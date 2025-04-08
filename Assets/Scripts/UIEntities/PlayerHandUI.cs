@@ -4,9 +4,10 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using UnityEngine;
-//using DG.Tweening;
+using DG.Tweening;
 using System.Threading.Tasks;
 using UnityEngine.XR;
+using UnityEngine.UI;
 
 public class PlayerHandUI : MonoBehaviour
 {
@@ -35,10 +36,10 @@ public class PlayerHandUI : MonoBehaviour
         var unityManager = UnGameManager.Instance;
         if (unityManager == null)
             return;
+
         CardView cardView;
         var deck = unityManager.Deck;
-        Transform hand;
-        if (!_playerHandPanels.TryGetValue(player, out hand))
+        if (!_playerHandPanels.TryGetValue(player, out var hand))
             return;
 
         if (_cardViewService.GetCardView(card) == null)
@@ -49,29 +50,33 @@ public class PlayerHandUI : MonoBehaviour
         {
             cardView = _cardViewService.GetCardView(card);
         }
-        unityManager.GameManager.PrintMessage($"Scale Before: {hand.transform.localScale}");
-        hand.transform.localScale = Vector3.one;
-        unityManager.GameManager.PrintMessage($"Scale After: {hand.transform.localScale}");
-        cardView.transform.SetParent(hand);
-        //await AnimateCardToHand(cardView, hand);
+
         cardView.SetCardViewBackground(card.Owner);
+        var animationTask = AnimateCardToHand(cardView, hand);
+        AnimationManager.Instance.Register(animationTask);
+        await animationTask;
     }
-    //public async Task AnimateCardToHand(CardView card, Transform hand)
-    //{
-    //    // Анимация перемещения карты в позицию руки
-    //    await card.transform.DOMove(hand.position, 1f) // Длительность анимации: 1 секунда
-    //        .SetEase(Ease.OutQuad) // Плавное замедление
-    //        .AsyncWaitForCompletion(); // Ожидаем завершения анимации
+    public async Task AnimateCardToHand(CardView card, Transform hand)
+    {
 
-    //    // Делаем карту дочерним объектом руки
-    //    card.transform.SetParent(hand);
+        // Анимация перемещения карты в позицию руки
+        await card.transform.DOMove(hand.position, 1f) // Длительность анимации: 1 секунда
+            .SetEase(Ease.OutQuad) // Плавное замедление
+            .AsyncWaitForCompletion(); // Ожидаем завершения анимации
 
-    //    // Ждём, пока GridLayoutGroup обновит позиции
-    //    await Task.Yield();
+        // Плавное перемещение в конечную позицию внутри GridLayoutGroup
+        //await card.transform.DOLocalMove(Vector3.zero, 1f)
+        //    .SetEase(Ease.OutQuad)
+        //    .AsyncWaitForCompletion();
 
-    //    // Плавное перемещение в конечную позицию внутри GridLayoutGroup
-    //    await card.transform.DOLocalMove(Vector3.zero, 1f)
-    //        .SetEase(Ease.OutQuad)
-    //        .AsyncWaitForCompletion();
-    //}
+
+        // Делаем карту дочерним объектом руки
+        card.transform.SetParent(hand);
+
+        // Принудительное обновление расположения GridLayout
+        LayoutRebuilder.ForceRebuildLayoutImmediate(hand.GetComponent<RectTransform>());
+
+        // Ждём, пока GridLayoutGroup обновит позиции
+        await Task.Yield();
+    }
 }

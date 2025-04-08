@@ -1,9 +1,15 @@
 using Assets.Scripts.Views;
+using DG.Tweening;
 using ScaryTales;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.XR;
 
+// Избавься от дубликатов
 public class BoardUI : MonoBehaviour
 {
     private CardViewService _cardViewService;
@@ -22,14 +28,26 @@ public class BoardUI : MonoBehaviour
         _cardViewService = CardViewService.Instance;
     }
 
-    private void HandleCardMovedToBoard(Card card)
+    private async void HandleCardMovedToBoard(Card card)
     {
+        var unityManager = UnGameManager.Instance;
+        var deck = unityManager.Deck;
         var cardView = _cardViewService.GetCardView(card);
-        cardView.transform.SetParent(GameBoardPanel);
+        if (cardView == null)
+        {
+            cardView = _cardViewService.CreateCardView(card, deck);
+        }
+        else
+        {
+            cardView = _cardViewService.GetCardView(card);
+        }
+        var animationTask = AnumateCardTransformToPositionInLayout(cardView, GameBoardPanel);
+        AnimationManager.Instance.Register(animationTask);
+        await animationTask;
         Debug.Log($"Карта {card.Name} перемещена на стол");
     }
 
-    private void HandleCardMovedToTimeOfDaySlot(Card card)
+    private async void HandleCardMovedToTimeOfDaySlot(Card card)
     {
         Debug.Log($"Карта {card.Name} перемещена в слот времени суток");
 
@@ -41,17 +59,21 @@ public class BoardUI : MonoBehaviour
         card.Owner = null;
         // Получаем CardView для текущей карты
         CardView cardView = _cardViewService.GetCardView(card);
-        if (cardView != null)
+        var unityManager = UnGameManager.Instance;
+        var deck = unityManager.Deck;
+        if (cardView == null)
         {
-            // Перемещаем CardView в слот времени суток
-            cardView.transform.SetParent(TimeOfDaySlot);
+            cardView = _cardViewService.CreateCardView(card, deck);
         }
         else
         {
-            Debug.LogError($"CardView для карты {card.Name} не найден!");
+            cardView = _cardViewService.GetCardView(card);
         }
+        // Перемещаем CardView в слот времени суток
+        await AnimateCardTransformToPosition(cardView, TimeOfDaySlot);
+        cardView.transform.SetParent(TimeOfDaySlot);
     }
-    private void HandleCardMovedToDiscardPile(Card card)
+    private async void HandleCardMovedToDiscardPile(Card card)
     {
         Debug.Log($"Карта {card.Name} перемещена в сброс");
 
@@ -60,6 +82,9 @@ public class BoardUI : MonoBehaviour
         {
             //cardView.transform.SetParent(DiscardPile); // Перемещаем CardView в сброс
             //cardView.transform.SetAsLastSibling(); // Убедимся, что карта отображается поверх остальных
+            var animationTask = AnimateCardTransformToPosition(cardView, DiscardPile);
+            AnimationManager.Instance.Register(animationTask);
+            await animationTask;
             DiscardPileView.Instance.SetSuit();
             Destroy(cardView.gameObject);
         }
@@ -67,6 +92,30 @@ public class BoardUI : MonoBehaviour
         {
             Debug.LogError($"CardView для карты {card.Name} не найден!");
         }
+    }
+    public async Task AnimateCardTransformToPosition(CardView card, Transform to)
+    {
+
+        // Анимация перемещения карты в позицию руки
+        await card.transform.DOMove(to.position, 1f) // Длительность анимации: 1 секунда
+            .SetEase(Ease.OutQuad) // Плавное замедление
+            .AsyncWaitForCompletion(); // Ожидаем завершения анимации
+    }
+
+    public async Task AnumateCardTransformToPositionInLayout(CardView card, Transform to)
+    {
+        // Анимация перемещения карты в позицию руки
+        await card.transform.DOMove(to.position, 1f) // Длительность анимации: 1 секунда
+            .SetEase(Ease.OutQuad) // Плавное замедление
+            .AsyncWaitForCompletion(); // Ожидаем завершения анимации
+        // Делаем карту дочерним объектом руки
+        card.transform.SetParent(to);
+
+        // Принудительное обновление расположения GridLayout
+        LayoutRebuilder.ForceRebuildLayoutImmediate(to.GetComponent<RectTransform>());
+
+        // Ждём, пока GridLayoutGroup обновит позиции
+        await Task.Yield();
     }
 }
 

@@ -41,7 +41,7 @@ public class TextUIManager : MonoBehaviour
         }
 
         NotifierText.text = string.Join("\n", messages);
-    }    
+    }
 
     private void HandleAddPointsToPlayer(Player player)
     {

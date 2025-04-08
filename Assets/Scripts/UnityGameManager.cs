@@ -45,46 +45,51 @@ public class UnGameManager : MonoBehaviour
         _cardViewService = CardViewService.Instance;
     }
 
-    void Start()
+    async void Start()
     {
-        StartGame();
+        await StartGame();
     }
-    private void StartGame()
+    private async Task StartGame()
     {
         PrepareFirstNight();
 
-        DrawCardsToPlayersHand();
+        await DrawCardsToPlayersHand();
 
-        // Начинаем первый ход
+
         HandlePlayerTurn();
     }
+
+
     private void PrepareFirstNight()
     {
         Card night = _context.Deck.TakeCardByName("Ночь")!;
         _cardViewService.CreateCardView(night, _boardUI.TimeOfDaySlot);
         _context.GameManager.PutCardInTimeOfDaySlot(night);
-    }   
-    public void DrawCardsToPlayersHand()
+    }
+    public async Task DrawCardsToPlayersHand()
     {
-        _gameManager.DrawCardsToPlayersHand();
-        //var players = _context.Players;
-        //var deck = _context.Deck;
-        //foreach (var player in players)
-        //{
-        //    for (int i = 0; i < 5; i++)
-        //    {
-        //        var card = deck.DrawCard();
-        //        //await Task.Delay(1000);
-        //        _gameManager.PutCardInPlayerHand(card!, player);
-        //    }
-        //}
+        //_gameManager.DrawCardsToPlayersHand();
+        var players = _context.Players;
+        var deck = _context.Deck;
+        foreach (var player in players)
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                await Task.Delay(200);
+                _gameManager.DrawCard(player);
+            }
+        }
     }
 
-    private void HandlePlayerTurn()
+    private async void HandlePlayerTurn()
     {
+        Debug.Log("Ждём окончания всех анимаций...");
+        await AnimationManager.Instance.WaitForAllAnimations();
+        Debug.Log("Анимации завершены.");
         _textUIManager.UpdateCurrentPlayerText();
         _gameManager.DrawCard(CurrentPlayer);
-        if(CurrentPlayer.Hand.Count == 0)
+        await AnimationManager.Instance.WaitForAllAnimations();
+        if (CurrentPlayer.Hand.Count == 0)
             _gameManager.EndGame();
         else
         {
@@ -92,7 +97,7 @@ public class UnGameManager : MonoBehaviour
         }
     }
 
-    private async void EndTurn()
+    private async Task EndTurn()
     {
         await _context.GameManager.ActivateAllPlayerPermanentCardEffects(CurrentPlayer);
         _context.GameState.NextTurn();
@@ -149,12 +154,12 @@ public class UnGameManager : MonoBehaviour
         {
             // Создаем Task для ожидания завершения PlayCard
             Task playCardTask = _gameManager.PlayCard(selectedCard);
-
             // Ожидаем завершения Task в корутине
             yield return new WaitUntil(() => playCardTask.IsCompleted);
         }
 
-        EndTurn();
+        yield return EndTurn().AsIEnumerator();
+
     }
 
 }
