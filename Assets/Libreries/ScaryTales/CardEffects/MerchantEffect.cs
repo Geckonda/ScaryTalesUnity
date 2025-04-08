@@ -12,7 +12,7 @@ namespace ScaryTales.CardEffects
     {
         public CardEffectTimeType Type => CardEffectTimeType.Instant;
 
-        public Task ApplyEffect(IGameContext context)
+        public async Task ApplyEffect(IGameContext context)
         {
             var state = context.GameState;
             var board = context.GameBoard;
@@ -21,11 +21,12 @@ namespace ScaryTales.CardEffects
             var deck = context.Deck;
 
             manager.DrawCard(player);
+            await Task.Delay(300);
             manager.DrawCard(player);
 
             var merchants = board.GetCardsOnBoard("Купец");
             manager.AddPointsToPlayer(player, merchants.Count * 2);
-            return Task.CompletedTask;
+            return;
         }
     }
 }

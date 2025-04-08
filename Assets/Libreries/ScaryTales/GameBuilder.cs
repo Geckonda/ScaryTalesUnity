@@ -41,6 +41,7 @@ namespace ScaryTales
             // Создаем игровой менеджер
             return new GameManager(gameState, _gameBoard, players, deck, items, _notifier);
         }
+
         private List<Card> MakeCardTemplates()
         {
             return new List<Card>()

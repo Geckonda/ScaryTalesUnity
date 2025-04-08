@@ -221,8 +221,8 @@ namespace ScaryTales
                     }
                 case (CardPosition.BeforePlayer):
                     {
-                        PutCardBeforePlayer(card);
-                        PrintMessage($"Карта {card.Name} была разыграна на стол перед игроком.");
+                        PutCardOnBoard(card);
+                        PrintMessage($"Карта {card.Name} была разыграна на стол перед игроком (Нет).");
                         break;
                     }
                 case (CardPosition.Discarded):

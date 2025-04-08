@@ -12,7 +12,7 @@ namespace ScaryTales.CardEffects
     {
         public CardEffectTimeType Type => CardEffectTimeType.Instant;
 
-        public Task ApplyEffect(IGameContext context)
+        public async Task ApplyEffect(IGameContext context)
         {
             var manager = context.GameManager;
             var player = context.GameState.GetCurrentPlayer();
@@ -21,13 +21,13 @@ namespace ScaryTales.CardEffects
             if(card != null)
             {
                 manager.PrintMessage($"Игрок {player.Name} вытянул карту {card.Name} и тут же разыграл.");
-                manager.PutCardInPlayerHand(card, player);
-                manager.PlayCard(card);
-                //manager.AddPointsToPlayer(player, card.Points);
-                //manager.ActivateInstantCardEffect(card);
-                //manager.MoveCardToItsPosition(card);
+                player.AddCardToHand(card);
+                card.Position = CardPosition.InHand;
+                card.Owner = player;
+                await AnimationManager.Instance.WaitForAllAnimations();
+                await manager.PlayCard(card);
             }
-            return Task.CompletedTask;
+            return;
         }
     }
 }
