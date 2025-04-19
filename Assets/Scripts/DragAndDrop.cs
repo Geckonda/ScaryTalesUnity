@@ -20,6 +20,12 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
 
     public event Action<Card> OnCardSelected;
 
+    /// <summary>
+    /// Проверяем, что карта принадлежит текущему игроку и карту можно выбирать и карта в руке игрока
+    /// </summary>
+    /// <returns>ture если карту нельзя передвигать, иначе false</returns>
+    private bool CardIsNotDragable() => card.Owner != UnGameManager.Instance.CurrentPlayer
+        || !SelectCard || card.Position != ScaryTales.Enums.CardPosition.InHand;
     public void Initialize(IGameManager manager, Card cardData, Transform board)
     {
         gameManager = manager;
@@ -29,11 +35,8 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        // Проверяем, что карта принадлежит текущему игроку и карту можно выбирать
-        if (card.Owner != UnGameManager.Instance.CurrentPlayer || !SelectCard)
-        {
-            return; // Игнорируем, если это не ход текущего игрока
-        }
+        if (CardIsNotDragable()) return;
+
 
         startPosition = transform.position;
         parentToReturnTo = transform.parent;
@@ -42,22 +45,14 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
 
     public void OnDrag(PointerEventData eventData)
     {
-        // Проверяем, что карта принадлежит текущему игроку и карту можно выбирать
-        if (card.Owner != UnGameManager.Instance.CurrentPlayer || !SelectCard)
-        {
-            return; // Игнорируем, если это не ход текущего игрока
-        }
+        if (CardIsNotDragable()) return;
 
         transform.position = eventData.position;
     }
 
     public void OnEndDrag(PointerEventData eventData)
     {
-        // Проверяем, что карта принадлежит текущему игроку и карту можно выбирать
-        if (card.Owner != UnGameManager.Instance.CurrentPlayer || !SelectCard)
-        {
-            return; // Игнорируем, если это не ход текущего игрока
-        }
+        if (CardIsNotDragable()) return;
 
         // Если карта перемещена на стол, разыгрываем её
         if (RectTransformUtility.RectangleContainsScreenPoint(
