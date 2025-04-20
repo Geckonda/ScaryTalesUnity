@@ -24,9 +24,14 @@ namespace ScaryTales
         /// <param name="templates">Шаблоны</param>
         public ItemManager(List<Item> templates)
         {
+            int count = 1;
             foreach (var template in templates)
                 for (int i = 0; i < template.DefaultAmount; i++)
-                    _availableItems.Add(template.Clone());
+                {
+                    var item = template.Clone();
+                    item.Id = count++;
+                    _availableItems.Add(item);
+                }
         }
         /// <summary>
         /// Возвращает предмет по его типу.

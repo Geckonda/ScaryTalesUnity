@@ -25,9 +25,14 @@ namespace ScaryTales
         /// <param name="templates">Шаблоны</param>
         public Deck(List<Card> templates)
         {
+            int count = 1;
             foreach (var template in templates)
                 for (int i = 0; i < template.CardCountInDeck; i++)
-                    _cards.Add(template.Clone());
+                {
+                    var card = template.Clone();
+                    card.Id = count++;
+                    _cards.Add(card);
+                }
 
             Shuffle();
 
