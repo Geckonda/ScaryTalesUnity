@@ -11,6 +11,7 @@ namespace ScaryTales
 {
     public abstract class Card
     {
+        public int Id { get; set; }
         public abstract string Name { get; }
         public abstract CardType Type { get; }
         public abstract int Points { get; }

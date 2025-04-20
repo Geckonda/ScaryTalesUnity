@@ -9,6 +9,7 @@ namespace ScaryTales
 {
     public class Player
     {
+        public int Id { get; set; }
         public string Name { get; private set; }
         public int Score { get; private set; }
         /// <summary>

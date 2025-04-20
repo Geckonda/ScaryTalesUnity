@@ -9,6 +9,7 @@ namespace ScaryTales
 {
     public abstract class Item
     {
+        public int Id { get; set; }
         public abstract string Name { get; }
         public abstract ItemType Type { get; }
         /// <summary>
