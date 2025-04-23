@@ -12,9 +12,9 @@ public class UnGameManager : MonoBehaviour
 {
     public static UnGameManager Instance { get; private set; }
 
-    private IGameContext _context;
-    private GameManager _gameManager;
-    private CardViewService _cardViewService;
+    public IGameContext _context;
+    public GameManager _gameManager;
+    public CardViewService _cardViewService;
 
     public BoardUI _boardUI;
     public PlayerHandUI _playerHandUI;
@@ -22,6 +22,7 @@ public class UnGameManager : MonoBehaviour
     public GameManager GameManager => _gameManager;
     public Transform GameBoardPanel;
     public Transform Deck;
+
     public Player CurrentPlayer => _context.GameState.GetCurrentPlayer();
 
     void Awake()
@@ -44,6 +45,12 @@ public class UnGameManager : MonoBehaviour
         _context = _gameManager._context;
         _cardViewService = CardViewService.Instance;
     }
+    public Player LocalPlayer { get; private set; }
+
+    public void SetLocalPlayer(Player player)
+    {
+        LocalPlayer = player;
+    }
 
     async void Start()
     {
@@ -61,6 +68,9 @@ public class UnGameManager : MonoBehaviour
 
     public async void StartGameFromNetwork()
     {
+        // Инициализируем UI после запуска игры
+        var playerHandUI = FindObjectOfType<PlayerHandUI>();
+        playerHandUI.Initialize();
         await StartGame(); // просто вызывает StartGame, когда пришла команда от сервера
     }
 
@@ -116,6 +126,8 @@ public class UnGameManager : MonoBehaviour
 
         bool cardSelected = false;
         Card selectedCard = null;
+
+        Debug.Log($"Player and Panel: {_playerHandUI._playerHandPanels.ContainsKey(player)}");
 
         if (!_playerHandUI._playerHandPanels.TryGetValue(player, out Transform playerHandPanel))
         {

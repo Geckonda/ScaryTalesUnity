@@ -1,5 +1,6 @@
 ﻿using Mirror;
 using ScaryTales;
+using ScaryTales.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,17 +11,17 @@ namespace Assets.Scripts.Network
     /// Реализация ввода игрока через сеть.
     /// Делегирует выбор карты, предмета и подтверждение действия через сетевой контроллер.
     /// </summary>
-    public class NetworkPlayerInput : NetworkBehaviour
+    public class NetworkPlayerInput : NetworkBehaviour, IPlayerInput
     {
-        private readonly int _playerId;
-        private readonly INetworkController _network;
+        private int _playerId;
+        private INetworkController _network;
 
         /// <summary>
         /// Конструктор сетевого ввода игрока.
         /// </summary>
         /// <param name="playerId">Уникальный ID игрока</param>
         /// <param name="network">Сетевой контроллер, обрабатывающий взаимодействие с клиентом</param>
-        public NetworkPlayerInput(int playerId, INetworkController network)
+        public void Initialize(int playerId, INetworkController network)
         {
             _playerId = playerId;
             _network = network;
@@ -58,6 +59,11 @@ namespace Assets.Scripts.Network
         public async Task<bool> ConfirmAction(string description)
         {
             return await _network.WaitForYesOrNo(_playerId);
+        }
+
+        public Task<bool> YesOrNo()
+        {
+            throw new System.NotImplementedException();
         }
     }
 }

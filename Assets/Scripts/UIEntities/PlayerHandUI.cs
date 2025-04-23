@@ -8,6 +8,7 @@ using DG.Tweening;
 using System.Threading.Tasks;
 using UnityEngine.XR;
 using UnityEngine.UI;
+using System.Linq;
 
 public class PlayerHandUI : MonoBehaviour
 {
@@ -20,15 +21,29 @@ public class PlayerHandUI : MonoBehaviour
     public Dictionary<Player, Transform> _playerHandPanels;
     void Awake()
     {
-        _context = UnGameManager.Instance.GameManager._context;
-        _context.GameManager.OnCardAddedToHand += HandleCardAddedToHand;
         _cardViewService = CardViewService.Instance;
+    }
+    public void Initialize()
+    {
+        _context = UnGameManager.Instance.GameManager._context;
+
+        // Убедимся, что всё готово
+        if (_context == null || UnGameManager.Instance.LocalPlayer == null)
+        {
+            UnityEngine.Debug.LogError("[PlayerHandUI] Игра или LocalPlayer еще не готовы!");
+            return;
+        }
+
+        _context.GameManager.OnCardAddedToHand += HandleCardAddedToHand;
+
+        var localPlayer = UnGameManager.Instance.LocalPlayer;
+        var opponent = _context.Players.First(p => p != localPlayer);
 
         _playerHandPanels = new Dictionary<Player, Transform>
-            {
-                { _context.Players[0], PlayerHandPanel1 },
-                { _context.Players[1], PlayerHandPanel2 }
-            };
+        {
+            { localPlayer, PlayerHandPanel1 },
+            { opponent, PlayerHandPanel2 }
+        };
     }
 
     private async void HandleCardAddedToHand(Card card, Player player)

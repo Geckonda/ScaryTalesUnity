@@ -16,6 +16,8 @@ namespace ScaryTales
         /// Выбирает карту из предоставленного списка
         /// </summary>
         private IPlayerInput _playerInput;
+
+        public IPlayerInput PlayerInput => _playerInput;
         /// <summary>
         /// Колода в руке игрока
         /// </summary>
@@ -39,6 +41,15 @@ namespace ScaryTales
 
         public Player(string name, IPlayerInput playerInput)
         {
+            Name = name;
+            _hand = new List<Card>();
+            _itemsBag = new List<Item>();
+            Score = 0;
+            _playerInput = playerInput;
+        }
+        public Player(int id, string name, IPlayerInput playerInput)
+        {
+            Id = id;
             Name = name;
             _hand = new List<Card>();
             _itemsBag = new List<Item>();

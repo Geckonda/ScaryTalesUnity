@@ -17,6 +17,8 @@ namespace ScaryTales
         private readonly INotifier _notifier;
         private readonly IGameBoard _gameBoard;
 
+        private Player _player1;
+        private Player _player2;
         public GameBuilder(IPlayerInput playerInput,
             INotifier notifier,
             IGameBoard gameBoard)
@@ -25,6 +27,8 @@ namespace ScaryTales
             _playerInput2 = playerInput;
             _notifier = notifier;
             _gameBoard = gameBoard;
+            _player1 = new Player("Саша", _playerInput1);
+            _player2 = new Player("Вова", _playerInput2);
         }
         public GameBuilder(IPlayerInput playerInput1,
             IPlayerInput playerInput2,
@@ -35,17 +39,32 @@ namespace ScaryTales
             _playerInput2 = playerInput2;
             _notifier = notifier;
             _gameBoard = gameBoard;
+
+            _player1 = new Player("Саша", _playerInput1);
+            _player2 = new Player("Вова", _playerInput2);
+
+        }
+        public GameBuilder(IPlayerInput playerInput1,
+            IPlayerInput playerInput2,
+            INotifier notifier,
+            IGameBoard gameBoard,
+            Player player1,
+            Player player2)
+        {
+            _playerInput1 = playerInput1;
+            _playerInput2 = playerInput2;
+            _notifier = notifier;
+            _gameBoard = gameBoard;
+            _player1 = player1;
+            _player2 = player2;
         }
         public GameManager Build()
         {
             var deck = new Deck(MakeCardTemplates());
             var items = new ItemManager(MakeItemTemplates());
-            // Создаем игроков
-            var player1 = new Player("Саша", _playerInput1);
-            var player2 = new Player("Вова", _playerInput2);
 
             // Список игроков
-            var players = new List<Player> { player1, player2 };
+            var players = new List<Player> { _player1, _player2 };
 
             // Игровое состояние
             var gameState = new GameState(players);
