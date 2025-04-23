@@ -1,4 +1,5 @@
-﻿using ScaryTales.Abstractions;
+﻿using Mirror.Examples.BilliardsPredicted;
+using ScaryTales.Abstractions;
 using ScaryTales.Cards;
 using ScaryTales.Items;
 using System;
@@ -11,7 +12,8 @@ namespace ScaryTales
 {
     public class GameBuilder
     {
-        private readonly IPlayerInput _playerInput;
+        private readonly IPlayerInput _playerInput1;
+        private readonly IPlayerInput _playerInput2;
         private readonly INotifier _notifier;
         private readonly IGameBoard _gameBoard;
 
@@ -19,7 +21,18 @@ namespace ScaryTales
             INotifier notifier,
             IGameBoard gameBoard)
         {
-            _playerInput = playerInput;
+            _playerInput1 = playerInput;
+            _playerInput2 = playerInput;
+            _notifier = notifier;
+            _gameBoard = gameBoard;
+        }
+        public GameBuilder(IPlayerInput playerInput1,
+            IPlayerInput playerInput2,
+            INotifier notifier,
+            IGameBoard gameBoard)
+        {
+            _playerInput1 = playerInput1;
+            _playerInput2 = playerInput2;
             _notifier = notifier;
             _gameBoard = gameBoard;
         }
@@ -28,8 +41,8 @@ namespace ScaryTales
             var deck = new Deck(MakeCardTemplates());
             var items = new ItemManager(MakeItemTemplates());
             // Создаем игроков
-            var player1 = new Player("Саша", _playerInput);
-            var player2 = new Player("Вова", _playerInput);
+            var player1 = new Player("Саша", _playerInput1);
+            var player2 = new Player("Вова", _playerInput2);
 
             // Список игроков
             var players = new List<Player> { player1, player2 };
