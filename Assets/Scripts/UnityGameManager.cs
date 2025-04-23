@@ -47,7 +47,7 @@ public class UnGameManager : MonoBehaviour
 
     async void Start()
     {
-        await StartGame();
+        //await StartGame();
     }
     private async Task StartGame()
     {
@@ -59,6 +59,10 @@ public class UnGameManager : MonoBehaviour
         HandlePlayerTurn();
     }
 
+    public async void StartGameFromNetwork()
+    {
+        await StartGame(); // просто вызывает StartGame, когда пришла команда от сервера
+    }
 
     private void PrepareFirstNight()
     {
