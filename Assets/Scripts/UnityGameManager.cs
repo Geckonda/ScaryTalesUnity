@@ -46,11 +46,9 @@ public class UnGameManager : MonoBehaviour
         _cardViewService = CardViewService.Instance;
     }
     public Player LocalPlayer { get; private set; }
-
-    public void SetLocalPlayer(Player player)
-    {
-        LocalPlayer = player;
-    }
+    public Player LocalOpponent { get; private set; }
+    public void SetLocalPlayer(Player player) => LocalPlayer = player;
+    public void SetLocalOpponent(Player player) => LocalOpponent = player;
 
     async void Start()
     {
