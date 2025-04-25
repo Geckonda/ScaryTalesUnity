@@ -48,13 +48,17 @@ namespace ScaryTales
             _playerInput = playerInput;
         }
         public Player(int id, string name, IPlayerInput playerInput)
+            :this(id, name)
+        {
+            _playerInput = playerInput;
+        }
+        public Player(int id, string name)
         {
             Id = id;
             Name = name;
             _hand = new List<Card>();
             _itemsBag = new List<Item>();
             Score = 0;
-            _playerInput = playerInput;
         }
 
         /// <summary>
