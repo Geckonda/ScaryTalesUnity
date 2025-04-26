@@ -58,6 +58,16 @@ namespace ScaryTales
             _player1 = player1;
             _player2 = player2;
         }
+        public GameBuilder(INotifier notifier,
+                IGameBoard gameBoard,
+                Player player1,
+                Player player2)
+        {
+            _notifier = notifier;
+            _gameBoard = gameBoard;
+            _player1 = player1;
+            _player2 = player2;
+        }
         public GameManager Build()
         {
             var deck = new Deck(MakeCardTemplates());

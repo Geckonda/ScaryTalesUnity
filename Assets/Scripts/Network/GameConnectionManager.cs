@@ -54,7 +54,7 @@ namespace Assets.Scripts.Network
 
                 // Получаем компонент GameNetworkController и вызываем RPC
                 var controller = controllerObj.GetComponent<GameNetworkController>();
-                controller.InitializeGameWithInputs(_players, _connectionMap);
+                controller.InitializeGame(_players, _connectionMap);
             }
         }
 

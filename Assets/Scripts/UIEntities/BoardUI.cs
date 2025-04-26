@@ -18,8 +18,18 @@ public class BoardUI : MonoBehaviour
     public Transform TimeOfDaySlot;
     public Transform DiscardPile;
 
-    private void Awake()
+    private void Start()
     {
+        StartCoroutine(WaitForContextAndInit());
+    }
+
+    private IEnumerator WaitForContextAndInit()
+    {
+        // ∆дЄм, пока инициализируетс€ контекст
+        while (UnGameManager.Instance.GameManager == null)
+        {
+            yield return null;
+        }
         var context = UnGameManager.Instance.GameManager._context;
         context.GameManager.OnCardMovedToBoard += HandleCardMovedToBoard;
         context.GameManager.OnCardMovedToTimeOfDaySlot += HandleCardMovedToTimeOfDaySlot;
@@ -27,7 +37,6 @@ public class BoardUI : MonoBehaviour
 
         _cardViewService = CardViewService.Instance;
     }
-
     private async void HandleCardMovedToBoard(Card card)
     {
         var unityManager = UnGameManager.Instance;

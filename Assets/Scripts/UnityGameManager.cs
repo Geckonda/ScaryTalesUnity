@@ -35,14 +35,14 @@ public class UnGameManager : MonoBehaviour
         {
             Destroy(gameObject);
         }
-        var playerInput = new GameObject("PlayerInputObject").AddComponent<UnityPlayerInput>();
+        //var playerInput = new GameObject("PlayerInputObject").AddComponent<UnityPlayerInput>();
 
-        // Инициализация игры
-        var builder = new GameBuilder(playerInput,
-            new UnityNotifier(),
-            new GameBoard());
-        _gameManager = builder.Build();
-        _context = _gameManager._context;
+        //// Инициализация игры
+        //var builder = new GameBuilder(playerInput,
+        //    new UnityNotifier(),
+        //    new GameBoard());
+        //_gameManager = builder.Build();
+        //_context = _gameManager._context;
         _cardViewService = CardViewService.Instance;
     }
     public Player LocalPlayer { get; private set; }

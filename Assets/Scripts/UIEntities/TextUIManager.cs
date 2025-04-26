@@ -17,18 +17,51 @@ public class TextUIManager : MonoBehaviour
 
     public TMP_Text CurrentPlayerText;
 
-    private void Awake()
-    {
-        _gameContext = UnGameManager.Instance.GameManager._context;
-        _playerScorePanels[_gameContext.Players[0]] = Player1ScoreText;
-        _playerScorePanels[_gameContext.Players[1]] = Player2ScoreText;
+    //private void Awake()
+    //{
+    //    _gameContext = UnGameManager.Instance.GameManager._context;
+    //    _playerScorePanels[_gameContext.Players[0]] = Player1ScoreText;
+    //    _playerScorePanels[_gameContext.Players[1]] = Player2ScoreText;
 
-        Player1Name.text = _gameContext.Players[0].Name;
-        Player2Name.text = _gameContext.Players[1].Name;
+    //    Player1Name.text = _gameContext.Players[0].Name;
+    //    Player2Name.text = _gameContext.Players[1].Name;
+
+    //    _gameContext.GameManager.OnAddPointsToPlayer += HandleAddPointsToPlayer;
+    //    _gameContext.GameManager.OnMessagePrinted += HandleNotify;
+    //}
+    private void Start()
+    {
+        StartCoroutine(WaitForContextAndInit());
+    }
+
+    private IEnumerator WaitForContextAndInit()
+    {
+        // ∆дЄм, пока инициализируетс€ контекст
+        while (UnGameManager.Instance.GameManager == null)
+        {
+            yield return null;
+        }
+
+        var unManager = UnGameManager.Instance;
+        _gameContext = unManager.GameManager._context;
+
+        while (unManager.LocalPlayer == null || unManager.LocalOpponent == null)
+        {
+            yield return null;
+        }
+        _playerScorePanels[unManager.LocalPlayer] = Player1ScoreText;
+        _playerScorePanels[unManager.LocalOpponent] = Player2ScoreText;
+
+        Player1Name.text = unManager.LocalPlayer.Name;
+        Player2Name.text = unManager.LocalOpponent.Name;
 
         _gameContext.GameManager.OnAddPointsToPlayer += HandleAddPointsToPlayer;
         _gameContext.GameManager.OnMessagePrinted += HandleNotify;
+
+        UpdateCurrentPlayerText();
     }
+
+
 
     private List<string> messages = new();
     private void HandleNotify(string message)

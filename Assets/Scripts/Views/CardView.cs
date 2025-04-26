@@ -39,10 +39,14 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     }
     public void SetCardViewBackground(Player player)
     {
-        if(player != null)
-        {
-            _background.color = player.Name == "Вова" ? Color.blue : Color.red;
-        }
+        //if(player != null)
+        //{
+        //    _background.color = player.Name == "Вова" ? Color.blue : Color.red;
+        //}
+        if(player == null)
+            return;
+        var localPlyaer = UnGameManager.Instance.LocalPlayer;
+        _background.color = player.Id == localPlyaer.Id ? Color.blue : Color.red;
     }
     public void OnPointerClick(PointerEventData eventData)
     {
