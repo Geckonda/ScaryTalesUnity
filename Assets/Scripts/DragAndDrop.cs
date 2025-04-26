@@ -24,7 +24,8 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
     /// Проверяем, что карта принадлежит текущему игроку и карту можно выбирать и карта в руке игрока
     /// </summary>
     /// <returns>ture если карту нельзя передвигать, иначе false</returns>
-    private bool CardIsNotDragable() => card.Owner != UnGameManager.Instance.CurrentPlayer
+    private bool CardIsNotDragable() => UnGameManager.Instance.LocalPlayer != UnGameManager.Instance.CurrentPlayer
+        || card.Owner != UnGameManager.Instance.CurrentPlayer
         || !SelectCard || card.Position != ScaryTales.Enums.CardPosition.InHand;
     public void Initialize(IGameManager manager, Card cardData, Transform board)
     {
