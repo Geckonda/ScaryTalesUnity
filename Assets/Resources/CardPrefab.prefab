@@ -1074,6 +1074,7 @@ MonoBehaviour:
   _cardTypeText: {fileID: 16243183621942867}
   _cardQuantityText: {fileID: 108839933211607267}
   _highlightFrame: {fileID: 2113902942548428009}
+  _enemyBackgroundSprite: {fileID: 21300000, guid: a4b47fc3810f1e1438fde3a61c33d0b8, type: 3}
 --- !u!114 &764412638383648772
 MonoBehaviour:
   m_ObjectHideFlags: 0

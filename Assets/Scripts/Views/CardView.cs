@@ -20,6 +20,8 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     private Card _card;
     private Image _background;
 
+    [SerializeField] private Sprite _enemyBackgroundSprite; 
+
     public void Initialize(Card card)
     {
         _card = card;
@@ -39,14 +41,20 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     }
     public void SetCardViewBackground(Player player)
     {
-        //if(player != null)
-        //{
-        //    _background.color = player.Name == "Вова" ? Color.blue : Color.red;
-        //}
         if(player == null)
             return;
-        var localPlyaer = UnGameManager.Instance.LocalPlayer;
-        _background.color = player.Id == localPlyaer.Id ? Color.blue : Color.red;
+        var localPlayer = UnGameManager.Instance.LocalPlayer;
+        if(player.Id != localPlayer.Id)
+        {
+            _background.color = new Color(1f, 1f, 1f, 1f); // Белый цвет с полной непрозрачностью
+            ChangeTextVisibility(false);
+            _background.sprite = _enemyBackgroundSprite;
+
+        }
+        else
+        {
+            _background.color = Color.black;
+        }
     }
     public void OnPointerClick(PointerEventData eventData)
     {
@@ -60,5 +68,13 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         if (_highlightFrame != null)
             _highlightFrame.gameObject.SetActive(isHighlighted);
     }
+    private void ChangeTextVisibility(bool isVisible)
+    {
+        _cardNameText.gameObject.SetActive(isVisible);
+        _cardDescriptionText.gameObject.SetActive(isVisible);
+        _cardScoreText.gameObject.SetActive(isVisible);
+        _cardTypeText.gameObject.SetActive(isVisible);
+        _cardQuantityText.gameObject.SetActive(isVisible);
 
+    }
 }
