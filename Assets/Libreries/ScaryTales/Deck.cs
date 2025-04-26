@@ -49,6 +49,32 @@ namespace ScaryTales
         }
 
         /// <summary>
+        /// Метод для тасовки калоды по Id
+        /// </summary>
+        /// <param name="ids"> Список Id, по которым нужн отсортировать</param>
+        public void ShuffleById(List<int> ids)
+        {
+            if (_cards.Count != ids.Count)
+                throw new ArgumentOutOfRangeException("Несоответсиве количества карт и количество Id");
+
+            var cardDict = _cards.ToDictionary(card => card.Id);
+            _cards = ids
+                .Where(id => cardDict.ContainsKey(id)) // на случай если в ids есть Id, которых нет в колоде
+                .Select(id => cardDict[id])
+                .ToList();
+        }
+
+        /// <summary>
+        /// Возвращает коллекцию идентификаторов карт, содержащихся в текущей колоде.
+        /// </summary>
+        /// <remarks>
+        /// Идентификаторы возвращаются в порядке расположения карт внутри колоды на момент вызова метода.
+        /// </remarks>
+        /// <returns>Список идентификаторов карт <see cref="int"/>.</returns>
+        public List<int> GetCardIds() => _cards.Select(x => x.Id).ToList();
+
+
+        /// <summary>
         /// Метод для вытягивания карты из колоды
         /// </summary>
         /// <returns>Карта на вершине колоды</returns>
