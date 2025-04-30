@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using System.Threading.Tasks;
+using Assets.Scripts.Network;
 
 public class UnGameManager : MonoBehaviour
 {
@@ -22,7 +23,6 @@ public class UnGameManager : MonoBehaviour
     public GameManager GameManager => _gameManager;
     public Transform GameBoardPanel;
     public Transform Deck;
-
     public Player CurrentPlayer => _context.GameState.GetCurrentPlayer();
 
     void Awake()
@@ -109,6 +109,14 @@ public class UnGameManager : MonoBehaviour
         }
     }
 
+    public async void PlayCard(Card card)
+    {
+        //Создаем Task для ожидания завершения PlayCard
+        await _gameManager.PlayCard(card);
+        //Ожидаем завершения Task в корутине
+        await EndTurn();
+
+    }
     private async Task EndTurn()
     {
         await _context.GameManager.ActivateAllPlayerPermanentCardEffects(CurrentPlayer);
@@ -167,9 +175,14 @@ public class UnGameManager : MonoBehaviour
         if (selectedCard != null)
         {
             // Создаем Task для ожидания завершения PlayCard
-            Task playCardTask = _gameManager.PlayCard(selectedCard);
+            //Task playCardTask = _gameManager.PlayCard(selectedCard);
+
             // Ожидаем завершения Task в корутине
-            yield return new WaitUntil(() => playCardTask.IsCompleted);
+            //yield return new WaitUntil(() => playCardTask.IsCompleted);
+
+            GameNetworkController.Instance.CmdPlayCard(selectedCard.Id);
+
+            yield break;
         }
 
         yield return EndTurn().AsIEnumerator();

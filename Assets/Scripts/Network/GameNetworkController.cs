@@ -18,7 +18,7 @@ namespace Assets.Scripts.Network
         public static GameNetworkController Instance { get; set; }
         private Dictionary<int, NetworkConnectionToClient> playerConnections = new();
 
-        private IGameContext _gameContext;
+        private IGameContext _serverGameContext;
 
         [SyncVar(hook = nameof(OnReadyPlayersChanged))]
         private int readyPlayers = 0;
@@ -60,12 +60,53 @@ namespace Assets.Scripts.Network
             var game = builder.Build();
             game._context.Deck.ShuffleById(cardsId);
 
+
+
             UnGameManager.Instance._context = game._context;
             UnGameManager.Instance._gameManager = game;
             UnGameManager.Instance.SetLocalPlayer(localPlayer);
             UnGameManager.Instance.SetLocalOpponent(localOpponent);
             UnGameManager.Instance.StartGameFromNetwork();
+
         }
+
+        private void CmdPlayCardTest(int cardId)
+        {
+            CmdPlayCard(cardId);
+        }
+
+        [Command(requiresAuthority = false)]
+        public void CmdPlayCard(int cardId)
+        {
+            // Сервер получает действие
+            // 1. Выполняет серверную валидацию (например, проверяет, может ли игрок сейчас ходить)
+            // 2. Обновляет игровое состояние
+            // 3. Отсылает другим клиентам обновление
+
+            var player = UnGameManager.Instance._context.GameState.GetCurrentPlayer();
+            var card = player.Hand.FirstOrDefault(c => c.Id == cardId);
+
+            if (card != null)
+            {
+                // Обновляем серверное состояние
+                _serverGameContext.GameManager.PlayCard(card);
+
+                // Рассылаем клиентам
+                RpcOnCardPlayed(cardId);
+            }
+        }
+        [ClientRpc]
+        private void RpcOnCardPlayed(int cardId)
+        {
+            var player = UnGameManager.Instance.CurrentPlayer;
+            var card = player.Hand.FirstOrDefault(c => c.Id == cardId);
+
+            if (card != null)
+            {
+                UnGameManager.Instance.PlayCard(card); // например, триггер анимации, обновление UI и т.п.
+            }
+        }
+
 
 
         [Server]
@@ -78,9 +119,9 @@ namespace Assets.Scripts.Network
                 players[1]);
 
             var game = builder.Build();
-            _gameContext = game._context;
+            _serverGameContext = game._context;
 
-            List<int> cardsId = _gameContext.Deck.GetCardIds();
+            List<int> cardsId = _serverGameContext.Deck.GetCardIds();
 
             int startPlayerId = players[0].Id;
 
