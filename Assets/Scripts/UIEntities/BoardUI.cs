@@ -50,6 +50,7 @@ public class BoardUI : MonoBehaviour
         {
             cardView = _cardViewService.GetCardView(card);
         }
+        cardView.FaceUp();
         var animationTask = AnumateCardTransformToPositionInLayout(cardView, GameBoardPanel);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;

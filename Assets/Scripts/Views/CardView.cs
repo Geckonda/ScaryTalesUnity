@@ -56,6 +56,15 @@ public class CardView : MonoBehaviour, IPointerClickHandler
             _background.color = Color.black;
         }
     }
+    public void FaceUp()
+    {
+        if (this._card.Position != CardPosition.InHand)
+        {
+            _background.color = Color.black;
+            ChangeTextVisibility(true);
+            _background.sprite = null;
+        }
+    }
     public void OnPointerClick(PointerEventData eventData)
     {
         OnCardClicked?.Invoke(_card);
