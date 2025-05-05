@@ -272,7 +272,7 @@ namespace ScaryTales
         public void PutCardInTimeOfDaySlot(Card card)
         {
             var board = _context.GameBoard;
-            var oldCard = board.GetCardFormTimeOfDaySlot();
+            var oldCard = board.GetCardFromTimeOfDaySlot();
             if(oldCard != null)
                 PutCardToDiscardPile(oldCard);
             board.SetTimeOfDaySlot(card);

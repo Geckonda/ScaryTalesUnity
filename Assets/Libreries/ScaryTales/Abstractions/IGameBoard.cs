@@ -78,6 +78,6 @@ namespace ScaryTales.Abstractions
         /// Возвращает карту, которая находится в слоте времени суток
         /// </summary>
         /// <returns></returns>
-        public Card? GetCardFormTimeOfDaySlot();
+        public Card? GetCardFromTimeOfDaySlot();
     }
 }

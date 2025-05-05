@@ -32,7 +32,7 @@ namespace Assets.Scripts
             throw new NotImplementedException();
         }
 
-        public Card GetCardFormTimeOfDaySlot()
+        public Card GetCardFromTimeOfDaySlot()
         {
             throw new NotImplementedException();
         }

@@ -76,6 +76,6 @@ namespace ScaryTales
                 _timeOfDay = card;
         }
 
-        public Card? GetCardFormTimeOfDaySlot() => _timeOfDay;
+        public Card? GetCardFromTimeOfDaySlot() => _timeOfDay;
     }
 }
