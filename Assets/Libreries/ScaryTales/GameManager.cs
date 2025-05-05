@@ -163,6 +163,7 @@ namespace ScaryTales
             {
                 player.RemoveCardFromHand(card);
                 PrintMessage($"Игрок {player.Name} разыгрывает карту {card.Name}.");
+                PutCardOnBoard(card); // Опасно
                 AddPointsToPlayer(player, card.Points);
                 await ActivateInstantCardEffect(card);
                 MoveCardToItsPosition(card);
