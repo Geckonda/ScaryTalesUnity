@@ -53,14 +53,17 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         }
         else
         {
-            _background.color = Color.black;
+            _background.color = Color.blue;
         }
     }
     public void FaceUp()
     {
-        if (this._card.Position != CardPosition.InHand)
+        if (this._card.Position != CardPosition.InHand )
         {
-            _background.color = Color.black;
+            if (this._card.Owner.Id == UnGameManager.Instance.LocalPlayer.Id)
+                _background.color = Color.blue;
+            else
+                _background.color = Color.red;
             ChangeTextVisibility(true);
             _background.sprite = null;
         }

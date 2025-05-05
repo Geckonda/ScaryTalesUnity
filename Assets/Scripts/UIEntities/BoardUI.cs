@@ -66,7 +66,6 @@ public class BoardUI : MonoBehaviour
         {
             child.SetParent(DiscardPile);
         }
-        card.Owner = null;
         // Получаем CardView для текущей карты
         CardView cardView = _cardViewService.GetCardView(card);
         var unityManager = UnGameManager.Instance;
@@ -79,9 +78,11 @@ public class BoardUI : MonoBehaviour
         {
             cardView = _cardViewService.GetCardView(card);
         }
+        cardView.FaceUp();
         // Перемещаем CardView в слот времени суток
         await AnimateCardTransformToPosition(cardView, TimeOfDaySlot);
         cardView.transform.SetParent(TimeOfDaySlot);
+        card.Owner = null;
     }
     private async void HandleCardMovedToDiscardPile(Card card)
     {
