@@ -38,7 +38,7 @@ namespace Assets.Scripts.Network
             Debug.Log($"[CLIENT] Start game. My index is: {playerDTO.Id}");
 
             var localPlayer = new Player(playerDTO.Id, playerDTO.Name, new UnityPlayerInput());
-            var localOpponent = new Player(opponentDTO.Id, opponentDTO.Name);
+            var localOpponent = new Player(opponentDTO.Id, opponentDTO.Name, new NetworkPlayerInput());
             GameBuilder builder;
             if (playerDTO.IsStartPlayer)
             {
@@ -106,6 +106,25 @@ namespace Assets.Scripts.Network
                 UnGameManager.Instance.PlayCard(card); // например, триггер анимации, обновление UI и т.п.
             }
         }
+
+
+        [Command(requiresAuthority = false)]
+        public void CmdSelectItem(int itemType)
+        {
+            // Рассылаем всем нужным клиентам выбранный ID
+            RpcNotifyOtherPlayersItemSelected(itemType);
+        }
+
+        [ClientRpc]
+        private void RpcNotifyOtherPlayersItemSelected(int itemType)
+        {
+            if (!isLocalPlayer) // Чтобы не вызывалось у того, кто сам выбирал
+            {
+                var input = (NetworkPlayerInput)UnGameManager.Instance.CurrentPlayer.PlayerInput;
+                input.OnItemSelectedFromRemote(itemType);
+            }
+        }
+
 
 
 

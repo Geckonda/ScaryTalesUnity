@@ -1,6 +1,7 @@
 ﻿using Mirror;
 using ScaryTales;
 using ScaryTales.Abstractions;
+using ScaryTales.Enums;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -44,12 +45,12 @@ namespace Assets.Scripts.Network
         /// </summary>
         /// <param name="items">Доступные предметы</param>
         /// <returns>Выбранный игроком предмет</returns>
-        public async Task<Item> SelectItem(List<Item> items)
-        {
-            await _network.SendAvailableItems(_playerId, items);
-            var selectedId = await _network.WaitForItemSelection(_playerId);
-            return items.FirstOrDefault(i => i.Id == selectedId);
-        }
+        //public async Task<Item> SelectItem(List<Item> items)
+        //{
+        //    await _network.SendAvailableItems(_playerId, items);
+        //    var selectedId = await _network.WaitForItemSelection(_playerId);
+        //    return items.FirstOrDefault(i => i.Id == selectedId);
+        //}
 
         /// <summary>
         /// Запрашивает у игрока подтверждение выполнения действия.
@@ -64,6 +65,28 @@ namespace Assets.Scripts.Network
         public Task<bool> YesOrNo()
         {
             throw new System.NotImplementedException();
+        }
+
+        private TaskCompletionSource<Item> _itemSelectionTcs;
+        private List<Item> _availableItems;
+        public async Task<Item> SelectItem(List<Item> availableItems)
+        {
+            _availableItems = availableItems;
+            // Ждём выбора от клиента, который реально играет
+            _itemSelectionTcs = new TaskCompletionSource<Item>();
+
+            // Ждать, пока этот TCS не будет завершён
+            return await _itemSelectionTcs.Task;
+        }
+
+        // Этот метод вызывается из RPC, когда сервер узнаёт, что выбрал другой игрок
+        public void OnItemSelectedFromRemote(int itemType)
+        {
+            var item = UnGameManager.Instance._context.ItemManager.GetCloneItemByType((ItemType)itemType);
+            if (item != null && _itemSelectionTcs != null && !_itemSelectionTcs.Task.IsCompleted)
+            {
+                _itemSelectionTcs.SetResult(item);
+            }
         }
     }
 }

@@ -44,6 +44,7 @@ namespace ScaryTales.CardEffects
             // Игрок выбирает предмет из доступных
             var selectedItem = await player.SelectItem(availableItems!);
 
+            manager.PrintMessage($"Игрок {player.Name} выбрал предмет \"{selectedItem.Name}\"");
             // Получаем оригинальный предмет (не клон) и добавляем в инвентарь
             var originalItem = itemManager.GetItemByType(selectedItem.Type);
             if (originalItem != null)

@@ -1,4 +1,5 @@
-﻿using ScaryTales.Abstractions;
+﻿using Assets.Scripts.Network;
+using ScaryTales.Abstractions;
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -99,6 +100,8 @@ namespace ScaryTales.Interaction_Entities.EnvUnity
             {
                 await Task.Yield(); // Освобождаем поток, чтобы не блокировать выполнение
             }
+
+            GameNetworkController.Instance.CmdSelectItem((int)_selectedItem.Type);
 
             // Прячем контейнер после выбора предмета
             ItemContainer.Instance.Hide();
