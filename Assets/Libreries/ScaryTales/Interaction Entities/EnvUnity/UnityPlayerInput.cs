@@ -42,6 +42,8 @@ namespace ScaryTales.Interaction_Entities.EnvUnity
                 await Task.Yield(); // Ожидание следующего кадра
             }
 
+            GameNetworkController.Instance.CmdSelectCard(_selectedCard.Id);
+
             // Отписываемся от событий кликов
             foreach (var cardView in _cardViewsToSelect)
             {

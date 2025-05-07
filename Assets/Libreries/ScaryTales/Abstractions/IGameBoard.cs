@@ -79,5 +79,9 @@ namespace ScaryTales.Abstractions
         /// </summary>
         /// <returns></returns>
         public Card? GetCardFromTimeOfDaySlot();
+        /// <summary>
+        /// Получение конкретной карты по ее id, которая в данный момент на столе
+        /// </summary>
+        public Card GetCardFromBoard(int cardId);
     }
 }

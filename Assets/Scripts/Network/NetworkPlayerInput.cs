@@ -33,12 +33,12 @@ namespace Assets.Scripts.Network
         /// </summary>
         /// <param name="cards">Доступные карты</param>
         /// <returns>Выбранная игроком карта</returns>
-        public async Task<Card> SelectCard(List<Card> cards)
-        {
-            await _network.SendAvailableCards(_playerId, cards);
-            var selectedId = await _network.WaitForCardSelection(_playerId);
-            return cards.FirstOrDefault(c => c.Id == selectedId);
-        }
+        //public async Task<Card> SelectCard(List<Card> cards)
+        //{
+        //    await _network.SendAvailableCards(_playerId, cards);
+        //    var selectedId = await _network.WaitForCardSelection(_playerId);
+        //    return cards.FirstOrDefault(c => c.Id == selectedId);
+        //}
 
         /// <summary>
         /// Запрашивает у игрока выбор предмета из списка.
@@ -86,6 +86,28 @@ namespace Assets.Scripts.Network
             if (item != null && _itemSelectionTcs != null && !_itemSelectionTcs.Task.IsCompleted)
             {
                 _itemSelectionTcs.SetResult(item);
+            }
+        }
+
+        private TaskCompletionSource<Card> _cardSelectionTcs;
+        private List<Card> _availableCards;
+        public async Task<Card> SelectCard(List<Card> availableCards)
+        {
+            _availableCards = availableCards;
+            // Ждём выбора от клиента, который реально играет
+            _cardSelectionTcs = new TaskCompletionSource<Card>();
+
+            // Ждать, пока этот TCS не будет завершён
+            return await _cardSelectionTcs.Task;
+        }
+
+        // Этот метод вызывается из RPC, когда сервер узнаёт, что выбрал другой игрок
+        public void OnCardSelectedFromRemote(int cardId)
+        {
+            var card = UnGameManager.Instance._context.GameBoard.GetCardFromBoard(cardId);
+            if (card != null && _cardSelectionTcs != null && !_cardSelectionTcs.Task.IsCompleted)
+            {
+                _cardSelectionTcs.SetResult(card);
             }
         }
     }

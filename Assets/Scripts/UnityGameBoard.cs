@@ -32,6 +32,11 @@ namespace Assets.Scripts
             throw new NotImplementedException();
         }
 
+        public Card GetCardFromBoard(int cardId)
+        {
+            throw new NotImplementedException();
+        }
+
         public Card GetCardFromTimeOfDaySlot()
         {
             throw new NotImplementedException();

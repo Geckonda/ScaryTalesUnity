@@ -77,5 +77,7 @@ namespace ScaryTales
         }
 
         public Card? GetCardFromTimeOfDaySlot() => _timeOfDay;
+
+        public Card? GetCardFromBoard(int cardId) => _cardsOnBoard.FirstOrDefault(x => x.Id == cardId);
     }
 }

@@ -125,7 +125,22 @@ namespace Assets.Scripts.Network
             }
         }
 
+        [Command(requiresAuthority = false)]
+        public void CmdSelectCard(int cardId)
+        {
+            // Рассылаем всем нужным клиентам выбранный ID
+            RpcNotifyOtherPlayersCardSelected(cardId);
+        }
 
+        [ClientRpc]
+        private void RpcNotifyOtherPlayersCardSelected(int cardId)
+        {
+            if (!isLocalPlayer) // Чтобы не вызывалось у того, кто сам выбирал
+            {
+                var input = (NetworkPlayerInput)UnGameManager.Instance.CurrentPlayer.PlayerInput;
+                input.OnCardSelectedFromRemote(cardId);
+            }
+        }
 
 
         [Server]
