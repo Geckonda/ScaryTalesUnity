@@ -6,10 +6,15 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ScaryTales.CardEffects
+namespace Assets.Libreries.ScaryTales.CardEffects
 {
-    public class FollyKingEffect : ICardEffect
+    public class KingEffect : ICardEffect
     {
+        private readonly bool _isWisdom;
+        public KingEffect(bool isWisdom)
+        {
+            _isWisdom = isWisdom;
+        }
         public CardEffectTimeType Type => CardEffectTimeType.Instant;
 
         public Task ApplyEffect(IGameContext context)
@@ -27,7 +32,7 @@ namespace ScaryTales.CardEffects
                 return Task.CompletedTask;
             }
             var earnedPoints = places.Count;
-            if (state.IsNight)
+            if ((state.IsNight && !_isWisdom) || (!state.IsNight && _isWisdom))
                 manager.AddPointsToPlayer(player, earnedPoints * 2);
             else
                 manager.AddPointsToPlayer(player, earnedPoints);
