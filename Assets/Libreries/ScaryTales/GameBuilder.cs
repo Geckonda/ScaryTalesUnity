@@ -92,7 +92,7 @@ namespace ScaryTales
                 new OldMasterCard(),
                 new DarkLordCard(),
                 new DragonCard(),
-                new EnchantedForestCard(),
+                //new EnchantedForestCard(),
                 new PrincessCard(),
                 new MerchantCard(),
                 new WizardCard(),
