@@ -5,6 +5,7 @@ using ScaryTales.Enums;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace Assets.Scripts.Network
 {
@@ -93,6 +94,11 @@ namespace Assets.Scripts.Network
         private List<Card> _availableCards;
         public async Task<Card> SelectCard(List<Card> availableCards)
         {
+            // Уничтожаем старый TCS, если он есть
+            if (_cardSelectionTcs != null && !_cardSelectionTcs.Task.IsCompleted)
+            {
+                _cardSelectionTcs.SetCanceled();
+            }
             _availableCards = availableCards;
             // Ждём выбора от клиента, который реально играет
             _cardSelectionTcs = new TaskCompletionSource<Card>();
@@ -104,11 +110,21 @@ namespace Assets.Scripts.Network
         // Этот метод вызывается из RPC, когда сервер узнаёт, что выбрал другой игрок
         public void OnCardSelectedFromRemote(int cardId)
         {
-            var card = UnGameManager.Instance._context.GameBoard.GetCardFromBoard(cardId);
-            if (card != null && _cardSelectionTcs != null && !_cardSelectionTcs.Task.IsCompleted)
+            if (_cardSelectionTcs == null || _cardSelectionTcs.Task.IsCompleted)
             {
-                _cardSelectionTcs.SetResult(card);
+                Debug.LogWarning("CardSelectionTcs is not active or already completed.");
+                return;
             }
+
+            var card = UnGameManager.Instance._context.GameBoard.GetCardFromBoard(cardId);
+            if (card == null)
+            {
+                Debug.LogError($"Card with ID {cardId} not found on the board.");
+                _cardSelectionTcs.SetCanceled(); // Отмена задачи, если карта не найдена
+                return;
+            }
+
+            _cardSelectionTcs.SetResult(card); // Успешное завершение
         }
     }
 }

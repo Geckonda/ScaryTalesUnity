@@ -36,9 +36,10 @@ namespace Assets.Scripts.Network
         private void TargetSetPlayer(NetworkConnection target, PlayerDTO playerDTO, PlayerDTO opponentDTO, List<int> cardsId)
         {
             Debug.Log($"[CLIENT] Start game. My index is: {playerDTO.Id}");
+            var networkInput = NetworkClient.localPlayer.GetComponent<NetworkPlayerInput>();
 
             var localPlayer = new Player(playerDTO.Id, playerDTO.Name, new UnityPlayerInput());
-            var localOpponent = new Player(opponentDTO.Id, opponentDTO.Name, new NetworkPlayerInput());
+            var localOpponent = new Player(opponentDTO.Id, opponentDTO.Name, networkInput);
             GameBuilder builder;
             if (playerDTO.IsStartPlayer)
             {
@@ -128,6 +129,13 @@ namespace Assets.Scripts.Network
         [Command(requiresAuthority = false)]
         public void CmdSelectCard(int cardId)
         {
+            Debug.Log($"Server: Received cardId: {cardId}, type: {cardId.GetType()}");
+
+            if (cardId < 0) // Пример валидации
+            {
+                Debug.LogError("Invalid cardId!");
+                return;
+            }
             // Рассылаем всем нужным клиентам выбранный ID
             RpcNotifyOtherPlayersCardSelected(cardId);
         }
