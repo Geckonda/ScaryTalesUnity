@@ -121,7 +121,7 @@ namespace Assets.Scripts.Network
         {
             if (!isLocalPlayer) // Чтобы не вызывалось у того, кто сам выбирал
             {
-                var input = (NetworkPlayerInput)UnGameManager.Instance.CurrentPlayer.PlayerInput;
+                var input = (NetworkPlayerInput)UnGameManager.Instance.LocalOpponent.PlayerInput;
                 input.OnItemSelectedFromRemote(itemType);
             }
         }
@@ -145,7 +145,7 @@ namespace Assets.Scripts.Network
         {
             if (!isLocalPlayer) // Чтобы не вызывалось у того, кто сам выбирал
             {
-                var input = (NetworkPlayerInput)UnGameManager.Instance.CurrentPlayer.PlayerInput;
+                var input = (NetworkPlayerInput)UnGameManager.Instance.LocalOpponent.PlayerInput;
                 input.OnCardSelectedFromRemote(cardId);
             }
         }
