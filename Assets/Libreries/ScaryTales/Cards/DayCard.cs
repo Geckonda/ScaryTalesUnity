@@ -1,4 +1,5 @@
-﻿using ScaryTales.Abstractions;
+﻿using Assets.Libreries.ScaryTales.CardEffects;
+using ScaryTales.Abstractions;
 using ScaryTales.CardEffects;
 using ScaryTales.Enums;
 using System;
@@ -23,7 +24,7 @@ namespace ScaryTales.Cards
 
         public override int CardCountInDeck => 3;
 
-        public override ICardEffect Effect => new SwapToDayEffect();
+        public override ICardEffect Effect => new SwapGameTimeEffect(false);
 
         public override async Task ActivateEffect(IGameContext context)
         {
