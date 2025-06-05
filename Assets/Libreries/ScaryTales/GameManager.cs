@@ -159,6 +159,7 @@ namespace ScaryTales
         public async Task PlayCard(Card card)
         {
             var player = _context.GameState.GetCurrentPlayer();
+            var board = _context.GameBoard;
             if (player.HasCard(card))
             {
                 player.RemoveCardFromHand(card);
@@ -166,6 +167,7 @@ namespace ScaryTales
                 PutCardOnBoard(card); // Опасно
                 AddPointsToPlayer(player, card.Points);
                 await ActivateInstantCardEffect(card);
+                board.RemoveCardFromBoard(card); // Опасно
                 MoveCardToItsPosition(card);
             }
         }
