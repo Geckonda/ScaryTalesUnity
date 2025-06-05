@@ -377,3 +377,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemNameText: {fileID: 6874105149504290485}
   highlightFrame: {fileID: 2113902942548428009}
+  background: {fileID: 8248419255128080064}

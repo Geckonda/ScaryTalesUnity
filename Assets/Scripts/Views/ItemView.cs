@@ -11,6 +11,7 @@ public class ItemView : MonoBehaviour, IPointerClickHandler
 
     public TMP_Text itemNameText;
     public Image highlightFrame; // Подсветка предмета
+    public Image background;
 
     private Item _item;
 
@@ -24,6 +25,7 @@ public class ItemView : MonoBehaviour, IPointerClickHandler
     public void DisplayItem()
     {
         itemNameText.text = _item.Name;
+        SetColorItem();
     }
 
     public void OnPointerClick(PointerEventData eventData)
@@ -38,5 +40,25 @@ public class ItemView : MonoBehaviour, IPointerClickHandler
     {
         if (highlightFrame != null)
             highlightFrame.gameObject.SetActive(isHighlighted);
+    }
+    private void SetColorItem()
+    {
+        switch (_item.Type)
+        {
+            case ScaryTales.Enums.ItemType.Coin:
+                background.color = new Color(255, 200, 0);
+                break;
+            case ScaryTales.Enums.ItemType.Sword:
+                background.color = Color.red;
+                break;
+            case ScaryTales.Enums.ItemType.Armor:
+                background.color = new Color(139, 0, 255);
+                break;
+            case ScaryTales.Enums.ItemType.MagicStick:
+                background.color = Color.green;
+                break;
+            default:
+                break;
+        }
     }
 }
