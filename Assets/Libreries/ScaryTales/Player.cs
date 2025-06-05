@@ -116,5 +116,12 @@ namespace ScaryTales
         /// </summary>
         public async Task<Item> SelectItem(List<Item> items)
             => await _playerInput.SelectItem(items);
+        /// <summary>
+        /// Игрок выбирает предмет из своего инвенторя
+        /// </summary>
+        public async Task<Item> SelectItemFromItemBag()
+            => await _playerInput.SelectItem(_itemsBag);
+
+        public List<Item> ShowItemsFormItemBag() => new List<Item>(_itemsBag);
     }
 }

@@ -95,7 +95,7 @@ namespace ScaryTales.Interaction_Entities.EnvUnity
             }
 
             // Отображаем предметы в контейнере
-            ItemContainer.Instance.Show(_itemViewsToSelect);
+            ItemContainer.Instance.Show(_itemViewsToSelect, false);
 
             // Ожидаем, пока пользователь выберет предмет
             while (!_isItemSelected)
@@ -105,8 +105,6 @@ namespace ScaryTales.Interaction_Entities.EnvUnity
 
             GameNetworkController.Instance.CmdSelectItem((int)_selectedItem.Type);
 
-            // Прячем контейнер после выбора предмета
-            ItemContainer.Instance.Hide();
 
             // Отписываемся от событий кликов по предметам
             foreach (var itemView in _itemViewsToSelect)
@@ -115,8 +113,11 @@ namespace ScaryTales.Interaction_Entities.EnvUnity
                 itemView.SetHighlight(false); // Снимаем выделение с предметов
             }
 
+
+            // Прячем контейнер после выбора предмета
+            ItemContainer.Instance.Hide();
             // Очищаем контейнер от представлений предметов
-            ItemContainer.Instance.ClearContentPanelchildren();
+            //ItemContainer.Instance.ClearContentPanelchildren();
 
             // Возвращаем выбранный предмет
             return _selectedItem;

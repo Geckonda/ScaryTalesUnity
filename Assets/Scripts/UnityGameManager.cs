@@ -8,6 +8,8 @@ using TMPro;
 using UnityEngine;
 using System.Threading.Tasks;
 using Assets.Scripts.Network;
+using System.Linq;
+using static UnityEditor.Progress;
 
 public class UnGameManager : MonoBehaviour
 {
@@ -91,6 +93,15 @@ public class UnGameManager : MonoBehaviour
                 _gameManager.DrawCard(player);
             }
         }
+    }
+
+    public void ShowLocalPlayerItemBag()
+    {
+        // Получаем контейнер для отображения предметов
+        var itemContainer = ItemContainer.Instance.contentPanel;
+
+        var items = LocalPlayer.ShowItemsFormItemBag();
+        ItemContainer.Instance.Show(items);
     }
 
     private async void HandlePlayerTurn()
