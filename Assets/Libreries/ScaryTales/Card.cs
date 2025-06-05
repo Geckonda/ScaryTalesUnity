@@ -40,5 +40,10 @@ namespace ScaryTales
         public abstract Task ActivateEffect(IGameContext context);
 
         public abstract Card Clone();
+
+        public override string ToString()
+        {
+            return $"{this.Id} | {this.Name} | ow:{this.Owner.Name} | pos: {this.Position}"; 
+        }
     }
 }
