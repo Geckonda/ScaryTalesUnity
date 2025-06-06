@@ -9,7 +9,6 @@ using UnityEngine;
 using System.Threading.Tasks;
 using Assets.Scripts.Network;
 using System.Linq;
-using static UnityEditor.Progress;
 
 public class UnGameManager : MonoBehaviour
 {

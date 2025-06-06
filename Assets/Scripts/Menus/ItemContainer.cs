@@ -1,8 +1,6 @@
-﻿using Castle.Core.Internal;
-using ScaryTales;
+﻿using ScaryTales;
 using System.Collections.Generic;
 using TMPro;
-using UnityEditor.Search;
 using UnityEngine;
 using UnityEngine.UI;
 
