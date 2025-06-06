@@ -115,11 +115,13 @@ namespace Assets.Scripts.Network
                 Debug.LogWarning("CardSelectionTcs is not active or already completed.");
                 return;
             }
-
-            var card = UnGameManager.Instance._context.GameBoard.GetCardFromBoard(cardId);
+            
+            var card = UnGameManager.Instance._context.GameBoard.GetCardFromBoard(cardId)
+                ?? UnGameManager.Instance.LocalPlayer.Hand.FirstOrDefault(x => x.Id == cardId)
+                ?? UnGameManager.Instance.LocalOpponent.Hand.FirstOrDefault(x => x.Id == cardId);
             if (card == null)
             {
-                Debug.LogError($"Card with ID {cardId} not found on the board.");
+                Debug.LogError($"Card with ID {cardId} not found on field.");
                 _cardSelectionTcs.SetCanceled(); // Отмена задачи, если карта не найдена
                 return;
             }

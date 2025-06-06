@@ -17,8 +17,8 @@ namespace ScaryTales.CardEffects
         {
             var state = context.GameState;
             var manager = context.GameManager;
-            var player = state.GetCurrentPlayer();
-            var players = state.GetPlayers();
+            var localPlayer = manager.LocalPlayer;
+            var localOpponent = manager.LocalOpponent;
             var deck = context.Deck;
 
             if(deck.CardsRemaining == 0)
@@ -26,7 +26,7 @@ namespace ScaryTales.CardEffects
                 manager.PrintMessage("В колоде не осталось карт.");
                 return;
             }
-            manager.DrawCard(player);
+            manager.DrawCard(localPlayer);
 
             if (deck.CardsRemaining == 0)
             {
@@ -37,21 +37,30 @@ namespace ScaryTales.CardEffects
             if (!state.IsNight)
             {
                 manager.PrintMessage("Все игроки вытягивают 1 карту из колоды");
-                foreach (var p in players)
-                {
-                    manager.DrawCard(p);
-                }
+                manager.DrawCard(localPlayer);
+                manager.DrawCard(localOpponent);
             }
             else
             {
                 manager.PrintMessage("Все игроки сбрасывают 1 карту из своей руки");
-                foreach (var p in players)
-                {
-                    manager.PrintMessage($"Игрок {p.Name} нужно выбрать карту для сброса.");
-                    var card = await p.SelectCardAmongOthers(p.Hand);
-                    p.RemoveCardFromHand(card);
-                    manager.PutCardToDiscardPile(card);
-                }
+
+                // Запускаем выбор карт у обоих игроков одновременно
+                var localPlayerTask = localPlayer.SelectCardAmongOthers(localPlayer.Hand);
+                var localOpponentTask = localOpponent.SelectCardAmongOthers(localOpponent.Hand);
+
+                // Показываем параллельные сообщения (если нужно)
+                manager.PrintMessage($"Игрок {localPlayer.Name} выбирает карту для сброса.");
+                manager.PrintMessage($"Игрок {localOpponent.Name} выбирает карту для сброса.");
+
+                // Дожидаемся, когда оба выберут
+                var cards = await Task.WhenAll(localPlayerTask, localOpponentTask);
+
+                // Обрабатываем результат
+                localPlayer.RemoveCardFromHand(cards[0]);
+                manager.PutCardToDiscardPile(cards[0]);
+
+                localOpponent.RemoveCardFromHand(cards[1]);
+                manager.PutCardToDiscardPile(cards[1]);
             }
         }
     }

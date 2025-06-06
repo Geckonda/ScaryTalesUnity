@@ -113,5 +113,7 @@ namespace ScaryTales.Abstractions
         public event Action<Player>? OnAddPointsToPlayer;
         public event Action<string>? OnMessagePrinted;
 
+        public Player LocalPlayer { get; set; }
+        public Player LocalOpponent { get; set; }
     }
 }

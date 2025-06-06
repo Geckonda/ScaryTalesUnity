@@ -23,6 +23,8 @@ namespace ScaryTales
         public event Action<Player>? OnAddPointsToPlayer;
         public event Action<string>? OnMessagePrinted;
 
+        public Player LocalPlayer { get; set; }
+        public Player LocalOpponent { get; set; }
 
         public GameManager(IGameState gameState, IGameBoard gameBoard,
             List<Player> players, Deck deck, ItemManager items,

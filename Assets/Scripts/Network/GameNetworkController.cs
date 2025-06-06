@@ -60,7 +60,8 @@ namespace Assets.Scripts.Network
 
             var game = builder.Build();
             game._context.Deck.ShuffleById(cardsId);
-
+            game.LocalPlayer = localPlayer;
+            game.LocalOpponent = localOpponent;
 
 
             UnGameManager.Instance._context = game._context;
