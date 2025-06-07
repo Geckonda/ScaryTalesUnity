@@ -122,7 +122,7 @@ namespace ScaryTales
         public async Task<Item> SelectItemFromItemBag()
             => await _playerInput.SelectItem(_itemsBag);
 
-        public List<Item> ShowItemsFormItemBag() => new List<Item>(_itemsBag);
+        public List<Item> ShowItemsFromItemBag() => new List<Item>(_itemsBag);
 
         public override string ToString()
         {

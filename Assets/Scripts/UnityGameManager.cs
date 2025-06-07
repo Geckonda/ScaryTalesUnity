@@ -99,7 +99,7 @@ public class UnGameManager : MonoBehaviour
         // Получаем контейнер для отображения предметов
         var itemContainer = ItemContainer.Instance.contentPanel;
 
-        var items = LocalPlayer.ShowItemsFormItemBag();
+        var items = LocalPlayer.ShowItemsFromItemBag();
         ItemContainer.Instance.Show(items);
     }
 
