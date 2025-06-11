@@ -116,6 +116,12 @@ namespace ScaryTales
         /// Удаляет предмет у игрока
         /// </summary>
         public void RemoveItemFromItemBag(Item item) => _itemsBag.Remove(item);
+
+        /// <summary>
+        /// Удаляет предмет у игрока по типу
+        /// </summary>
+        public void RemoveItemFromItemBag(ItemType type)
+            => _itemsBag.Remove(_itemsBag.FirstOrDefault(x => x.Type == type));
         /// <summary>
         /// Игрок выбирает нужный ему предмет
         /// </summary>
