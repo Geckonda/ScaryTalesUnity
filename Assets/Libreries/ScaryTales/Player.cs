@@ -1,4 +1,5 @@
 ﻿using ScaryTales.Abstractions;
+using ScaryTales.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -107,6 +108,10 @@ namespace ScaryTales
         /// Есть ли у игрока такой предмет
         /// </summary>
         public bool HasItem(Item item) => _itemsBag.Contains(item);
+        /// <summary>
+        /// Есть ли у игрока такой предмет
+        /// </summary>
+        public bool HasItem(ItemType type) => _itemsBag.Any(x => x.Type == type);
         /// <summary>
         /// Удаляет предмет у игрока
         /// </summary>
