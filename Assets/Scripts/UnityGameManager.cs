@@ -111,6 +111,12 @@ public class UnGameManager : MonoBehaviour
         _textUIManager.UpdateCurrentPlayerText();
         _gameManager.DrawCard(CurrentPlayer);
         await AnimationManager.Instance.WaitForAllAnimations();
+
+        if (CurrentPlayer.ItemsBagCount > 0)
+        {
+            StartCoroutine(PlayerUseItems(CurrentPlayer));
+        }
+
         if (CurrentPlayer.Hand.Count == 0)
             _gameManager.EndGame();
         else
@@ -132,6 +138,20 @@ public class UnGameManager : MonoBehaviour
         await _context.GameManager.ActivateAllPlayerPermanentCardEffects(CurrentPlayer);
         _context.GameState.NextTurn();
         HandlePlayerTurn();
+    }
+
+    private async Task EndChoosingItems()
+    {
+
+    }
+    private IEnumerator PlayerUseItems(Player player)
+    {
+        if (!Application.isPlaying)
+            yield break;
+
+        // Продолжать здесь!!!!!
+
+        yield return EndChoosingItems().AsIEnumerator();
     }
 
     private IEnumerator ProcessPlayerActions(Player player)

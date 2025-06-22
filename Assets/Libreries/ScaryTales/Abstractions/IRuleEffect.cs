@@ -1,0 +1,16 @@
+﻿using ScaryTales.Abstractions;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Assets.Libreries.ScaryTales.Abstractions
+{
+    public interface IRuleEffect
+    {
+        public string Description { get; }
+        public bool IsEffectAvailable(IGameContext context);
+        public Task ApplyEffect(IGameContext context);
+    }
+}
