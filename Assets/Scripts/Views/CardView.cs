@@ -49,11 +49,18 @@ public class CardView : MonoBehaviour, IPointerClickHandler
             _background.color = new Color(1f, 1f, 1f, 1f); // Белый цвет с полной непрозрачностью
             ChangeTextVisibility(false);
             _background.sprite = _enemyBackgroundSprite;
-
         }
         else
         {
-            _background.color = Color.blue;
+            var frontSprite = Resources.Load<Sprite>($"CardsImages/{_card.Name}");
+            if (frontSprite != null)
+            {
+                _background.sprite = frontSprite;
+            }
+            else
+            {
+                _background.color = Color.blue;
+            }
         }
     }
     public void FaceUp()
@@ -65,7 +72,15 @@ public class CardView : MonoBehaviour, IPointerClickHandler
             else
                 _background.color = Color.red;
             ChangeTextVisibility(true);
-            _background.sprite = null;
+            var frontSprite = Resources.Load<Sprite>($"CardsImages/{_card.Name}");
+            if (frontSprite != null)
+            {
+                _background.sprite = frontSprite;
+            }
+            else
+            {
+                _background.sprite = null;
+            }
         }
     }
     public void OnPointerClick(PointerEventData eventData)
@@ -87,6 +102,5 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         _cardScoreText.gameObject.SetActive(isVisible);
         _cardTypeText.gameObject.SetActive(isVisible);
         _cardQuantityText.gameObject.SetActive(isVisible);
-
     }
 }
