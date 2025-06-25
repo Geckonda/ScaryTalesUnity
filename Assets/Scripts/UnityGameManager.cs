@@ -36,14 +36,6 @@ public class UnGameManager : MonoBehaviour
         {
             Destroy(gameObject);
         }
-        //var playerInput = new GameObject("PlayerInputObject").AddComponent<UnityPlayerInput>();
-
-        //// Инициализация игры
-        //var builder = new GameBuilder(playerInput,
-        //    new UnityNotifier(),
-        //    new GameBoard());
-        //_gameManager = builder.Build();
-        //_context = _gameManager._context;
         _cardViewService = CardViewService.Instance;
     }
     public Player LocalPlayer { get; private set; }
@@ -51,10 +43,6 @@ public class UnGameManager : MonoBehaviour
     public void SetLocalPlayer(Player player) => LocalPlayer = player;
     public void SetLocalOpponent(Player player) => LocalOpponent = player;
 
-    async void Start()
-    {
-        //await StartGame();
-    }
     private async Task StartGame()
     {
         PrepareFirstNight();
@@ -81,7 +69,6 @@ public class UnGameManager : MonoBehaviour
     }
     public async Task DrawCardsToPlayersHand()
     {
-        //_gameManager.DrawCardsToPlayersHand();
         var players = _context.Players;
         var deck = _context.Deck;
         foreach (var player in players)
@@ -105,18 +92,20 @@ public class UnGameManager : MonoBehaviour
 
     private async void HandlePlayerTurn()
     {
-        Debug.Log("Ждём окончания всех анимаций...");
+        Debug.Log($"1) HandlePlayerTurn DragAndDrop is {DragAndDrop.SelectCard}");
+        DragAndDrop.SelectCard = false;
+
         await AnimationManager.Instance.WaitForAllAnimations();
-        Debug.Log("Анимации завершены.");
         _textUIManager.UpdateCurrentPlayerText();
         _gameManager.DrawCard(CurrentPlayer);
         await AnimationManager.Instance.WaitForAllAnimations();
+        Debug.Log($"2) HandlePlayerTurn DragAndDrop is {DragAndDrop.SelectCard}");
 
+        EnablePlayerDrag(CurrentPlayer);
         if (CurrentPlayer.ItemsBagCount > 0)
         {
             StartCoroutine(PlayerUseItems(CurrentPlayer));
         }
-
         if (CurrentPlayer.Hand.Count == 0)
             _gameManager.EndGame();
         else
@@ -136,6 +125,7 @@ public class UnGameManager : MonoBehaviour
     private async Task EndTurn()
     {
         await _context.GameManager.ActivateAllPlayerPermanentCardEffects(CurrentPlayer);
+        Debug.Log($"ENDTURHN DragAndDrop is {DragAndDrop.SelectCard}");
         _context.GameState.NextTurn();
         HandlePlayerTurn();
     }
@@ -160,6 +150,11 @@ public class UnGameManager : MonoBehaviour
         if (!Application.isPlaying)
             yield break;
 
+        // Только локальный игрок должен выполнять выбор карты
+        if (_gameManager.LocalPlayer != player)
+        {
+            yield break;
+        }
         bool cardSelected = false;
         Card selectedCard = null;
 
@@ -204,19 +199,42 @@ public class UnGameManager : MonoBehaviour
         // Если карта выбрана, разыгрываем её
         if (selectedCard != null)
         {
-            // Создаем Task для ожидания завершения PlayCard
-            //Task playCardTask = _gameManager.PlayCard(selectedCard);
-
-            // Ожидаем завершения Task в корутине
-            //yield return new WaitUntil(() => playCardTask.IsCompleted);
-
             GameNetworkController.Instance.CmdPlayCard(selectedCard.Id);
 
             yield break;
         }
+        DisablePlayerDrag(CurrentPlayer);
+        yield break;
 
-        yield return EndTurn().AsIEnumerator();
+    }
+    public void EnablePlayerDrag(Player player)
+    {
+        if (!_playerHandUI._playerHandPanels.TryGetValue(player, out var handPanel))
+            return;
 
+        foreach (Transform child in handPanel)
+        {
+            var cardView = child.GetComponent<CardView>();
+            if (cardView != null)
+            {
+                _cardViewService.CardViewFactory.EnableDrag(cardView);
+            }
+        }
+    }
+
+    public void DisablePlayerDrag(Player player)
+    {
+        if (!_playerHandUI._playerHandPanels.TryGetValue(player, out var handPanel))
+            return;
+
+        foreach (Transform child in handPanel)
+        {
+            var cardView = child.GetComponent<CardView>();
+            if (cardView != null)
+            {
+                _cardViewService.CardViewFactory.DisableDrag(cardView);
+            }
+        }
     }
 
 }

@@ -41,10 +41,27 @@ namespace Assets.Scripts.Factories
             DragAndDrop dragAndDrop = cardInstance.GetComponent<DragAndDrop>();
             if (dragAndDrop != null)
             {
-                dragAndDrop.Initialize(_gameManager, card, _gameBoardPanel);
+                dragAndDrop.Initialize(_gameManager, card, _gameBoardPanel, parent);
             }
 
             return cardView;
         }
+        public void EnableDrag(CardView cardView)
+        {
+            var dragAndDrop = cardView.GetComponent<DragAndDrop>();
+            if (dragAndDrop == null)
+                dragAndDrop = cardView.gameObject.AddComponent<DragAndDrop>();
+
+            dragAndDrop.Initialize(_gameManager, cardView._card, _gameBoardPanel, cardView.transform.parent);
+        }
+
+        public void DisableDrag(CardView cardView)
+        {
+            var dragAndDrop = cardView.GetComponent<DragAndDrop>();
+            if (dragAndDrop != null)
+                GameObject.Destroy(dragAndDrop);
+        }
+
     }
+
 }

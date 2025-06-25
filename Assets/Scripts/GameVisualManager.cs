@@ -141,7 +141,7 @@ namespace Assets.Scripts
             DragAndDrop dragAndDrop = cardInstance.GetComponent<DragAndDrop>();
             if (dragAndDrop != null)
             {
-                dragAndDrop.Initialize(_context.GameManager, card, GameBoardPanel);
+                //dragAndDrop.Initialize(_context.GameManager, card, GameBoardPanel);
             }
         }
         public void UpdateCurrentPlayerText()

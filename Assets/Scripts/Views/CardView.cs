@@ -17,7 +17,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     public TMP_Text _cardQuantityText;
     public Image _highlightFrame; // —сылка на Image дл€ рамки
 
-    private Card _card;
+    public Card _card;
     private Image _background;
 
     [SerializeField] private Sprite _enemyBackgroundSprite; 

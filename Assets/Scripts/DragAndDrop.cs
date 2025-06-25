@@ -20,6 +20,9 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
 
     public event Action<Card> OnCardSelected;
 
+    // Выполняем действия инициализации, которые обычно в OnBeginDrag:
+    private bool dragStarted = false;
+
     /// <summary>
     /// Проверяем, что карта принадлежит текущему игроку и карту можно выбирать и карта в руке игрока
     /// </summary>
@@ -27,26 +30,28 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
     private bool CardIsNotDragable() => UnGameManager.Instance.LocalPlayer != UnGameManager.Instance.CurrentPlayer
         || card.Owner != UnGameManager.Instance.CurrentPlayer
         || !SelectCard || card.Position != ScaryTales.Enums.CardPosition.InHand;
-    public void Initialize(IGameManager manager, Card cardData, Transform board)
+    public void Initialize(IGameManager manager, Card cardData, Transform board, Transform parent)
     {
         gameManager = manager;
         card = cardData;
         gameBoard = board;
+        parentToReturnTo = parent;
     }
 
     public void OnBeginDrag(PointerEventData eventData)
     {
         if (CardIsNotDragable()) return;
 
+        OnInit();
 
-        startPosition = transform.position;
-        parentToReturnTo = transform.parent;
-        transform.SetParent(transform.root);
+        Debug.Log($"DaD: {this.card}");
     }
 
     public void OnDrag(PointerEventData eventData)
     {
         if (CardIsNotDragable()) return;
+        if (!dragStarted)
+            OnInit();
 
         transform.position = eventData.position;
     }
@@ -54,6 +59,8 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
     public void OnEndDrag(PointerEventData eventData)
     {
         if (CardIsNotDragable()) return;
+
+        dragStarted = false; // сброс состояния
 
         // Если карта перемещена на стол, разыгрываем её
         if (RectTransformUtility.RectangleContainsScreenPoint(
@@ -68,4 +75,15 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
             transform.position = startPosition;
         }
     }
+    private void OnInit()
+    {
+        startPosition = transform.position;
+        //parentToReturnTo = transform.parent;
+        transform.SetParent(transform.root);
+    }
+    public void ClearAllListeners()
+    {
+        OnCardSelected = null;
+    }
+
 }

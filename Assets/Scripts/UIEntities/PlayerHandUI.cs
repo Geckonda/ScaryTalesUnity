@@ -52,46 +52,49 @@ public class PlayerHandUI : MonoBehaviour
         if (unityManager == null)
             return;
 
-        CardView cardView;
-        var deck = unityManager.Deck;
         if (!_playerHandPanels.TryGetValue(player, out var hand))
             return;
 
-        if (_cardViewService.GetCardView(card) == null)
-        {
-            cardView = _cardViewService.CreateCardView(card, deck);
-        }
-        else
-        {
-            cardView = _cardViewService.GetCardView(card);
-        }
-
+        var deck = unityManager.Deck;
+        var cardView = _cardViewService.GetCardView(card) ?? _cardViewService.CreateCardView(card, deck);
         cardView.SetCardViewBackground(card.Owner);
+
+        // Здесь мы создаём настоящий Task, и только потом регистрируем
         var animationTask = AnimateCardToHand(cardView, hand);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
     }
-    public async Task AnimateCardToHand(CardView card, Transform hand)
+
+
+    private async Task AnimateCardToHand(CardView cardView, Transform hand)
     {
+        // Запускаем анимацию
+        await cardView.transform.DOMove(hand.position, 1f)
+            .SetEase(Ease.OutQuad)
+            .AsyncWaitForCompletion();
 
-        // Анимация перемещения карты в позицию руки
-        await card.transform.DOMove(hand.position, 1f) // Длительность анимации: 1 секунда
-            .SetEase(Ease.OutQuad) // Плавное замедление
-            .AsyncWaitForCompletion(); // Ожидаем завершения анимации
+        // Только после завершения tween'а — меняем родителя
+        cardView.transform.SetParent(hand);
 
-        // Плавное перемещение в конечную позицию внутри GridLayoutGroup
-        //await card.transform.DOLocalMove(Vector3.zero, 1f)
-        //    .SetEase(Ease.OutQuad)
-        //    .AsyncWaitForCompletion();
-
-
-        // Делаем карту дочерним объектом руки
-        card.transform.SetParent(hand);
-
-        // Принудительное обновление расположения GridLayout
+        // Принудительно перестраиваем layout
         LayoutRebuilder.ForceRebuildLayoutImmediate(hand.GetComponent<RectTransform>());
 
-        // Ждём, пока GridLayoutGroup обновит позиции
+        // Ждём один кадр, чтобы UI точно перестроился
         await Task.Yield();
     }
+    public void ClearAllCardListeners(Player player)
+    {
+        if (!_playerHandPanels.TryGetValue(player, out var panel))
+            return;
+
+        foreach (Transform cardTransform in panel)
+        {
+            var drag = cardTransform.GetComponent<DragAndDrop>();
+            if (drag != null)
+            {
+                drag.ClearAllListeners();
+            }
+        }
+    }
+
 }

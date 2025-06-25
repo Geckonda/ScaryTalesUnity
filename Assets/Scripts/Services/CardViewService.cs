@@ -12,6 +12,7 @@ public class CardViewService
     private readonly CardViewFactory _cardViewFactory;
     private readonly Dictionary<Card, CardView> _cardToCardViewMap = new Dictionary<Card, CardView>();
 
+    public CardViewFactory CardViewFactory => _cardViewFactory;
     private CardViewService()
     {
         // ѕолучаем зависимости (например, через UnGameManager)
