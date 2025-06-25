@@ -78,7 +78,6 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
     private void OnInit()
     {
         startPosition = transform.position;
-        //parentToReturnTo = transform.parent;
         transform.SetParent(transform.root);
     }
     public void ClearAllListeners()

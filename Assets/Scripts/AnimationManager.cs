@@ -50,8 +50,6 @@ public class AnimationManager : MonoBehaviour
     /// <returns>Задача, представляющая ожидание завершения всех анимаций.</returns>
     public async Task WaitForAllAnimations()
     {
-        Debug.Log($"[AnimationManager] Ждём {_activeAnimations.Count} анимаций...");
         await Task.WhenAll(_activeAnimations.ToArray());
-        Debug.Log($"[AnimationManager] Все анимации завершены.");
     }
 }
