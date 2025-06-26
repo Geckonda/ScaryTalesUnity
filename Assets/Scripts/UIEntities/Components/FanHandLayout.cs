@@ -20,7 +20,7 @@ namespace Assets.Scripts.UIEntities.Components
     {
         [Range(0, 180)] public float angle = 110f;
         [Range(0, 100)] public float spacing = 40f;
-        [Range(-300, 300)] public float verticalOffset = -150f; // <- добавили
+        [Range(-1000, 1000)] public float verticalOffset = -150f; // <- добавили
 
         [Range(0, 300)] public float radius = 0f;
         [Range(0.1f, 3f)] public float scale = 1f; // масштаб карты

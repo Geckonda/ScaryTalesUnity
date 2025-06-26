@@ -317,10 +317,10 @@ MonoBehaviour:
     m_Top: 0
     m_Bottom: 0
   m_ChildAlignment: 0
-  angle: 115
+  angle: 60
   spacing: 85.9
-  verticalOffset: -300
-  radius: 200
+  verticalOffset: -440
+  radius: 260
   scale: 1
   fanUpwards: 1
 --- !u!1 &478253977
@@ -3227,7 +3227,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 2107280953}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 40a428f4c8f85d442a3e833c1cb01966, type: 3}
+  m_Script: {fileID: 11500000, guid: c000279aaef71474a8878c83f5c75e99, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   m_Padding:
@@ -3235,13 +3235,14 @@ MonoBehaviour:
     m_Right: 0
     m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 4
-  angle: 110
-  spacing: 40
-  verticalOffset: -150
-  radius: 0
-  scale: 1.31
-  fanUpwards: 0
+  m_ChildAlignment: 0
+  cellSize: {x: 150, y: 250}
+  spacing: {x: 20, y: 0}
+  verticalOffset: -90
+  scale: 1.3
+  ellipseHeight: 30
+  spacingX: 20
+  rotationAngle: 10
 --- !u!1 &2109685232
 GameObject:
   m_ObjectHideFlags: 0
