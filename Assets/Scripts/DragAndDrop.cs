@@ -53,6 +53,7 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
         if (!dragStarted)
             OnInit();
 
+        transform.localRotation = Quaternion.identity;
         transform.position = eventData.position;
     }
 

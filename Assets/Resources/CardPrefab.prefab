@@ -1015,9 +1015,9 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -683, y: 0}
+  m_AnchoredPosition: {x: -683, y: -125}
   m_SizeDelta: {x: 150, y: 250}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_Pivot: {x: 0.5, y: 0}
 --- !u!222 &2459107839523600839
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1039,7 +1039,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.5254902}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1075,7 +1075,6 @@ MonoBehaviour:
   _cardQuantityText: {fileID: 108839933211607267}
   _highlightFrame: {fileID: 2113902942548428009}
   _enemyBackgroundSprite: {fileID: 21300000, guid: a4b47fc3810f1e1438fde3a61c33d0b8, type: 3}
-  _sideFrame: {fileID: 0}
 --- !u!114 &764412638383648772
 MonoBehaviour:
   m_ObjectHideFlags: 0
