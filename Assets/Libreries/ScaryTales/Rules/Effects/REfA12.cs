@@ -12,15 +12,22 @@ namespace Assets.Libreries.ScaryTales.Rules.Effects
 {
     public class REfA12 : IRuleEffect
     {
+        public REfA12(int id)
+        {
+            this._id = id;
+        }
+        private int _id;
         public string Description => "Сбросьте 1 меч и 1 любого разыгранного злодея, чтобы получить 3 ПО.";
 
-        public async Task ApplyEffect(IGameContext context)
+        public int Id => _id;
+
+        public async Task<bool> ApplyEffect(IGameContext context)
         {
             var manager = context.GameManager;
             if (!IsEffectAvailable(context))
             {
                 manager.PrintMessage($"Нельзя использовать правило 2. Условия не выполнены.");
-                return;
+                return false;
             }
 
             var player = context.GameState.GetCurrentPlayer();
@@ -35,6 +42,7 @@ namespace Assets.Libreries.ScaryTales.Rules.Effects
             board.RemoveCardFromBoard(monster);
             manager.PutCardToDiscardPile(monster);
             manager.AddPointsToPlayer(player, 3);
+            return true;
         }
 
         public bool IsEffectAvailable(IGameContext context)

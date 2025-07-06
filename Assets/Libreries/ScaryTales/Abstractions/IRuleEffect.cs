@@ -9,8 +9,9 @@ namespace Assets.Libreries.ScaryTales.Abstractions
 {
     public interface IRuleEffect
     {
+        public int Id { get; }
         public string Description { get; }
         public bool IsEffectAvailable(IGameContext context);
-        public Task ApplyEffect(IGameContext context);
+        public Task<bool> ApplyEffect(IGameContext context);
     }
 }

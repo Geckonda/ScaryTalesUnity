@@ -1,4 +1,8 @@
-﻿using Assets.Scripts.Network;
+﻿using Assets.Libreries.ScaryTales.Abstractions;
+using Assets.Scripts.Menus;
+using Assets.Scripts.Network;
+using Assets.Scripts.Services;
+using Assets.Scripts.Views;
 using ScaryTales.Abstractions;
 using System.Collections;
 using System.Collections.Generic;
@@ -128,10 +132,70 @@ namespace ScaryTales.Interaction_Entities.EnvUnity
             _selectedItem = item;
             _isItemSelected = true;
         }
+      
 
         public Task<bool> YesOrNo()
         {
             throw new System.NotImplementedException();
+        }
+
+        private IRuleEffect _selectedRuleEffect;
+        private bool _isRuleEffectSelected;
+
+        public async Task<IRuleEffect> SelectRuleEffect(List<IRuleEffect> effects)
+        {
+            // Очистка состояния выбора
+            _selectedRuleEffect = null;
+            _isRuleEffectSelected = false;
+
+            // Получаем контейнер
+            var ruleEffectContainer = RuleContainer.Instance.contentPanel;
+            List<RuleEffectView> _viewsToSelect = new();
+
+            // Создаем и настраиваем представления эффектов
+            foreach (var effect in effects)
+            {
+                var effectView = RuleEffectService.Instance.CreateRuleEffectView(effect, ruleEffectContainer);
+                if (effectView != null)
+                {
+                    effectView.OnRuleEffectClicked += OnRuleClicked;
+                    _viewsToSelect.Add(effectView);
+                }
+            }
+
+
+            // Показываем UI
+            RuleContainer.Instance.Show(_viewsToSelect, false, OnSkip);
+
+            // Ждем, пока игрок не выберет или не пропустит
+            while (!_isRuleEffectSelected)
+                await Task.Yield();
+
+            // Отписываемся
+            foreach (var view in _viewsToSelect)
+                view.OnRuleEffectClicked -= OnRuleClicked;
+            RuleContainer.Instance.SkipBtn.onClick.RemoveListener(OnSkip);
+
+            // Прячем UI
+            RuleContainer.Instance.Hide();
+
+            // Если выбрано правило — отправим команду на сервер
+            //if (_selectedRuleEffect != null)
+            //    GameNetworkController.Instance.CmdSelectRuleEffect(_selectedRuleEffect.Id);
+
+            return _selectedRuleEffect; // Вернёт null, если пропущено
+        }
+
+        // Подписываемся на кнопку пропуска
+        private void OnSkip()
+        {
+            _selectedRuleEffect = null;
+            _isRuleEffectSelected = true;
+        }
+        private void OnRuleClicked(IRuleEffect ruleEffect)
+        {
+            _selectedRuleEffect = ruleEffect;
+            _isRuleEffectSelected = true;
         }
     }
 }

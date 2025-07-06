@@ -1,4 +1,5 @@
-﻿using Mirror;
+﻿using Assets.Libreries.ScaryTales.Abstractions;
+using Mirror;
 using ScaryTales;
 using ScaryTales.Abstractions;
 using ScaryTales.Enums;
@@ -127,6 +128,25 @@ namespace Assets.Scripts.Network
             }
 
             _cardSelectionTcs.SetResult(card); // Успешное завершение
+        }
+
+        private TaskCompletionSource<IRuleEffect> _ruleEffectsSelectionTcs;
+        public async Task<IRuleEffect> SelectRuleEffect(List<IRuleEffect> effects)
+        {
+            // Ждём выбора от клиента, который реально играет
+            _ruleEffectsSelectionTcs = new TaskCompletionSource<IRuleEffect>();
+
+            // Ждать, пока этот TCS не будет завершён
+            return await _ruleEffectsSelectionTcs.Task;
+        }
+        // Этот метод вызывается из RPC, когда сервер узнаёт, что выбрал другой игрок
+        public void OnRuleEffectSelectedFromRemote(int ruleEffectId)
+        {
+            var effect = UnGameManager.Instance.CurrentRule.Effects.FirstOrDefault(x => x.Id == ruleEffectId);
+            if (effect != null && _ruleEffectsSelectionTcs != null && !_ruleEffectsSelectionTcs.Task.IsCompleted)
+            {
+                _ruleEffectsSelectionTcs.SetResult(effect);
+            }
         }
     }
 }

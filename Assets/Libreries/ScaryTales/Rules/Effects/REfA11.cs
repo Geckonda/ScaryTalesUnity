@@ -11,12 +11,20 @@ namespace Assets.Libreries.ScaryTales.Rules.Effects
 {
     public class REfA11 : IRuleEffect
     {
+        public REfA11(int id)
+        {
+            this._id = id;
+        }
+        private int _id;
+
+        public int Id => _id;
         public string Description => "Сбросьте 1 доспех, чтобы взять верхнюю карту стопки сброса.";
 
-        public async Task ApplyEffect(IGameContext context)
+        public async Task<bool> ApplyEffect(IGameContext context)
         {
             if (!IsEffectAvailable(context))
-                return;
+                return false;
+            return true;
         }
 
         public bool IsEffectAvailable(IGameContext context)

@@ -1,4 +1,5 @@
-﻿using ScaryTales.Enums;
+﻿using Assets.Libreries.ScaryTales.Abstractions;
+using ScaryTales.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -61,6 +62,10 @@ namespace ScaryTales.Abstractions
         /// Активируется постоянный эффект карты
         /// </summary>
         public Task ActivatePermanentCardEffect(Card card);
+        /// <summary>
+        /// Активируется эффект правила игры
+        /// </summary>
+        public Task ActivateRuleEffect(IRuleEffect effect);
         /// <summary>
         /// Присвоение пользователю ПО
         /// </summary>

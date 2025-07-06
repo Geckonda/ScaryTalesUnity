@@ -17,6 +17,6 @@ namespace Assets.Libreries.ScaryTales.Rules.Templates.A
 
         public override RuleType Type => RuleType.InGame;
 
-        public override List<IRuleEffect> Effects => new List<IRuleEffect>() { new REfA12() };
+        public override List<IRuleEffect> Effects => new List<IRuleEffect>() { new REfA11(1), new REfA12(2) };
     }
 }

@@ -1,14 +1,19 @@
+using Assets.Libreries.ScaryTales;
+using Assets.Libreries.ScaryTales.Abstractions;
+using Assets.Libreries.ScaryTales.Rules.Templates.A;
+using Assets.Scripts.Menus;
+using Assets.Scripts.Network;
+using Assets.Scripts.Utilities;
 using ScaryTales;
 using ScaryTales.Abstractions;
 using ScaryTales.Interaction_Entities.EnvUnity;
-using System.Collections;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
-using System.Threading.Tasks;
-using Assets.Scripts.Network;
-using System.Linq;
 
 public class UnGameManager : MonoBehaviour
 {
@@ -26,6 +31,9 @@ public class UnGameManager : MonoBehaviour
     public Transform Deck;
     public Player CurrentPlayer => _context.GameState.GetCurrentPlayer();
 
+    private Rule _currentRule;
+    public Rule CurrentRule => _currentRule;
+
     void Awake()
     {
         if (Instance == null)
@@ -37,6 +45,8 @@ public class UnGameManager : MonoBehaviour
             Destroy(gameObject);
         }
         _cardViewService = CardViewService.Instance;
+        // Жесткая установка правила
+        _currentRule = new A1();
     }
     public Player LocalPlayer { get; private set; }
     public Player LocalOpponent { get; private set; }
@@ -92,28 +102,38 @@ public class UnGameManager : MonoBehaviour
 
     private async void HandlePlayerTurn()
     {
-        Debug.Log($"1) HandlePlayerTurn DragAndDrop is {DragAndDrop.SelectCard}");
         DragAndDrop.SelectCard = false;
 
         await AnimationManager.Instance.WaitForAllAnimations();
         _textUIManager.UpdateCurrentPlayerText();
         _gameManager.DrawCard(CurrentPlayer);
         await AnimationManager.Instance.WaitForAllAnimations();
-        Debug.Log($"2) HandlePlayerTurn DragAndDrop is {DragAndDrop.SelectCard}");
 
-        EnablePlayerDrag(CurrentPlayer);
         if (CurrentPlayer.ItemsBagCount > 0)
         {
-            StartCoroutine(PlayerUseItems(CurrentPlayer));
+            await CoroutineUtils.WaitForCoroutine(this, PlayerUseRules(CurrentPlayer));
         }
+
+        EnablePlayerDrag(CurrentPlayer);
+        
         if (CurrentPlayer.Hand.Count == 0)
             _gameManager.EndGame();
         else
         {
-            StartCoroutine(ProcessPlayerActions(CurrentPlayer));
+            await CoroutineUtils.WaitForCoroutine(this, ProcessPlayerActions(CurrentPlayer));
         }
     }
+    public void ShowGameRules(bool openedByPlayer)
+    {
+        // Получаем контейнер для отображения предметов
+        var ruleContainer = RuleContainer.Instance.contentPanel;
 
+        RuleContainer.Instance.Show(_currentRule.Effects, openedByPlayer);
+    }
+    public async Task ApplyTheRule()
+    {
+        
+    }
     public async void PlayCard(Card card)
     {
         //Создаем Task для ожидания завершения PlayCard
@@ -134,14 +154,28 @@ public class UnGameManager : MonoBehaviour
     {
 
     }
-    private IEnumerator PlayerUseItems(Player player)
+    private IEnumerator PlayerUseRules(Player player)
     {
         if (!Application.isPlaying)
             yield break;
 
-        // Продолжать здесь!!!!!
+        // Ждём, пока игрок выберет или пропустит правило
+        var selectTask = player.SelectRuleEffect(CurrentRule.Effects); // <- это async Task<IRuleEffect>
+        yield return selectTask.AsIEnumerator(); // ждём завершения task внутри корутины
 
-        yield return EndChoosingItems().AsIEnumerator();
+        IRuleEffect chosen = selectTask.Result;
+
+        if (chosen == null)
+        {
+            Debug.Log("Игрок пропустил выбор правила.");
+            yield break;
+        }
+        else
+        {
+            Debug.Log($"Игрок выбрал правило {chosen.Id}.");
+            GameNetworkController.Instance.CmdSelectRuleEffect(chosen.Id);
+            yield break;
+        }
     }
 
     private IEnumerator ProcessPlayerActions(Player player)

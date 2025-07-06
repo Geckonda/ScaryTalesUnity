@@ -1,4 +1,5 @@
-﻿using ScaryTales.Abstractions;
+﻿using Assets.Libreries.ScaryTales.Abstractions;
+using ScaryTales.Abstractions;
 using ScaryTales.Enums;
 using System;
 using System.Collections.Generic;
@@ -127,6 +128,11 @@ namespace ScaryTales
         /// </summary>
         public async Task<Item> SelectItem(List<Item> items)
             => await _playerInput.SelectItem(items);
+        /// <summary>
+        /// Игрок выбирает нужнный ему эффект правила
+        /// </summary>
+        public async Task<IRuleEffect> SelectRuleEffect(List<IRuleEffect> ruleEffects)
+            => await _playerInput.SelectRuleEffect(ruleEffects);
         /// <summary>
         /// Игрок выбирает предмет из своего инвенторя
         /// </summary>

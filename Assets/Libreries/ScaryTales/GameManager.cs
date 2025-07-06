@@ -1,4 +1,5 @@
-﻿using ScaryTales.Abstractions;
+﻿using Assets.Libreries.ScaryTales.Abstractions;
+using ScaryTales.Abstractions;
 using ScaryTales.Enums;
 using System;
 using System.Collections.Generic;
@@ -292,6 +293,11 @@ namespace ScaryTales
         public void EndGame()
         {
             _context.GameState.EndGame();
+        }
+
+        public async Task ActivateRuleEffect(IRuleEffect effect)
+        {
+             await effect.ApplyEffect(_context);
         }
     }
 }

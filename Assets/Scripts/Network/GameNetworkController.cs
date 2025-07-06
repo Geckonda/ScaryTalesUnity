@@ -117,6 +117,19 @@ namespace Assets.Scripts.Network
             RpcNotifyOtherPlayersItemSelected(itemType);
         }
 
+        [Command(requiresAuthority = false)]
+        public void CmdSelectRuleEffect(int ruleEffectId)
+        {
+            var effect = UnGameManager.Instance.CurrentRule.Effects.FirstOrDefault(x => x.Id == ruleEffectId);
+
+            if(effect != null)
+            {
+                _serverGameContext.GameManager.ActivateRuleEffect(effect);
+                // Рассылаем всем нужным клиентам выбранный ID
+                RpcNotifyOtherPlayersRuleEffectSelected(ruleEffectId);
+            }
+        }
+
         [ClientRpc]
         private void RpcNotifyOtherPlayersItemSelected(int itemType)
         {
@@ -124,6 +137,15 @@ namespace Assets.Scripts.Network
             {
                 var input = (NetworkPlayerInput)UnGameManager.Instance.LocalOpponent.PlayerInput;
                 input.OnItemSelectedFromRemote(itemType);
+            }
+        }
+        [ClientRpc]
+        private void RpcNotifyOtherPlayersRuleEffectSelected(int ruleId)
+        {
+            if (!isLocalPlayer) // Чтобы не вызывалось у того, кто сам выбирал
+            {
+                var input = (NetworkPlayerInput)UnGameManager.Instance.LocalOpponent.PlayerInput;
+                input.OnRuleEffectSelectedFromRemote(ruleId);
             }
         }
 
