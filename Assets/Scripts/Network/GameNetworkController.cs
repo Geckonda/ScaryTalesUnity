@@ -44,7 +44,7 @@ namespace Assets.Scripts.Network
             if (playerDTO.IsStartPlayer)
             {
                 builder = new GameBuilder(
-                   new UnityNotifier(),
+                   new UnityNotifier(localPlayer.Name),
                    new GameBoard(),
                    localPlayer,
                    localOpponent);
@@ -52,7 +52,7 @@ namespace Assets.Scripts.Network
             else
             {
                 builder = new GameBuilder(
-                   new UnityNotifier(),
+                   new UnityNotifier(localPlayer.Name),
                    new GameBoard(),
                    localOpponent,
                    localPlayer);
@@ -178,7 +178,7 @@ namespace Assets.Scripts.Network
         public void InitializeGame(List<Player> players, Dictionary<int, NetworkConnectionToClient> connectionMap)
         {
             var builder = new GameBuilder(
-                new UnityNotifier(),
+                new UnityNotifier("Server"),
                 new GameBoard(),
                 players[0],
                 players[1]);
