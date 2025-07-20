@@ -91,7 +91,7 @@ namespace Assets.Scripts.Network
             if (card != null)
             {
                 // Обновляем серверное состояние
-                _serverGameContext.GameManager.PlayCard(card);
+                //_serverGameContext.GameManager.PlayCard(card); // Он точно нужен?
 
                 // Рассылаем клиентам
                 RpcOnCardPlayed(cardId);
@@ -118,16 +118,43 @@ namespace Assets.Scripts.Network
         }
 
         [Command(requiresAuthority = false)]
-        public void CmdSelectRuleEffect(int ruleEffectId)
+        public void CmdOnRuleChosen(int ruleEffectId)
         {
+
+            var player = UnGameManager.Instance._context.GameState.GetCurrentPlayer();
             var effect = UnGameManager.Instance.CurrentRule.Effects.FirstOrDefault(x => x.Id == ruleEffectId);
 
-            if(effect != null)
+            if (effect != null)
             {
-                _serverGameContext.GameManager.ActivateRuleEffect(effect);
-                // Рассылаем всем нужным клиентам выбранный ID
-                RpcNotifyOtherPlayersRuleEffectSelected(ruleEffectId);
+                // Обновляем серверное состояние
+                //_serverGameContext.GameManager.ActivateRuleEffect(effect); // Он точно нужен?
+
+                // Рассылаем клиентам
+                RpcOnRuleChosen(ruleEffectId);
             }
+        }
+        [ClientRpc]
+        private void RpcOnRuleChosen(int ruleEffectId)
+        {
+            var player = UnGameManager.Instance.CurrentPlayer;
+            var effect = UnGameManager.Instance.CurrentRule.Effects.FirstOrDefault(x => x.Id == ruleEffectId);
+
+            if (effect != null)
+            {
+                UnGameManager.Instance.ActivateRuleEffect(effect); // например, триггер анимации, обновление UI и т.п.
+            }
+        }
+
+        [Command(requiresAuthority = false)]
+        public void CmdSelectRuleEffect(int ruleEffectId)
+        {
+            if (ruleEffectId < 0) // Пример валидации
+            {
+                Debug.LogError("Invalid ruleEffectId!");
+                return;
+            }
+
+            RpcNotifyOtherPlayersRuleEffectSelected(ruleEffectId);
         }
 
         [ClientRpc]

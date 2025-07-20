@@ -142,6 +142,10 @@ public class UnGameManager : MonoBehaviour
         await EndTurn();
 
     }
+    public async void ActivateRuleEffect(IRuleEffect effect)
+    {
+        await _gameManager.ActivateRuleEffect(effect);
+    }
     private async Task EndTurn()
     {
         await _context.GameManager.ActivateAllPlayerPermanentCardEffects(CurrentPlayer);
@@ -173,7 +177,8 @@ public class UnGameManager : MonoBehaviour
         else
         {
             Debug.Log($"Игрок выбрал правило {chosen.Id}.");
-            GameNetworkController.Instance.CmdSelectRuleEffect(chosen.Id);
+            //GameNetworkController.Instance.CmdSelectRuleEffect(chosen.Id);
+            GameNetworkController.Instance.CmdOnRuleChosen(chosen.Id);
             yield break;
         }
     }
