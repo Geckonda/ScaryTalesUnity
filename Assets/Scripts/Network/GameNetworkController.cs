@@ -145,17 +145,6 @@ namespace Assets.Scripts.Network
             }
         }
 
-        [Command(requiresAuthority = false)]
-        public void CmdSelectRuleEffect(int ruleEffectId)
-        {
-            if (ruleEffectId < 0) // Пример валидации
-            {
-                Debug.LogError("Invalid ruleEffectId!");
-                return;
-            }
-
-            RpcNotifyOtherPlayersRuleEffectSelected(ruleEffectId);
-        }
 
         [ClientRpc]
         private void RpcNotifyOtherPlayersItemSelected(int itemType)
@@ -164,15 +153,6 @@ namespace Assets.Scripts.Network
             {
                 var input = (NetworkPlayerInput)UnGameManager.Instance.LocalOpponent.PlayerInput;
                 input.OnItemSelectedFromRemote(itemType);
-            }
-        }
-        [ClientRpc]
-        private void RpcNotifyOtherPlayersRuleEffectSelected(int ruleId)
-        {
-            if (!isLocalPlayer) // Чтобы не вызывалось у того, кто сам выбирал
-            {
-                var input = (NetworkPlayerInput)UnGameManager.Instance.LocalOpponent.PlayerInput;
-                input.OnRuleEffectSelectedFromRemote(ruleId);
             }
         }
 

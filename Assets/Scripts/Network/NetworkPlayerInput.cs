@@ -139,14 +139,5 @@ namespace Assets.Scripts.Network
             // Ждать, пока этот TCS не будет завершён
             return await _ruleEffectsSelectionTcs.Task;
         }
-        // Этот метод вызывается из RPC, когда сервер узнаёт, что выбрал другой игрок
-        public void OnRuleEffectSelectedFromRemote(int ruleEffectId)
-        {
-            var effect = UnGameManager.Instance.CurrentRule.Effects.FirstOrDefault(x => x.Id == ruleEffectId);
-            if (effect != null && _ruleEffectsSelectionTcs != null && !_ruleEffectsSelectionTcs.Task.IsCompleted)
-            {
-                _ruleEffectsSelectionTcs.SetResult(effect);
-            }
-        }
     }
 }

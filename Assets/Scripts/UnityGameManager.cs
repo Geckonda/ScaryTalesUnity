@@ -177,7 +177,6 @@ public class UnGameManager : MonoBehaviour
         else
         {
             Debug.Log($"Игрок выбрал правило {chosen.Id}.");
-            //GameNetworkController.Instance.CmdSelectRuleEffect(chosen.Id);
             GameNetworkController.Instance.CmdOnRuleChosen(chosen.Id);
             yield break;
         }
