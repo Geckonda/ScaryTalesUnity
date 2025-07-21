@@ -135,10 +135,6 @@ public class UnGameManager : MonoBehaviour
             RuleContainer.Instance.Show(_currentRule.Effects, openedByPlayer);
         }
     }
-    public async Task ApplyTheRule()
-    {
-        
-    }
     public async void PlayCard(Card card)
     {
         //Создаем Task для ожидания завершения PlayCard
@@ -157,11 +153,6 @@ public class UnGameManager : MonoBehaviour
         Debug.Log($"ENDTURHN DragAndDrop is {DragAndDrop.SelectCard}");
         _context.GameState.NextTurn();
         HandlePlayerTurn();
-    }
-
-    private async Task EndChoosingItems()
-    {
-
     }
     private IEnumerator PlayerUseRules(Player player)
     {
