@@ -17,10 +17,13 @@ public class BoardUI : MonoBehaviour
     public Transform GameBoardPanel;
     public Transform TimeOfDaySlot;
     public Transform DiscardPile;
+    public GameObject UIBlockerOverlay;
 
     private void Start()
     {
+        UIBlockerOverlay.SetActive(false);
         StartCoroutine(WaitForContextAndInit());
+
     }
 
     private IEnumerator WaitForContextAndInit()

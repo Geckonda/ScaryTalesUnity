@@ -21,6 +21,8 @@ namespace Assets.Scripts.Menus
         [SerializeField] public Button SkipBtn;
         [SerializeField] private Button ShowBtn;
         [SerializeField] private Button CloseBtn;
+        [SerializeField] private GameObject UIBlockerOverlay;
+
 
         private List<RuleEffectView> _ruleEffectViews = new List<RuleEffectView>();
 
@@ -43,6 +45,7 @@ namespace Assets.Scripts.Menus
             ShowBtn.gameObject.SetActive(false);
             SkipBtn.gameObject.SetActive(!openedByPlayer);
             CloseBtn.gameObject.SetActive(openedByPlayer);
+            UIBlockerOverlay.SetActive(true); // включает блокировку
 
             //ClearContentPanelchildren();
             ConvertRuleEffectsToViews(ruleEffects);
@@ -78,6 +81,7 @@ namespace Assets.Scripts.Menus
         public void Show(List<RuleEffectView> views, bool openedByPlayer, Action onSkip = null)
         {
             gameObject.SetActive(true);
+            UIBlockerOverlay.SetActive(true); // включает блокировку
             ShowBtn.gameObject.SetActive(false);
             SkipBtn.gameObject.SetActive(!openedByPlayer);
             CloseBtn.gameObject.SetActive(openedByPlayer);
@@ -125,6 +129,7 @@ namespace Assets.Scripts.Menus
             SkipBtn.gameObject.SetActive(true);
             CloseBtn.gameObject.SetActive(true);
             ShowBtn.gameObject.SetActive(true);
+            UIBlockerOverlay.SetActive(false); // отключает блокировку
         }
         private void ConvertRuleEffectsToViews(List<IRuleEffect> effects)
         {
