@@ -15,6 +15,7 @@ namespace ScaryTales
         public readonly IGameContext _context;
         private readonly INotifier _notifier;
         public event Action<Card, Player>? OnCardAddedToHand;
+        public event Action<Card, Player>? OnCardAddedToHandFromDiscardPile;
         public event Action<Card>? OnCardPlayed;
         public event Action<Card>? OnCardMovedToDiscardPile;
         public event Action<Card>? OnCardMovedToBoard;
@@ -273,6 +274,13 @@ namespace ScaryTales
             card.Position = CardPosition.InHand;
             card.Owner = player;
             OnCardAddedToHand?.Invoke(card, player);
+        }
+        public void PutCardInPlayerHandFromDiscardPile(Card card, Player player)
+        {
+            player.AddCardToHand(card);
+            card.Position = CardPosition.InHand;
+            card.Owner = player;
+            OnCardAddedToHandFromDiscardPile?.Invoke(card, player);
         }
 
         public void PutCardInTimeOfDaySlot(Card card)

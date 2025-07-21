@@ -95,6 +95,11 @@ namespace ScaryTales.Abstractions
         /// <param name="player">Игрок, в руку которому будет плолжена карта</param>
         public void PutCardInPlayerHand(Card card, Player player);
         /// <summary>
+        /// Положить карту в руку игроку из колоды сброса
+        /// </summary>
+        /// <param name="player">Игрок, в руку которому будет плолжена карта</param>
+        public void PutCardInPlayerHandFromDiscardPile(Card card, Player player);
+        /// <summary>
         /// Положить карту в слот День/Ночь
         /// </summary>
         public void PutCardInTimeOfDaySlot(Card card);
@@ -109,6 +114,7 @@ namespace ScaryTales.Abstractions
 
 
         public event Action<Card, Player>? OnCardAddedToHand;
+        public event Action<Card, Player>? OnCardAddedToHandFromDiscardPile;
         public event Action<Card>? OnCardPlayed;
         public event Action<Card>? OnCardMovedToDiscardPile;
         public event Action<Card>? OnCardMovedToBoard;

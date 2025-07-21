@@ -215,6 +215,8 @@ public class UnGameManager : MonoBehaviour
             cardSelected = true;
             selectedCard = card;
         };
+        CardSelectionService.CurrentSelectionHandler = onCardSelected;
+
 
         DragAndDrop.SelectCard = true; // Разрешаем выбирать карту
         foreach (Transform cardTransform in playerHandPanel)
@@ -232,6 +234,8 @@ public class UnGameManager : MonoBehaviour
         }
         DragAndDrop.SelectCard = false; // Запрещаем выбор карты
         canChooseRule = false; // Запрещаем выбор правила
+        CardSelectionService.CurrentSelectionHandler = null;
+
         foreach (Transform cardTransform in playerHandPanel)
         {
             var dragAndDrop = cardTransform.GetComponent<DragAndDrop>();

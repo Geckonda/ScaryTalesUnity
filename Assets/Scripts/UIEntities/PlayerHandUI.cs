@@ -35,6 +35,7 @@ public class PlayerHandUI : MonoBehaviour
         }
 
         _context.GameManager.OnCardAddedToHand += HandleCardAddedToHand;
+        _context.GameManager.OnCardAddedToHandFromDiscardPile += HandleCardAddedToHandFromDiscardPile;
 
         var localPlayer = UnGameManager.Instance.LocalPlayer;
         var opponent = _context.Players.First(p => p != localPlayer);
@@ -64,7 +65,24 @@ public class PlayerHandUI : MonoBehaviour
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
     }
+    private async void HandleCardAddedToHandFromDiscardPile(Card card, Player player)
+    {
+        var unityManager = UnGameManager.Instance;
+        if (unityManager == null)
+            return;
 
+        if (!_playerHandPanels.TryGetValue(player, out var hand))
+            return;
+
+        var discardPile = unityManager._boardUI.DiscardPile;
+        var cardView = _cardViewService.CreateCardView(card, discardPile);
+        cardView.SetCardViewBackground(card.Owner);
+
+        // Здесь мы создаём настоящий Task, и только потом регистрируем
+        var animationTask = AnimateCardToHand(cardView, hand);
+        AnimationManager.Instance.Register(animationTask);
+        await animationTask;
+    }
 
     private async Task AnimateCardToHand(CardView cardView, Transform hand)
     {

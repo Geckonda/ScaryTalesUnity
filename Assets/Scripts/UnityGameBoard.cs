@@ -67,6 +67,11 @@ namespace Assets.Scripts
             throw new NotImplementedException();
         }
 
+        public Card GetTopCardFromDiscardPile()
+        {
+            throw new NotImplementedException();
+        }
+
         public void MoveAllCardsToDiscardPile()
         {
             throw new NotImplementedException();

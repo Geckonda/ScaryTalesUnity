@@ -83,5 +83,10 @@ namespace ScaryTales.Abstractions
         /// Получение конкретной карты по ее id, которая в данный момент на столе
         /// </summary>
         public Card GetCardFromBoard(int cardId);
+        /// <summary>
+        /// Получение последней карты стопки сброса
+        /// </summary>
+        /// <returns>Верхняя карта стопки сброса</returns>
+        public Card? GetTopCardFromDiscardPile();
     }
 }

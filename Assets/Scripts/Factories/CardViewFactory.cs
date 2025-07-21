@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using Assets.Scripts.Utilities;
 
 namespace Assets.Scripts.Factories
 {
@@ -42,6 +43,11 @@ namespace Assets.Scripts.Factories
             if (dragAndDrop != null)
             {
                 dragAndDrop.Initialize(_gameManager, card, _gameBoardPanel, parent);
+
+                if(CardSelectionService.CurrentSelectionHandler != null)
+                {
+                    dragAndDrop.OnCardSelected += CardSelectionService.CurrentSelectionHandler;
+                }
             }
 
             return cardView;
