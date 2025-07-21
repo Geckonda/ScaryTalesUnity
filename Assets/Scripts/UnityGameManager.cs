@@ -32,6 +32,7 @@ public class UnGameManager : MonoBehaviour
     public Player CurrentPlayer => _context.GameState.GetCurrentPlayer();
 
     private Rule _currentRule;
+    private bool canChooseRule = false;
     public Rule CurrentRule => _currentRule;
 
     void Awake()
@@ -103,16 +104,12 @@ public class UnGameManager : MonoBehaviour
     private async void HandlePlayerTurn()
     {
         DragAndDrop.SelectCard = false;
+        canChooseRule = true; // Разрешаем выбор правила
 
         await AnimationManager.Instance.WaitForAllAnimations();
         _textUIManager.UpdateCurrentPlayerText();
         _gameManager.DrawCard(CurrentPlayer);
         await AnimationManager.Instance.WaitForAllAnimations();
-
-        if (CurrentPlayer.ItemsBagCount > 0)
-        {
-            await CoroutineUtils.WaitForCoroutine(this, PlayerUseRules(CurrentPlayer));
-        }
 
         EnablePlayerDrag(CurrentPlayer);
         
@@ -123,12 +120,20 @@ public class UnGameManager : MonoBehaviour
             await CoroutineUtils.WaitForCoroutine(this, ProcessPlayerActions(CurrentPlayer));
         }
     }
-    public void ShowGameRules(bool openedByPlayer)
+    public async void ShowGameRules(bool openedByPlayer)
     {
         // Получаем контейнер для отображения предметов
-        var ruleContainer = RuleContainer.Instance.contentPanel;
+        if(CurrentPlayer == LocalPlayer && canChooseRule)
+        {
+            await CoroutineUtils.WaitForCoroutine(this, PlayerUseRules(CurrentPlayer));
 
-        RuleContainer.Instance.Show(_currentRule.Effects, openedByPlayer);
+        }
+        else
+        {
+            var ruleContainer = RuleContainer.Instance.contentPanel;
+
+            RuleContainer.Instance.Show(_currentRule.Effects, openedByPlayer);
+        }
     }
     public async Task ApplyTheRule()
     {
@@ -177,6 +182,7 @@ public class UnGameManager : MonoBehaviour
         else
         {
             Debug.Log($"Игрок выбрал правило {chosen.Id}.");
+            canChooseRule = false;
             GameNetworkController.Instance.CmdOnRuleChosen(chosen.Id);
             yield break;
         }
@@ -225,6 +231,7 @@ public class UnGameManager : MonoBehaviour
             yield return null;
         }
         DragAndDrop.SelectCard = false; // Запрещаем выбор карты
+        canChooseRule = false; // Запрещаем выбор правила
         foreach (Transform cardTransform in playerHandPanel)
         {
             var dragAndDrop = cardTransform.GetComponent<DragAndDrop>();
