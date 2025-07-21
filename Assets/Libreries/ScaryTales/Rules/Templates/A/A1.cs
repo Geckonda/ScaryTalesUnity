@@ -13,7 +13,7 @@ namespace Assets.Libreries.ScaryTales.Rules.Templates.A
     {
         public override string Name => "Битва на позабытых болотах";
 
-        public override string Description => "Земли";
+        public override string Description => "Земли к северу от столицы испокон веков принадлежали королевству — пока их не захватили и не заселили ужасные монстры. Наследник престола и его соратники наконец решили отвоевать их обратно...";
 
         public override RuleType Type => RuleType.InGame;
 
