@@ -124,6 +124,11 @@ namespace ScaryTales
         public void RemoveItemFromItemBag(ItemType type)
             => _itemsBag.Remove(_itemsBag.FirstOrDefault(x => x.Type == type));
         /// <summary>
+        /// Возвращает количество предметов определенного типа
+        /// </summary>
+        public int ItemAmount(ItemType type)
+            => _itemsBag.Count(x => x.Type == type);
+        /// <summary>
         /// Игрок выбирает нужный ему предмет
         /// </summary>
         public async Task<Item> SelectItem(List<Item> items)
