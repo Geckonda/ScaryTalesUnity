@@ -122,7 +122,7 @@ namespace Assets.Scripts.Network
         {
 
             var player = UnGameManager.Instance._context.GameState.GetCurrentPlayer();
-            var effect = UnGameManager.Instance.CurrentRule.Effects.FirstOrDefault(x => x.Id == ruleEffectId);
+            var effect = UnGameManager.Instance.CurrentRuleInGame.Effects.FirstOrDefault(x => x.Id == ruleEffectId);
 
             if (effect != null)
             {
@@ -137,7 +137,7 @@ namespace Assets.Scripts.Network
         private void RpcOnRuleChosen(int ruleEffectId)
         {
             var player = UnGameManager.Instance.CurrentPlayer;
-            var effect = UnGameManager.Instance.CurrentRule.Effects.FirstOrDefault(x => x.Id == ruleEffectId);
+            var effect = UnGameManager.Instance.CurrentRuleInGame.Effects.FirstOrDefault(x => x.Id == ruleEffectId);
 
             if (effect != null)
             {

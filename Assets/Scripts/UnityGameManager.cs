@@ -1,9 +1,12 @@
 using Assets.Libreries.ScaryTales;
 using Assets.Libreries.ScaryTales.Abstractions;
 using Assets.Libreries.ScaryTales.Rules.Templates.A;
+using Assets.Libreries.ScaryTales.Rules.Templates.B;
 using Assets.Scripts.Menus;
 using Assets.Scripts.Network;
+using Assets.Scripts.Services;
 using Assets.Scripts.Utilities;
+using Assets.Scripts.Views;
 using ScaryTales;
 using ScaryTales.Abstractions;
 using ScaryTales.Interaction_Entities.EnvUnity;
@@ -31,9 +34,11 @@ public class UnGameManager : MonoBehaviour
     public Transform Deck;
     public Player CurrentPlayer => _context.GameState.GetCurrentPlayer();
 
-    private Rule _currentRule;
+    private Rule _currentRuleInGame;
+    private Rule _currentFinalRule;
     private bool canChooseRule = false;
-    public Rule CurrentRule => _currentRule;
+    public Rule CurrentRuleInGame => _currentRuleInGame;
+    public Rule CurrentFinalRule=> _currentFinalRule;
 
     void Awake()
     {
@@ -47,7 +52,8 @@ public class UnGameManager : MonoBehaviour
         }
         _cardViewService = CardViewService.Instance;
         // Жесткая установка правила
-        _currentRule = new A1();
+        _currentRuleInGame = new A1();
+        _currentFinalRule = new B2();
     }
     public Player LocalPlayer { get; private set; }
     public Player LocalOpponent { get; private set; }
@@ -114,11 +120,41 @@ public class UnGameManager : MonoBehaviour
         EnablePlayerDrag(CurrentPlayer);
         
         if (CurrentPlayer.Hand.Count == 0)
+        {
             _gameManager.EndGame();
+            EndGame();
+        }
         else
         {
             await CoroutineUtils.WaitForCoroutine(this, ProcessPlayerActions(CurrentPlayer));
         }
+    }
+    public void EndGame()
+    {
+        _gameManager.PrintMessage("Конец игры");
+        FinalRule();
+    }
+    // Отрефактоирть этот етод, перенести логику в отдельный класс
+    public async void FinalRule()
+    {
+        // Получаем контейнер
+        var ruleEffectContainer = RuleContainer.Instance.contentPanel;
+        List<RuleEffectView> _viewsToSelect = new();
+
+        // Создаем и настраиваем представления эффектов
+        foreach (var effect in CurrentFinalRule.Effects)
+        {
+            var effectView = RuleEffectService.Instance.CreateRuleEffectView(effect, ruleEffectContainer);
+            if (effectView != null)
+            {
+                _viewsToSelect.Add(effectView);
+            }
+        }
+        // Показываем UI
+        RuleContainer.Instance.Show(_viewsToSelect, false);
+        CurrentFinalRule.Effects.ForEach(x => x.ApplyEffect(_context));
+        await Task.Delay(10000);
+        RuleContainer.Instance.Hide();
     }
     public async void ShowGameRules(bool openedByPlayer)
     {
@@ -132,7 +168,7 @@ public class UnGameManager : MonoBehaviour
         {
             var ruleContainer = RuleContainer.Instance.contentPanel;
 
-            RuleContainer.Instance.Show(_currentRule.Effects, openedByPlayer);
+            RuleContainer.Instance.Show(_currentRuleInGame.Effects, openedByPlayer);
         }
     }
     public async void PlayCard(Card card)
@@ -160,7 +196,7 @@ public class UnGameManager : MonoBehaviour
             yield break;
 
         // Ждём, пока игрок выберет или пропустит правило
-        var selectTask = player.SelectRuleEffect(CurrentRule.Effects); // <- это async Task<IRuleEffect>
+        var selectTask = player.SelectRuleEffect(CurrentRuleInGame.Effects); // <- это async Task<IRuleEffect>
         yield return selectTask.AsIEnumerator(); // ждём завершения task внутри корутины
 
         IRuleEffect chosen = selectTask.Result;
