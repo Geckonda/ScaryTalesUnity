@@ -84,7 +84,7 @@ namespace Assets.Scripts.Menus
             UIBlockerOverlay.SetActive(true); // включает блокировку
             ShowBtn.gameObject.SetActive(false);
             SkipBtn.gameObject.SetActive(!openedByPlayer);
-            CloseBtn.gameObject.SetActive(openedByPlayer);
+            CloseBtn.gameObject.SetActive(true);
 
             //ClearContentPanelchildren();
             foreach (var view in _ruleEffectViews)
