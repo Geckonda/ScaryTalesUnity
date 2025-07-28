@@ -56,7 +56,7 @@ public class TextUIManager : MonoBehaviour
         Player2Name.text = unManager.LocalOpponent.Name;
 
         _gameContext.GameManager.OnAddPointsToPlayer += HandleAddPointsToPlayer;
-        _gameContext.GameManager.OnMessagePrinted += HandleNotify;
+        //_gameContext.GameManager.OnMessagePrinted += HandleNotify;
 
         UpdateCurrentPlayerText();
     }
