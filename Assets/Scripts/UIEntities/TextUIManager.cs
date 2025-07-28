@@ -80,7 +80,7 @@ public class TextUIManager : MonoBehaviour
     {
         if (_playerScorePanels.TryGetValue(player, out TMP_Text panel))
         {
-            panel.text = player.Score.ToString();
+            panel.text = "он: " + player.Score.ToString();
         }
     }
 
