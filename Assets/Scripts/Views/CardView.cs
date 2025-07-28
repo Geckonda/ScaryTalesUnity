@@ -67,10 +67,10 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     {
         if (this._card.Position != CardPosition.InHand )
         {
-            if (this._card.Owner.Id == UnGameManager.Instance.LocalPlayer.Id)
-                _background.color = Color.blue;
-            else
-                _background.color = Color.red;
+            //if (this._card.Owner.Id == UnGameManager.Instance.LocalPlayer.Id)
+            //    _background.color = Color.blue;
+            //else
+            //    _background.color = Color.red;
             ChangeTextVisibility(true);
             var frontSprite = Resources.Load<Sprite>($"CardsImages/{_card.Name}");
             if (frontSprite != null)
