@@ -81,7 +81,8 @@ public class UnGameManager : MonoBehaviour
     private void PrepareFirstNight()
     {
         Card night = _context.Deck.TakeCardByName("Ночь")!;
-        _cardViewService.CreateCardView(night, _boardUI.TimeOfDaySlot);
+        var card = _cardViewService.CreateCardView(night, _boardUI.TimeOfDaySlot);
+        card.FaceUp();
         _context.GameManager.PutCardInTimeOfDaySlot(night);
     }
     public async Task DrawCardsToPlayersHand()
