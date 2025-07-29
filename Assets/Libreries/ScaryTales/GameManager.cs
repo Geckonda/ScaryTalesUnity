@@ -168,11 +168,14 @@ namespace ScaryTales
             {
                 player.RemoveCardFromHand(card);
                 PrintMessage($"Игрок {player.Name} разыгрывает карту {card.Name}.");
-                PutCardOnBoard(card); // Опасно
+                PutCardOnBoard(card);
                 AddPointsToPlayer(player, card.Points);
                 await ActivateInstantCardEffect(card);
-                board.RemoveCardFromBoard(card); // Опасно
-                MoveCardToItsPosition(card);
+                if(card.PositionAfterPlay != CardPosition.OnGameBoard)
+                {
+                    board.RemoveCardFromBoard(card);
+                    MoveCardToItsPosition(card);
+                }
             }
         }
         /// <summary>
@@ -228,8 +231,8 @@ namespace ScaryTales
                     }
                 case (CardPosition.BeforePlayer):
                     {
-                        PutCardOnBoard(card);
-                        PrintMessage($"Карта {card.Name} была разыграна на стол перед игроком (Нет).");
+                        PutCardBeforePlayer(card);
+                        PrintMessage($"Карта {card.Name} была разыграна на стол перед игроком.");
                         break;
                     }
                 case (CardPosition.Discarded):
