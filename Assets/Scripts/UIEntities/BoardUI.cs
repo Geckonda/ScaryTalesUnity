@@ -15,6 +15,8 @@ public class BoardUI : MonoBehaviour
     private CardViewService _cardViewService;
 
     public Transform GameBoardPanel;
+    public Transform OpponentTable;
+    public Transform LocalPlayerTable;
     public Transform TimeOfDaySlot;
     public Transform DiscardPile;
     public GameObject UIBlockerOverlay;
@@ -35,6 +37,7 @@ public class BoardUI : MonoBehaviour
         }
         var context = UnGameManager.Instance.GameManager._context;
         context.GameManager.OnCardMovedToBoard += HandleCardMovedToBoard;
+        context.GameManager.OnCardMovedToBeforePlayer += HandleCardMovedToBeforePlayer;
         context.GameManager.OnCardMovedToTimeOfDaySlot += HandleCardMovedToTimeOfDaySlot;
         context.GameManager.OnCardMovedToDiscardPile += HandleCardMovedToDiscardPile;
 
@@ -58,6 +61,27 @@ public class BoardUI : MonoBehaviour
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
         Debug.Log($"Карта {card.Name} перемещена на стол");
+    }
+    private async void HandleCardMovedToBeforePlayer(Card card)
+    {
+        var unityManager = UnGameManager.Instance;
+        var deck = unityManager.Deck;
+        var cardView = _cardViewService.GetCardView(card);
+        if (cardView == null)
+        {
+            cardView = _cardViewService.CreateCardView(card, deck);
+        }
+        else
+        {
+            cardView = _cardViewService.GetCardView(card);
+        }
+        cardView.FaceUp();
+        bool isLocalCard = unityManager.LocalPlayer == card.Owner;
+        var panel = isLocalCard ? LocalPlayerTable : OpponentTable;
+        var animationTask = AnumateCardTransformToPositionInLayout(cardView, panel);
+        AnimationManager.Instance.Register(animationTask);
+        await animationTask;
+        Debug.Log($"Карта {card.Name} перемещена на стол перед игроком");
     }
 
     private async void HandleCardMovedToTimeOfDaySlot(Card card)
@@ -86,6 +110,7 @@ public class BoardUI : MonoBehaviour
         await AnimateCardTransformToPosition(cardView, TimeOfDaySlot);
         cardView.transform.SetParent(TimeOfDaySlot);
         card.Owner = null;
+        cardView.transform.localScale = Vector3.one;
     }
     private async void HandleCardMovedToDiscardPile(Card card)
     {
