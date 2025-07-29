@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UI;
 
 public class CardTableLayout : LayoutGroup
@@ -21,30 +22,53 @@ public class CardTableLayout : LayoutGroup
 
     private void UpdateLayout()
     {
-        int count = rectChildren.Count;
-        if (count == 0) return;
+        if (rectChildren.Count == 0) return;
 
-        // Считаем сколько "шагов" уменьшения нужно
-        int shrinkSteps = count / shrinkThreshold;
-        float scale = Mathf.Pow(shrinkStep, shrinkSteps); // каждый шаг уменьшает на коэффициент
+        // Группировка по названию карты
+        Dictionary<string, List<RectTransform>> cardGroups = new();
 
-        float scaledWidth = cardSize.x * scale;
-        float scaledHeight = cardSize.y * scale;
-        float totalSpacing = spacing * (count - 1);
-        float totalWidth = count * scaledWidth + totalSpacing;
+        foreach (var child in rectChildren)
+        {
+            var cardView = child.GetComponent<CardView>();
+            if (cardView == null) continue;
 
+            string name = cardView._cardNameText.text;
+            if (!cardGroups.ContainsKey(name))
+                cardGroups[name] = new List<RectTransform>();
+
+            cardGroups[name].Add(child);
+        }
+
+        // Вычисляем общую ширину всех групп
+        float groupWidth = cardSize.x;
+        float totalSpacing = spacing * (cardGroups.Count - 1);
+        float totalWidth = groupWidth * cardGroups.Count + totalSpacing;
+
+        // Начальная X-позиция (левый край, чтобы всё оказалось по центру)
         float startX = (rectTransform.rect.width - totalWidth) / 2f;
 
-        for (int i = 0; i < count; i++)
+        int groupIndex = 0;
+        foreach (var group in cardGroups)
         {
-            var child = rectChildren[i];
+            var cards = group.Value;
+            float x = startX + groupIndex * (cardSize.x + spacing);
 
-            float x = startX + i * (scaledWidth + spacing);
+            float yOffset = 20f;
 
-            SetChildAlongAxis(child, 0, x, scaledWidth);
-            SetChildAlongAxis(child, 1, 0, scaledHeight);
+            for (int i = 0; i < cards.Count; i++)
+            {
+                var card = cards[i];
+                float y = yOffset * i;
 
-            child.localScale = new Vector3(scale, scale, 1f); // Масштабируем карту
+                SetChildAlongAxis(card, 0, x, cardSize.x);      // по X
+                SetChildAlongAxis(card, 1, -y, cardSize.y);     // по Y
+
+                card.localScale = Vector3.one;
+            }
+
+            groupIndex++;
         }
     }
+
+
 }
