@@ -56,11 +56,16 @@ public class BoardUI : MonoBehaviour
         {
             cardView = _cardViewService.GetCardView(card);
         }
+        RemoveCardHoverComponent(cardView);
         cardView.FaceUp();
         var animationTask = AnumateCardTransformToPositionInLayout(cardView, GameBoardPanel);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
         Debug.Log($"Карта {card.Name} перемещена на стол");
+        if (cardView.GetComponent<CardHoverScaler>() == null)
+        {
+            cardView.gameObject.AddComponent<CardHoverScaler>();
+        }
     }
     private async void HandleCardMovedToBeforePlayer(Card card)
     {
@@ -75,6 +80,7 @@ public class BoardUI : MonoBehaviour
         {
             cardView = _cardViewService.GetCardView(card);
         }
+        RemoveCardHoverComponent(cardView);
         cardView.FaceUp();
         bool isLocalCard = unityManager.LocalPlayer == card.Owner;
         var panel = isLocalCard ? LocalPlayerTable : OpponentTable;
@@ -82,6 +88,10 @@ public class BoardUI : MonoBehaviour
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
         Debug.Log($"Карта {card.Name} перемещена на стол перед игроком");
+        if (cardView.GetComponent<CardHoverScaler>() == null)
+        {
+            cardView.gameObject.AddComponent<CardHoverScaler>();
+        }
     }
 
     private async void HandleCardMovedToTimeOfDaySlot(Card card)
@@ -105,6 +115,7 @@ public class BoardUI : MonoBehaviour
         {
             cardView = _cardViewService.GetCardView(card);
         }
+        RemoveCardHoverComponent(cardView);
         cardView.FaceUp();
         // Перемещаем CardView в слот времени суток
         await AnimateCardTransformToPosition(cardView, TimeOfDaySlot);
@@ -156,5 +167,17 @@ public class BoardUI : MonoBehaviour
         // Ждём, пока GridLayoutGroup обновит позиции
         await Task.Yield();
     }
+    private void RemoveCardHoverComponent(CardView cardView)
+    {
+        if (cardView == null)
+            return;
+
+        var hover = cardView.GetComponent<CardHoverScaler>();
+        if (hover != null)
+        {
+            Destroy(hover);
+        }
+    }
+
 }
 

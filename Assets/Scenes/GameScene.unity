@@ -3402,12 +3402,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6c30a22b774c4a149a08363d2ace443c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  columns: 5
-  spacing: {x: 10, y: 10}
-  cellSize: {x: 150, y: 250}
-  padding: {x: 0, y: 0}
-  childScale: {x: 1, y: 1, z: 1}
-  alignment: 0
+  m_Padding:
+    m_Left: 0
+    m_Right: 0
+    m_Top: 0
+    m_Bottom: 0
+  m_ChildAlignment: 0
+  cardSize: {x: 150, y: 250}
+  spacing: 5
+  shrinkThreshold: 5
+  shrinkStep: 0.95
 --- !u!1 &1699977347
 GameObject:
   m_ObjectHideFlags: 0

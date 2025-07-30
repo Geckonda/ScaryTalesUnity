@@ -59,11 +59,17 @@ public class PlayerHandUI : MonoBehaviour
         var deck = unityManager.Deck;
         var cardView = _cardViewService.GetCardView(card) ?? _cardViewService.CreateCardView(card, deck);
         cardView.SetCardViewBackground(card.Owner);
+        RemoveCardHoverComponent(cardView);
 
         // Здесь мы создаём настоящий Task, и только потом регистрируем
         var animationTask = AnimateCardToHand(cardView, hand);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
+
+        if (cardView.GetComponent<CardHoverScaler>() == null && player == unityManager.LocalPlayer)
+        {
+            cardView.gameObject.AddComponent<CardHoverScaler>();
+        }
     }
     private async void HandleCardAddedToHandFromDiscardPile(Card card, Player player)
     {
@@ -82,6 +88,11 @@ public class PlayerHandUI : MonoBehaviour
         var animationTask = AnimateCardToHand(cardView, hand);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
+
+        if (cardView.GetComponent<CardHoverScaler>() == null && player == unityManager.LocalPlayer)
+        {
+            cardView.gameObject.AddComponent<CardHoverScaler>();
+        }
     }
 
     private async Task AnimateCardToHand(CardView cardView, Transform hand)
@@ -114,5 +125,15 @@ public class PlayerHandUI : MonoBehaviour
             }
         }
     }
+    private void RemoveCardHoverComponent(CardView cardView)
+    {
+        if (cardView == null)
+            return;
 
+        var hover = cardView.GetComponent<CardHoverScaler>();
+        if (hover != null)
+        {
+            Destroy(hover);
+        }
+    }
 }

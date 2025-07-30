@@ -22,6 +22,9 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
 
     // Выполняем действия инициализации, которые обычно в OnBeginDrag:
     private bool dragStarted = false;
+    // Если хотя бы одна карта "передвигается"
+    public static bool IsAnyCardBeingDragged { get; private set; } = false;
+    public bool IsDragging { get; private set; } = false;
 
     /// <summary>
     /// Проверяем, что карта принадлежит текущему игроку и карту можно выбирать и карта в руке игрока
@@ -45,6 +48,8 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
         OnInit();
 
         Debug.Log($"DaD: {this.card}");
+        IsDragging = true;
+        IsAnyCardBeingDragged = true;
     }
 
     public void OnDrag(PointerEventData eventData)
@@ -75,6 +80,8 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
             transform.SetParent(parentToReturnTo);
             transform.position = startPosition;
         }
+        IsDragging = false;
+        IsAnyCardBeingDragged = false;
     }
     private void OnInit()
     {
