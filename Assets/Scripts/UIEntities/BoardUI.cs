@@ -134,7 +134,8 @@ public class BoardUI : MonoBehaviour
     }
     public async Task AnimateCardTransformToPosition(CardView card, Transform to)
     {
-
+        // Задержка перед отправлением карты
+        await Task.Delay(2000);
         // Анимация перемещения карты в позицию руки
         await card.transform.DOMove(to.position, 1f) // Длительность анимации: 1 секунда
             .SetEase(Ease.OutQuad) // Плавное замедление

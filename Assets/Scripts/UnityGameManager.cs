@@ -176,6 +176,9 @@ public class UnGameManager : MonoBehaviour
     {
         //Создаем Task для ожидания завершения PlayCard
         await _gameManager.PlayCard(card);
+
+        // Задержка - можно в будущем прикрутить анмиацию 
+        await Task.Delay(1000);
         //Ожидаем завершения Task в корутине
         await EndTurn();
 
