@@ -21,6 +21,8 @@ public class BoardUI : MonoBehaviour
     public Transform DiscardPile;
     public GameObject UIBlockerOverlay;
 
+
+    private int _animationDelay = 2000;
     private void Start()
     {
         UIBlockerOverlay.SetActive(false);
@@ -88,11 +90,6 @@ public class BoardUI : MonoBehaviour
     {
         Debug.Log($"Карта {card.Name} перемещена в слот времени суток");
 
-        // Удаляем старую карту из слота (если есть)
-        foreach (Transform child in TimeOfDaySlot)
-        {
-            child.SetParent(DiscardPile);
-        }
         // Получаем CardView для текущей карты
         CardView cardView = _cardViewService.GetCardView(card);
         var unityManager = UnGameManager.Instance;
@@ -119,8 +116,6 @@ public class BoardUI : MonoBehaviour
         CardView cardView = _cardViewService.GetCardView(card);
         if (cardView != null)
         {
-            //cardView.transform.SetParent(DiscardPile); // Перемещаем CardView в сброс
-            //cardView.transform.SetAsLastSibling(); // Убедимся, что карта отображается поверх остальных
             var animationTask = AnimateCardTransformToPosition(cardView, DiscardPile);
             AnimationManager.Instance.Register(animationTask);
             await animationTask;
@@ -134,8 +129,7 @@ public class BoardUI : MonoBehaviour
     }
     public async Task AnimateCardTransformToPosition(CardView card, Transform to)
     {
-        // Задержка перед отправлением карты
-        await Task.Delay(2000);
+        await Task.Delay(_animationDelay);
         // Анимация перемещения карты в позицию руки
         await card.transform.DOMove(to.position, 1f) // Длительность анимации: 1 секунда
             .SetEase(Ease.OutQuad) // Плавное замедление

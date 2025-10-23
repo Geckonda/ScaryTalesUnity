@@ -28,8 +28,6 @@ namespace ScaryTales.Cards
 
         public override async Task ActivateEffect(IGameContext context)
         {
-            var card = context.GameBoard.GetCardFromTimeOfDaySlot()!;
-            context.GameManager.PutCardToDiscardPile(card);
             if (context.GameState.IsNight == true)
                 await Effect.ApplyEffect(context);
         }
