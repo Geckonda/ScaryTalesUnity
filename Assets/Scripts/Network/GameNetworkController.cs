@@ -38,7 +38,11 @@ namespace Assets.Scripts.Network
             Debug.Log($"[CLIENT] Start game. My index is: {playerDTO.Id}");
             var networkInput = NetworkClient.localPlayer.GetComponent<NetworkPlayerInput>();
 
-            var localPlayer = new Player(playerDTO.Id, playerDTO.Name, new UnityPlayerInput());
+            // Создаем GameObject и добавляем компонент
+            GameObject inputObject = new GameObject(nameof(UnityPlayerInput));
+            UnityPlayerInput playerInput = inputObject.AddComponent<UnityPlayerInput>();
+
+            var localPlayer = new Player(playerDTO.Id, playerDTO.Name, playerInput);
             var localOpponent = new Player(opponentDTO.Id, opponentDTO.Name, networkInput);
             GameBuilder builder;
             if (playerDTO.IsStartPlayer)
