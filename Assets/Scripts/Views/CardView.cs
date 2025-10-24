@@ -22,6 +22,8 @@ public class CardView : MonoBehaviour, IPointerClickHandler
 
     [SerializeField] private Sprite _enemyBackgroundSprite; 
 
+    public bool IsFacedUp { get; private set; }
+
     public void Initialize(Card card)
     {
         _card = card;
@@ -32,6 +34,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
 
     public void DisplayCard()
     {
+        ChangeTextVisibility(true);
         _cardNameText.text = _card.Name;
         _cardDescriptionText.text = _card.EffectDescription;
         _cardScoreText.text = _card.Points == 0 ? "?" : _card.Points.ToString();
@@ -97,6 +100,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     }
     private void ChangeTextVisibility(bool isVisible)
     {
+        IsFacedUp = isVisible;
         _cardNameText.gameObject.SetActive(isVisible);
         _cardDescriptionText.gameObject.SetActive(isVisible);
         _cardScoreText.gameObject.SetActive(isVisible);
