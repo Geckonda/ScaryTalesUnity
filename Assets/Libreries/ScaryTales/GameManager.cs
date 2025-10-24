@@ -142,7 +142,7 @@ namespace ScaryTales
             PrintMessage("Выбор предмета Не работает!");
         }
         /// <summary>
-        /// Разыгрывание игрком карты
+        /// Разыгрывание игрком карты [МЕТОД НЕ АКТУАЛЬНЫЙ!]
         /// </summary>
         public async Task PlayCard(Player player)
         {
@@ -170,6 +170,7 @@ namespace ScaryTales
                 PrintMessage($"Игрок {player.Name} разыгрывает карту {card.Name}.");
                 PutCardOnBoard(card);
                 AddPointsToPlayer(player, card.Points);
+                await Task.Delay(1000);
                 await ActivateInstantCardEffect(card);
                 if(card.PositionAfterPlay != CardPosition.OnGameBoard)
                 {
