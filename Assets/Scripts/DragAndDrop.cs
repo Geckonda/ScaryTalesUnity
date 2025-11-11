@@ -1,4 +1,4 @@
-using ScaryTales;
+п»їusing ScaryTales;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using System;
@@ -13,20 +13,20 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
     private Card card;
 
     /// <summary>
-    /// Доступна ли возможность выбора карты
+    /// Р”РѕСЃС‚СѓРїРЅР° Р»Рё РІРѕР·РјРѕР¶РЅРѕСЃС‚СЊ РІС‹Р±РѕСЂР° РєР°СЂС‚С‹
     /// </summary>
     public static bool SelectCard {  get; set; }
     public Card Card => card;
 
     public event Action<Card> OnCardSelected;
 
-    // Выполняем действия инициализации, которые обычно в OnBeginDrag:
+    // Р’С‹РїРѕР»РЅСЏРµРј РґРµР№СЃС‚РІРёСЏ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё, РєРѕС‚РѕСЂС‹Рµ РѕР±С‹С‡РЅРѕ РІ OnBeginDrag:
     private bool dragStarted = false;
 
     /// <summary>
-    /// Проверяем, что карта принадлежит текущему игроку и карту можно выбирать и карта в руке игрока
+    /// РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ РєР°СЂС‚Р° РїСЂРёРЅР°РґР»РµР¶РёС‚ С‚РµРєСѓС‰РµРјСѓ РёРіСЂРѕРєСѓ Рё РєР°СЂС‚Сѓ РјРѕР¶РЅРѕ РІС‹Р±РёСЂР°С‚СЊ Рё РєР°СЂС‚Р° РІ СЂСѓРєРµ РёРіСЂРѕРєР°
     /// </summary>
-    /// <returns>ture если карту нельзя передвигать, иначе false</returns>
+    /// <returns>ture РµСЃР»Рё РєР°СЂС‚Сѓ РЅРµР»СЊР·СЏ РїРµСЂРµРґРІРёРіР°С‚СЊ, РёРЅР°С‡Рµ false</returns>
     private bool CardIsNotDragable() => UnGameManager.Instance.LocalPlayer != UnGameManager.Instance.CurrentPlayer
         || card.Owner != UnGameManager.Instance.CurrentPlayer
         || !SelectCard || card.Position != ScaryTales.Enums.CardPosition.InHand;
@@ -53,17 +53,19 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
         if (!dragStarted)
             OnInit();
 
+        var yOffset = new Vector2(0, -125);
         transform.localRotation = Quaternion.identity;
-        transform.position = eventData.position;
+        transform.position = eventData.position + yOffset;
     }
 
     public void OnEndDrag(PointerEventData eventData)
     {
         if (CardIsNotDragable()) return;
 
-        dragStarted = false; // сброс состояния
+        dragStarted = false; // СЃР±СЂРѕСЃ СЃРѕСЃС‚РѕСЏРЅРёСЏ
 
-        // Если карта перемещена на стол, разыгрываем её
+
+        // Р•СЃР»Рё РєР°СЂС‚Р° РїРµСЂРµРјРµС‰РµРЅР° РЅР° СЃС‚РѕР», СЂР°Р·С‹РіСЂС‹РІР°РµРј РµС‘
         if (RectTransformUtility.RectangleContainsScreenPoint(
             gameBoard.GetComponent<RectTransform>(), eventData.position))
         {
