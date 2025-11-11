@@ -1,4 +1,4 @@
-using Assets.Libreries.ScaryTales;
+п»їusing Assets.Libreries.ScaryTales;
 using Assets.Libreries.ScaryTales.Abstractions;
 using Assets.Libreries.ScaryTales.Rules.Templates.A;
 using Assets.Libreries.ScaryTales.Rules.Templates.B;
@@ -51,7 +51,7 @@ public class UnGameManager : MonoBehaviour
             Destroy(gameObject);
         }
         _cardViewService = CardViewService.Instance;
-        // Жесткая установка правила
+        // Р–РµСЃС‚РєР°СЏ СѓСЃС‚Р°РЅРѕРІРєР° РїСЂР°РІРёР»Р°
         _currentRuleInGame = new A1();
         _currentFinalRule = new B2();
     }
@@ -72,15 +72,15 @@ public class UnGameManager : MonoBehaviour
 
     public async void StartGameFromNetwork()
     {
-        // Инициализируем UI после запуска игры
+        // РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј UI РїРѕСЃР»Рµ Р·Р°РїСѓСЃРєР° РёРіСЂС‹
         var playerHandUI = FindObjectOfType<PlayerHandUI>();
         playerHandUI.Initialize();
-        await StartGame(); // просто вызывает StartGame, когда пришла команда от сервера
+        await StartGame(); // РїСЂРѕСЃС‚Рѕ РІС‹Р·С‹РІР°РµС‚ StartGame, РєРѕРіРґР° РїСЂРёС€Р»Р° РєРѕРјР°РЅРґР° РѕС‚ СЃРµСЂРІРµСЂР°
     }
 
     private void PrepareFirstNight()
     {
-        Card night = _context.Deck.TakeCardByName("Ночь")!;
+        Card night = _context.Deck.TakeCardByName("РќРѕС‡СЊ")!;
         var card = _cardViewService.CreateCardView(night, _boardUI.TimeOfDaySlot);
         card.FaceUp();
         _context.GameManager.PutCardInTimeOfDaySlot(night);
@@ -101,7 +101,7 @@ public class UnGameManager : MonoBehaviour
 
     public void ShowLocalPlayerItemBag()
     {
-        // Получаем контейнер для отображения предметов
+        // РџРѕР»СѓС‡Р°РµРј РєРѕРЅС‚РµР№РЅРµСЂ РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ РїСЂРµРґРјРµС‚РѕРІ
         var itemContainer = ItemContainer.Instance.contentPanel;
 
         var items = LocalPlayer.ShowItemsFromItemBag();
@@ -111,7 +111,7 @@ public class UnGameManager : MonoBehaviour
     private async void HandlePlayerTurn()
     {
         DragAndDrop.SelectCard = false;
-        canChooseRule = true; // Разрешаем выбор правила
+        canChooseRule = true; // Р Р°Р·СЂРµС€Р°РµРј РІС‹Р±РѕСЂ РїСЂР°РІРёР»Р°
 
         await AnimationManager.Instance.WaitForAllAnimations();
         _textUIManager.UpdateCurrentPlayerText();
@@ -130,19 +130,24 @@ public class UnGameManager : MonoBehaviour
             await CoroutineUtils.WaitForCoroutine(this, ProcessPlayerActions(CurrentPlayer));
         }
     }
-    public void EndGame()
+    public async void EndGame()
     {
-        _gameManager.PrintMessage("Конец игры");
-        FinalRule();
+        _gameManager.PrintMessage("РљРѕРЅРµС† РёРіСЂС‹");
+        await FinalRule();
+        string winner =  LocalPlayer.Score > LocalOpponent.Score 
+            ? LocalPlayer.Name : LocalOpponent.Name;
+        ResultContainer.Instance.ShowWinner(winner);
     }
-    // Отрефактоирть этот етод, перенести логику в отдельный класс
-    public async void FinalRule()
+
+
+    // РћС‚СЂРµС„Р°РєС‚РѕРёСЂС‚СЊ СЌС‚РѕС‚ РµС‚РѕРґ, РїРµСЂРµРЅРµСЃС‚Рё Р»РѕРіРёРєСѓ РІ РѕС‚РґРµР»СЊРЅС‹Р№ РєР»Р°СЃСЃ
+    public async Task FinalRule()
     {
-        // Получаем контейнер
+        // РџРѕР»СѓС‡Р°РµРј РєРѕРЅС‚РµР№РЅРµСЂ
         var ruleEffectContainer = RuleContainer.Instance.contentPanel;
         List<RuleEffectView> _viewsToSelect = new();
 
-        // Создаем и настраиваем представления эффектов
+        // РЎРѕР·РґР°РµРј Рё РЅР°СЃС‚СЂР°РёРІР°РµРј РїСЂРµРґСЃС‚Р°РІР»РµРЅРёСЏ СЌС„С„РµРєС‚РѕРІ
         foreach (var effect in CurrentFinalRule.Effects)
         {
             var effectView = RuleEffectService.Instance.CreateRuleEffectView(effect, ruleEffectContainer);
@@ -151,7 +156,7 @@ public class UnGameManager : MonoBehaviour
                 _viewsToSelect.Add(effectView);
             }
         }
-        // Показываем UI
+        // РџРѕРєР°Р·С‹РІР°РµРј UI
         RuleContainer.Instance.Show(_viewsToSelect, false);
         CurrentFinalRule.Effects.ForEach(x => x.ApplyEffect(_context));
         await Task.Delay(10000);
@@ -159,7 +164,7 @@ public class UnGameManager : MonoBehaviour
     }
     public async void ShowGameRules(bool openedByPlayer)
     {
-        // Получаем контейнер для отображения предметов
+        // РџРѕР»СѓС‡Р°РµРј РєРѕРЅС‚РµР№РЅРµСЂ РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ РїСЂРµРґРјРµС‚РѕРІ
         if(CurrentPlayer == LocalPlayer && canChooseRule)
         {
             await CoroutineUtils.WaitForCoroutine(this, PlayerUseRules(CurrentPlayer));
@@ -174,12 +179,12 @@ public class UnGameManager : MonoBehaviour
     }
     public async void PlayCard(Card card)
     {
-        //Создаем Task для ожидания завершения PlayCard
+        //РЎРѕР·РґР°РµРј Task РґР»СЏ РѕР¶РёРґР°РЅРёСЏ Р·Р°РІРµСЂС€РµРЅРёСЏ PlayCard
         await _gameManager.PlayCard(card);
 
-        // Задержка - можно в будущем прикрутить анмиацию 
+        // Р—Р°РґРµСЂР¶РєР° - РјРѕР¶РЅРѕ РІ Р±СѓРґСѓС‰РµРј РїСЂРёРєСЂСѓС‚РёС‚СЊ Р°РЅРјРёР°С†РёСЋ 
         await Task.Delay(1000);
-        //Ожидаем завершения Task в корутине
+        //РћР¶РёРґР°РµРј Р·Р°РІРµСЂС€РµРЅРёСЏ Task РІ РєРѕСЂСѓС‚РёРЅРµ
         await EndTurn();
 
     }
@@ -199,20 +204,20 @@ public class UnGameManager : MonoBehaviour
         if (!Application.isPlaying)
             yield break;
 
-        // Ждём, пока игрок выберет или пропустит правило
-        var selectTask = player.SelectRuleEffect(CurrentRuleInGame.Effects); // <- это async Task<IRuleEffect>
-        yield return selectTask.AsIEnumerator(); // ждём завершения task внутри корутины
+        // Р–РґС‘Рј, РїРѕРєР° РёРіСЂРѕРє РІС‹Р±РµСЂРµС‚ РёР»Рё РїСЂРѕРїСѓСЃС‚РёС‚ РїСЂР°РІРёР»Рѕ
+        var selectTask = player.SelectRuleEffect(CurrentRuleInGame.Effects); // <- СЌС‚Рѕ async Task<IRuleEffect>
+        yield return selectTask.AsIEnumerator(); // Р¶РґС‘Рј Р·Р°РІРµСЂС€РµРЅРёСЏ task РІРЅСѓС‚СЂРё РєРѕСЂСѓС‚РёРЅС‹
 
         IRuleEffect chosen = selectTask.Result;
 
         if (chosen == null)
         {
-            Debug.Log("Игрок пропустил выбор правила.");
+            Debug.Log("РРіСЂРѕРє РїСЂРѕРїСѓСЃС‚РёР» РІС‹Р±РѕСЂ РїСЂР°РІРёР»Р°.");
             yield break;
         }
         else
         {
-            Debug.Log($"Игрок выбрал правило {chosen.Id}.");
+            Debug.Log($"РРіСЂРѕРє РІС‹Р±СЂР°Р» РїСЂР°РІРёР»Рѕ {chosen.Id}.");
             canChooseRule = false;
             GameNetworkController.Instance.CmdOnRuleChosen(chosen.Id);
             yield break;
@@ -221,11 +226,11 @@ public class UnGameManager : MonoBehaviour
 
     private IEnumerator ProcessPlayerActions(Player player)
     {
-        // Проверяем, что игра ещё запущена
+        // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ РёРіСЂР° РµС‰С‘ Р·Р°РїСѓС‰РµРЅР°
         if (!Application.isPlaying)
             yield break;
 
-        // Только локальный игрок должен выполнять выбор карты
+        // РўРѕР»СЊРєРѕ Р»РѕРєР°Р»СЊРЅС‹Р№ РёРіСЂРѕРє РґРѕР»Р¶РµРЅ РІС‹РїРѕР»РЅСЏС‚СЊ РІС‹Р±РѕСЂ РєР°СЂС‚С‹
         if (_gameManager.LocalPlayer != player)
         {
             yield break;
@@ -237,7 +242,7 @@ public class UnGameManager : MonoBehaviour
 
         if (!_playerHandUI._playerHandPanels.TryGetValue(player, out Transform playerHandPanel))
         {
-            Debug.LogError($"Панель руки для {player.Name} не найдена!");
+            Debug.LogError($"РџР°РЅРµР»СЊ СЂСѓРєРё РґР»СЏ {player.Name} РЅРµ РЅР°Р№РґРµРЅР°!");
             yield break;
         }
 
@@ -249,7 +254,7 @@ public class UnGameManager : MonoBehaviour
         CardSelectionService.CurrentSelectionHandler = onCardSelected;
 
 
-        DragAndDrop.SelectCard = true; // Разрешаем выбирать карту
+        DragAndDrop.SelectCard = true; // Р Р°Р·СЂРµС€Р°РµРј РІС‹Р±РёСЂР°С‚СЊ РєР°СЂС‚Сѓ
         foreach (Transform cardTransform in playerHandPanel)
         {
             var dragAndDrop = cardTransform.GetComponent<DragAndDrop>();
@@ -263,8 +268,8 @@ public class UnGameManager : MonoBehaviour
         {
             yield return null;
         }
-        DragAndDrop.SelectCard = false; // Запрещаем выбор карты
-        canChooseRule = false; // Запрещаем выбор правила
+        DragAndDrop.SelectCard = false; // Р—Р°РїСЂРµС‰Р°РµРј РІС‹Р±РѕСЂ РєР°СЂС‚С‹
+        canChooseRule = false; // Р—Р°РїСЂРµС‰Р°РµРј РІС‹Р±РѕСЂ РїСЂР°РІРёР»Р°
         CardSelectionService.CurrentSelectionHandler = null;
 
         foreach (Transform cardTransform in playerHandPanel)
@@ -276,7 +281,7 @@ public class UnGameManager : MonoBehaviour
             }
         }
 
-        // Если карта выбрана, разыгрываем её
+        // Р•СЃР»Рё РєР°СЂС‚Р° РІС‹Р±СЂР°РЅР°, СЂР°Р·С‹РіСЂС‹РІР°РµРј РµС‘
         if (selectedCard != null)
         {
             GameNetworkController.Instance.CmdPlayCard(selectedCard.Id);
