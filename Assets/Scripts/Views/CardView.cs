@@ -1,4 +1,4 @@
-using ScaryTales;
+п»їusing ScaryTales;
 using ScaryTales.Enums;
 using System;
 using TMPro;
@@ -15,7 +15,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     public TMP_Text _cardScoreText;
     public TMP_Text _cardTypeText;
     public TMP_Text _cardQuantityText;
-    public Image _highlightFrame; // Ссылка на Image для рамки
+    public Image _highlightFrame; // РЎСЃС‹Р»РєР° РЅР° Image РґР»СЏ СЂР°РјРєРё
 
     public Card _card;
     private Image _background;
@@ -29,51 +29,20 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         _card = card;
         _background = GetComponent<Image>();
         DisplayCard();
-        SetHighlight(false); // По умолчанию рамка выключена
+        SetHighlight(false); // РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ СЂР°РјРєР° РІС‹РєР»СЋС‡РµРЅР°
     }
 
     public void DisplayCard()
     {
-        ChangeTextVisibility(true);
         _cardNameText.text = _card.Name;
         _cardDescriptionText.text = _card.EffectDescription;
         _cardScoreText.text = _card.Points == 0 ? "?" : _card.Points.ToString();
         _cardTypeText.text = _card.Type.GetDescription();
         _cardQuantityText.text = _card.CardCountInDeck.ToString();
-        SetCardViewBackground(_card.Owner);
     }
-    public void SetCardViewBackground(Player player)
-    {
-        if(player == null)
-            return;
-        var localPlayer = UnGameManager.Instance.LocalPlayer;
-        if(player.Id != localPlayer.Id)
-        {
-            _background.color = new Color(1f, 1f, 1f, 1f); // Белый цвет с полной непрозрачностью
-            ChangeTextVisibility(false);
-            _background.sprite = _enemyBackgroundSprite;
-        }
-        else
-        {
-            var frontSprite = Resources.Load<Sprite>($"CardsImages/{_card.Name}");
-            if (frontSprite != null)
-            {
-                _background.sprite = frontSprite;
-            }
-            else
-            {
-                _background.color = Color.blue;
-            }
-        }
-    }
+
     public void FaceUp()
     {
-        if (this._card.Position != CardPosition.InHand )
-        {
-            //if (this._card.Owner.Id == UnGameManager.Instance.LocalPlayer.Id)
-            //    _background.color = Color.blue;
-            //else
-            //    _background.color = Color.red;
             ChangeTextVisibility(true);
             var frontSprite = Resources.Load<Sprite>($"CardsImages/{_card.Name}");
             if (frontSprite != null)
@@ -84,14 +53,19 @@ public class CardView : MonoBehaviour, IPointerClickHandler
             {
                 _background.sprite = null;
             }
-        }
+    }
+    public void FaceDown()
+    {
+        _background.color = new Color(1f, 1f, 1f, 1f); // Р‘РµР»С‹Р№ С†РІРµС‚ СЃ РїРѕР»РЅРѕР№ РЅРµРїСЂРѕР·СЂР°С‡РЅРѕСЃС‚СЊСЋ
+        ChangeTextVisibility(false);
+        _background.sprite = _enemyBackgroundSprite;
     }
     public void OnPointerClick(PointerEventData eventData)
     {
         OnCardClicked?.Invoke(_card);
     }
     /// <summary>
-    /// Включает или выключает рамку
+    /// Р’РєР»СЋС‡Р°РµС‚ РёР»Рё РІС‹РєР»СЋС‡Р°РµС‚ СЂР°РјРєСѓ
     /// </summary>
     public void SetHighlight(bool isHighlighted)
     {

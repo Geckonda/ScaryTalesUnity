@@ -1,4 +1,4 @@
-using ScaryTales;
+п»їusing ScaryTales;
 using System.Collections.Generic;
 using System;
 using UnityEngine;
@@ -15,7 +15,7 @@ public class CardViewService
     public CardViewFactory CardViewFactory => _cardViewFactory;
     private CardViewService()
     {
-        // Получаем зависимости (например, через UnGameManager)
+        // РџРѕР»СѓС‡Р°РµРј Р·Р°РІРёСЃРёРјРѕСЃС‚Рё (РЅР°РїСЂРёРјРµСЂ, С‡РµСЂРµР· UnGameManager)
         var gameManager = UnGameManager.Instance.GameManager;
         var gameBoardPanel = UnGameManager.Instance.GameBoardPanel;
         var cardPrefab = Resources.Load<GameObject>("CardPrefab");
@@ -26,7 +26,7 @@ public class CardViewService
     public void BundleCardAndCardView(Card card, CardView view)
     {
         if (_cardToCardViewMap.ContainsKey(card))
-            throw new ArgumentException("Такая карта уже имеет представление.");
+            throw new ArgumentException("РўР°РєР°СЏ РєР°СЂС‚Р° СѓР¶Рµ РёРјРµРµС‚ РїСЂРµРґСЃС‚Р°РІР»РµРЅРёРµ.");
 
         _cardToCardViewMap.Add(card, view);
     }
@@ -44,6 +44,17 @@ public class CardViewService
         {
             _cardToCardViewMap[card] = cardView;
         }
+        return cardView;
+    }
+
+    /// <summary>
+    /// РЎРѕР·РґР°РµС‚ РєР»РѕРЅР° РЅР° РѕРґРёРЅ СЂР°Р·
+    /// </summary>
+    /// <param name="card">РћР±С‹С‡РЅР°СЏ РєР°СЂС‚Р°</param>
+    public CardView CreateSingleCardViewClone(Card card, Transform parent)
+    {
+        var cardView = _cardViewFactory.CreateCardView(card.Clone(), parent);
+
         return cardView;
     }
 }

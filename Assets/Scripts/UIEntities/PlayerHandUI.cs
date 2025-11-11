@@ -1,4 +1,4 @@
-using ScaryTales;
+п»їusing ScaryTales;
 using ScaryTales.Abstractions;
 using System.Collections;
 using System.Collections.Generic;
@@ -16,8 +16,8 @@ public class PlayerHandUI : MonoBehaviour
 
     private CardViewService _cardViewService;
 
-    public Transform PlayerHandPanel1; // Панель для карт первого игрока
-    public Transform PlayerHandPanel2; // Панель для карт второго игрока
+    public Transform PlayerHandPanel1; // РџР°РЅРµР»СЊ РґР»СЏ РєР°СЂС‚ РїРµСЂРІРѕРіРѕ РёРіСЂРѕРєР°
+    public Transform PlayerHandPanel2; // РџР°РЅРµР»СЊ РґР»СЏ РєР°СЂС‚ РІС‚РѕСЂРѕРіРѕ РёРіСЂРѕРєР°
     public Dictionary<Player, Transform> _playerHandPanels;
     void Awake()
     {
@@ -27,10 +27,10 @@ public class PlayerHandUI : MonoBehaviour
     {
         _context = UnGameManager.Instance.GameManager._context;
 
-        // Убедимся, что всё готово
+        // РЈР±РµРґРёРјСЃСЏ, С‡С‚Рѕ РІСЃС‘ РіРѕС‚РѕРІРѕ
         if (_context == null || UnGameManager.Instance.LocalPlayer == null)
         {
-            UnityEngine.Debug.LogError("[PlayerHandUI] Игра или LocalPlayer еще не готовы!");
+            UnityEngine.Debug.LogError("[PlayerHandUI] РРіСЂР° РёР»Рё LocalPlayer РµС‰Рµ РЅРµ РіРѕС‚РѕРІС‹!");
             return;
         }
 
@@ -58,9 +58,12 @@ public class PlayerHandUI : MonoBehaviour
 
         var deck = unityManager.Deck;
         var cardView = _cardViewService.GetCardView(card) ?? _cardViewService.CreateCardView(card, deck);
-        cardView.SetCardViewBackground(card.Owner);
+        if (card.Owner != null && card.Owner == unityManager.LocalPlayer)
+            cardView.FaceUp();
+        else
+            cardView.FaceDown();
 
-        // Здесь мы создаём настоящий Task, и только потом регистрируем
+        // Р—РґРµСЃСЊ РјС‹ СЃРѕР·РґР°С‘Рј РЅР°СЃС‚РѕСЏС‰РёР№ Task, Рё С‚РѕР»СЊРєРѕ РїРѕС‚РѕРј СЂРµРіРёСЃС‚СЂРёСЂСѓРµРј
         var animationTask = AnimateCardToHand(cardView, hand);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
@@ -76,9 +79,12 @@ public class PlayerHandUI : MonoBehaviour
 
         var discardPile = unityManager._boardUI.DiscardPile;
         var cardView = _cardViewService.CreateCardView(card, discardPile);
-        cardView.SetCardViewBackground(card.Owner);
+        if (card.Owner != null && card.Owner == unityManager.LocalPlayer)
+            cardView.FaceUp();
+        else
+            cardView.FaceDown();
 
-        // Здесь мы создаём настоящий Task, и только потом регистрируем
+        // Р—РґРµСЃСЊ РјС‹ СЃРѕР·РґР°С‘Рј РЅР°СЃС‚РѕСЏС‰РёР№ Task, Рё С‚РѕР»СЊРєРѕ РїРѕС‚РѕРј СЂРµРіРёСЃС‚СЂРёСЂСѓРµРј
         var animationTask = AnimateCardToHand(cardView, hand);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
@@ -86,18 +92,18 @@ public class PlayerHandUI : MonoBehaviour
 
     private async Task AnimateCardToHand(CardView cardView, Transform hand)
     {
-        // Запускаем анимацию
+        // Р—Р°РїСѓСЃРєР°РµРј Р°РЅРёРјР°С†РёСЋ
         await cardView.transform.DOMove(hand.position, 1f)
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();
 
-        // Только после завершения tween'а — меняем родителя
+        // РўРѕР»СЊРєРѕ РїРѕСЃР»Рµ Р·Р°РІРµСЂС€РµРЅРёСЏ tween'Р° вЂ” РјРµРЅСЏРµРј СЂРѕРґРёС‚РµР»СЏ
         cardView.transform.SetParent(hand);
 
-        // Принудительно перестраиваем layout
+        // РџСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕ РїРµСЂРµСЃС‚СЂР°РёРІР°РµРј layout
         LayoutRebuilder.ForceRebuildLayoutImmediate(hand.GetComponent<RectTransform>());
 
-        // Ждём один кадр, чтобы UI точно перестроился
+        // Р–РґС‘Рј РѕРґРёРЅ РєР°РґСЂ, С‡С‚РѕР±С‹ UI С‚РѕС‡РЅРѕ РїРµСЂРµСЃС‚СЂРѕРёР»СЃСЏ
         await Task.Yield();
     }
     public void ClearAllCardListeners(Player player)
