@@ -1,4 +1,5 @@
 ﻿using ScaryTales.Abstractions;
+using ScaryTales.Decisions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,13 +16,15 @@ namespace ScaryTales
         public Deck Deck { get; private set; }
         public ItemManager ItemManager { get; private set; }
         public IGameManager GameManager { get; private set; }
+        public IDecisionRouter Router { get; private set; }
 
         public GameContext(IGameState gameState,
             IGameBoard gameBoard,
             List<Player> players,
             Deck deck,
             ItemManager itemManager,
-            IGameManager gameManager)
+            IGameManager gameManager,
+            IDecisionRouter router)
         {
             GameState = gameState;
             GameBoard = gameBoard;
@@ -29,6 +32,7 @@ namespace ScaryTales
             Deck = deck;
             ItemManager = itemManager;
             GameManager = gameManager;
+            Router = router;
         }
     }
 }

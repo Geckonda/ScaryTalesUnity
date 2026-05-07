@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ScaryTales.Decisions;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -14,5 +15,6 @@ namespace ScaryTales.Abstractions
         public Deck Deck { get; }
         public ItemManager ItemManager { get; }
         public IGameManager GameManager { get; }
+        public IDecisionRouter Router { get; }
     }
 }

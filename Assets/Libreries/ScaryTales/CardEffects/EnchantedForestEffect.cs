@@ -1,4 +1,5 @@
 ﻿using ScaryTales.Abstractions;
+using ScaryTales.Decisions;
 using ScaryTales.Enums;
 using ScaryTales.Helpers;
 using System;
@@ -13,6 +14,8 @@ namespace ScaryTales.CardEffects
     {
         public CardEffectTimeType Type => CardEffectTimeType.Instant;
 
+        // NOTE: 2-player concept (LocalPlayer + LocalOpponent). Phase 4 will
+        // generalize this to "every player picks a card" by iterating context.Players.
         public async Task ApplyEffect(IGameContext context)
         {
             var state = context.GameState;
@@ -44,23 +47,29 @@ namespace ScaryTales.CardEffects
             {
                 manager.PrintMessage("Все игроки сбрасывают 1 карту из своей руки");
 
-                // Запускаем выбор карт у обоих игроков одновременно
-                var localPlayerTask = localPlayer.SelectCardAmongOthers(localPlayer.Hand);
-                var localOpponentTask = localOpponent.SelectCardAmongOthers(localOpponent.Hand);
+                var localHandSnapshot = localPlayer.Hand.ToList();
+                var opponentHandSnapshot = localOpponent.Hand.ToList();
 
-                // Показываем параллельные сообщения (если нужно)
+                var localPickTask = context.Router.PickCard(
+                    localPlayer.Id,
+                    new PickCardRequest(localHandSnapshot.Select(c => c.Id)));
+                var opponentPickTask = context.Router.PickCard(
+                    localOpponent.Id,
+                    new PickCardRequest(opponentHandSnapshot.Select(c => c.Id)));
+
                 manager.PrintMessage($"Игрок {localPlayer.Name} выбирает карту для сброса.");
                 manager.PrintMessage($"Игрок {localOpponent.Name} выбирает карту для сброса.");
 
-                // Дожидаемся, когда оба выберут
-                var cards = await Task.WhenAll(localPlayerTask, localOpponentTask);
+                var picks = await Task.WhenAll(localPickTask, opponentPickTask);
 
-                // Обрабатываем результат
-                localPlayer.RemoveCardFromHand(cards[0]);
-                manager.PutCardToDiscardPile(cards[0]);
+                var localCard = localHandSnapshot.First(c => c.Id == picks[0].CardId);
+                var opponentCard = opponentHandSnapshot.First(c => c.Id == picks[1].CardId);
 
-                localOpponent.RemoveCardFromHand(cards[1]);
-                manager.PutCardToDiscardPile(cards[1]);
+                localPlayer.RemoveCardFromHand(localCard);
+                manager.PutCardToDiscardPile(localCard);
+
+                localOpponent.RemoveCardFromHand(opponentCard);
+                manager.PutCardToDiscardPile(opponentCard);
             }
         }
     }

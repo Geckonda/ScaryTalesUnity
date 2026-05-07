@@ -1,4 +1,5 @@
 ﻿using ScaryTales.Abstractions;
+using ScaryTales.Decisions;
 using ScaryTales.Enums;
 using ScaryTales.Helpers;
 using System;
@@ -26,7 +27,12 @@ namespace ScaryTales.CardEffects
                 manager.PrintMessage("Нет ни одной карты типа 'Мужчина' на столе.");
                 return;
             }
-            var man = await player.SelectCardAmongOthers(men);
+
+            var pick = await context.Router.PickCard(
+                player.Id,
+                new PickCardRequest(men.Select(c => c.Id)));
+            var man = men.First(c => c.Id == pick.CardId);
+
             board.RemoveCardFromBoard(man);
             manager.PutCardInPlayerHand(man, player);
         }

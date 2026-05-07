@@ -1,4 +1,5 @@
 ﻿using ScaryTales.Abstractions;
+using ScaryTales.Decisions;
 using ScaryTales.Enums;
 using System;
 using System.Collections.Generic;
@@ -32,7 +33,10 @@ namespace ScaryTales.CardEffects
             }
             else
             {
-                var place = await player.SelectCardAmongOthers(places);
+                var pick = await context.Router.PickCard(
+                    player.Id,
+                    new PickCardRequest(places.Select(c => c.Id)));
+                var place = places.First(c => c.Id == pick.CardId);
                 board.RemoveCardFromBoard(place);
                 manager.PutCardInPlayerHand(place, player);
             }
@@ -43,7 +47,10 @@ namespace ScaryTales.CardEffects
             }
             else
             {
-                var woman = await player.SelectCardAmongOthers(women);
+                var pick = await context.Router.PickCard(
+                    player.Id,
+                    new PickCardRequest(women.Select(c => c.Id)));
+                var woman = women.First(c => c.Id == pick.CardId);
                 board.RemoveCardFromBoard(woman);
                 manager.PutCardInPlayerHand(woman, player);
             }

@@ -16,36 +16,15 @@ namespace ScaryTales.Abstractions
         /// <param name="message"></param>
         public void PrintMessage(string message);
         /// <summary>
-        /// Запустить игру
-        /// </summary>
-        public void StartGame();
-        /// <summary>
-        /// Раздача карт всем игрокам (по 5 карт)
-        /// </summary>
-        public void DrawCardsToPlayersHand();
-        /// <summary>
         /// Пытается вытянуть карту из колоды, если она не пуста.
         /// </summary>
         /// <returns>Карта (БЕЗ ВЛАДЕЛЬЦА) или null.</returns>
         public Card? TryDrawCardFromDeck();
-        public void Run();
-        /// <summary>
-        /// Ход игрока
-        /// </summary>
-        public void GameCourse();
         /// <summary>
         /// Взять 1 карту из колоды и передать игроку
         /// </summary>
         /// <param name="player"></param>
         public void DrawCard(Player player);
-        /// <summary>
-        /// Разыгрывание игроком предмета (По желанию)
-        /// </summary>
-        public void PlayItem(Player player);
-        /// <summary>
-        /// Разыгрывание игрком карты
-        /// </summary>
-        public Task PlayCard(Player player);
         /// <summary>
         /// Разыгрывание игрком карты
         /// </summary>

@@ -1,6 +1,7 @@
 ﻿using Mirror.Examples.BilliardsPredicted;
 using ScaryTales.Abstractions;
 using ScaryTales.Cards;
+using ScaryTales.Decisions;
 using ScaryTales.Items;
 using System;
 using System.Collections.Generic;
@@ -79,9 +80,12 @@ namespace ScaryTales
             // Игровое состояние
             var gameState = new GameState(players);
 
+            // Phase 1 router: forwards decisions to each player's IPlayerInput
+            // until effects are migrated and IPlayerInput is removed (Phase 1 end / Phase 3).
+            var router = new PlayerInputAdapterRouter(players, _gameBoard, items);
 
             // Создаем игровой менеджер
-            return new GameManager(gameState, _gameBoard, players, deck, items, _notifier);
+            return new GameManager(gameState, _gameBoard, players, deck, items, _notifier, router);
         }
 
         private List<Card> MakeCardTemplates()

@@ -9,6 +9,7 @@ using Assets.Scripts.Utilities;
 using Assets.Scripts.Views;
 using ScaryTales;
 using ScaryTales.Abstractions;
+using ScaryTales.Decisions;
 using ScaryTales.Interaction_Entities.EnvUnity;
 using System;
 using System.Collections;
@@ -75,6 +76,15 @@ public class UnGameManager : MonoBehaviour
         // Инициализируем UI после запуска игры
         var playerHandUI = FindObjectOfType<PlayerHandUI>();
         playerHandUI.Initialize();
+
+        // Wire the rule-effect lookup into the router. The current rule lives
+        // here, not in core, so we configure the adapter post-init.
+        if (_context.Router is PlayerInputAdapterRouter adapter)
+        {
+            adapter.SetRuleEffectLookup(id =>
+                _currentRuleInGame.Effects.FirstOrDefault(e => e.Id == id));
+        }
+
         await StartGame(); // просто вызывает StartGame, когда пришла команда от сервера
     }
 
@@ -205,21 +215,23 @@ public class UnGameManager : MonoBehaviour
             yield break;
 
         // Ждём, пока игрок выберет или пропустит правило
-        var selectTask = player.SelectRuleEffect(CurrentRuleInGame.Effects); // <- это async Task<IRuleEffect>
-        yield return selectTask.AsIEnumerator(); // ждём завершения task внутри корутины
+        var pickTask = _context.Router.PickRuleEffect(
+            player.Id,
+            new PickRuleEffectRequest(CurrentRuleInGame.Effects.Select(e => e.Id)));
+        yield return pickTask.AsIEnumerator();
 
-        IRuleEffect chosen = selectTask.Result;
+        var pick = pickTask.Result;
 
-        if (chosen == null)
+        if (pick.RuleEffectId == null)
         {
             Debug.Log("Игрок пропустил выбор правила.");
             yield break;
         }
         else
         {
-            Debug.Log($"Игрок выбрал правило {chosen.Id}.");
+            Debug.Log($"Игрок выбрал правило {pick.RuleEffectId}.");
             canChooseRule = false;
-            GameNetworkController.Instance.CmdOnRuleChosen(chosen.Id);
+            GameNetworkController.Instance.CmdOnRuleChosen(pick.RuleEffectId.Value);
             yield break;
         }
     }

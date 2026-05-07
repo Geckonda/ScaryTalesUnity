@@ -1,6 +1,7 @@
 ﻿using Assets.Libreries.ScaryTales.Abstractions;
 using ScaryTales;
 using ScaryTales.Abstractions;
+using ScaryTales.Decisions;
 using ScaryTales.Enums;
 using System;
 using System.Collections.Generic;
@@ -36,7 +37,10 @@ namespace Assets.Libreries.ScaryTales.Rules.Effects
 
             player.RemoveItemFromItemBag(ItemType.Sword);
 
-            var monster = await player.SelectCardAmongOthers(monsters);
+            var pick = await context.Router.PickCard(
+                player.Id,
+                new PickCardRequest(monsters.Select(c => c.Id)));
+            var monster = monsters.First(c => c.Id == pick.CardId);
             manager.PrintMessage($"Игрок {player.Name} сбросил карту {monster.Name}");
 
             board.RemoveCardFromBoard(monster);
