@@ -1,4 +1,5 @@
-﻿using ScaryTales;
+﻿using Assets.Scripts;
+using ScaryTales;
 using ScaryTales.Abstractions;
 using System.Collections;
 using System.Collections.Generic;
@@ -12,6 +13,7 @@ using System.Linq;
 
 public class PlayerHandUI : MonoBehaviour
 {
+    private GameSession _session;
     private IGameContext _context;
 
     private CardViewService _cardViewService;
@@ -23,12 +25,15 @@ public class PlayerHandUI : MonoBehaviour
     {
         _cardViewService = CardViewService.Instance;
     }
-    public void Initialize()
+    /// <summary>
+    /// Wires this hand UI to a session. Called by UnGameManager.StartNewSession.
+    /// </summary>
+    public void Initialize(GameSession session)
     {
-        _context = UnGameManager.Instance.GameManager._context;
+        _session = session;
+        _context = session.Context;
 
-        // Убедимся, что всё готово
-        if (_context == null || UnGameManager.Instance.LocalPlayer == null)
+        if (_context == null || _session.LocalPlayer == null)
         {
             UnityEngine.Debug.LogError("[PlayerHandUI] Игра или LocalPlayer еще не готовы!");
             return;
@@ -37,7 +42,7 @@ public class PlayerHandUI : MonoBehaviour
         _context.GameManager.OnCardAddedToHand += HandleCardAddedToHand;
         _context.GameManager.OnCardAddedToHandFromDiscardPile += HandleCardAddedToHandFromDiscardPile;
 
-        var localPlayer = UnGameManager.Instance.LocalPlayer;
+        var localPlayer = _session.LocalPlayer;
         var opponent = _context.Players.First(p => p != localPlayer);
 
         _playerHandPanels = new Dictionary<Player, Transform>
@@ -58,7 +63,7 @@ public class PlayerHandUI : MonoBehaviour
 
         var deck = unityManager.Deck;
         var cardView = _cardViewService.GetCardView(card) ?? _cardViewService.CreateCardView(card, deck);
-        if (card.Owner != null && card.Owner == unityManager.LocalPlayer)
+        if (card.Owner != null && card.Owner == _session.LocalPlayer)
             cardView.FaceUp();
         else
             cardView.FaceDown();
@@ -79,7 +84,7 @@ public class PlayerHandUI : MonoBehaviour
 
         var discardPile = unityManager._boardUI.DiscardPile;
         var cardView = _cardViewService.CreateCardView(card, discardPile);
-        if (card.Owner != null && card.Owner == unityManager.LocalPlayer)
+        if (card.Owner != null && card.Owner == _session.LocalPlayer)
             cardView.FaceUp();
         else
             cardView.FaceDown();

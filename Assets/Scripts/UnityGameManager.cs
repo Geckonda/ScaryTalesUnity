@@ -1,7 +1,8 @@
-﻿using Assets.Libreries.ScaryTales;
+using Assets.Libreries.ScaryTales;
 using Assets.Libreries.ScaryTales.Abstractions;
 using Assets.Libreries.ScaryTales.Rules.Templates.A;
 using Assets.Libreries.ScaryTales.Rules.Templates.B;
+using Assets.Scripts;
 using Assets.Scripts.Menus;
 using Assets.Scripts.Network;
 using Assets.Scripts.Services;
@@ -23,23 +24,32 @@ public class UnGameManager : MonoBehaviour
 {
     public static UnGameManager Instance { get; private set; }
 
-    public IGameContext _context;
-    public GameManager _gameManager;
-    public CardViewService _cardViewService;
+    public GameSession Session { get; private set; }
 
+    public CardViewService _cardViewService;
     public BoardUI _boardUI;
     public PlayerHandUI _playerHandUI;
     public TextUIManager _textUIManager;
-    public GameManager GameManager => _gameManager;
     public Transform GameBoardPanel;
     public Transform Deck;
-    public Player CurrentPlayer => _context.GameState.GetCurrentPlayer();
 
-    private Rule _currentRuleInGame;
-    private Rule _currentFinalRule;
-    private bool canChooseRule = false;
-    public Rule CurrentRuleInGame => _currentRuleInGame;
-    public Rule CurrentFinalRule=> _currentFinalRule;
+    // Forwarders to session state. Kept named the way legacy callers expect
+    // so they keep compiling; Phase 2.2 will migrate callers to use Session
+    // directly and these forwarders can go away.
+    public IGameContext _context => Session?.Context;
+    public GameManager _gameManager => Session?.GameManager;
+    public GameManager GameManager => Session?.GameManager;
+    public Player CurrentPlayer => Session?.CurrentPlayer;
+    public Rule CurrentRuleInGame => Session?.CurrentRuleInGame;
+    public Rule CurrentFinalRule => Session?.CurrentFinalRule;
+    public Player LocalPlayer => Session?.LocalPlayer;
+    public Player LocalOpponent => Session?.LocalOpponent;
+
+    private bool canChooseRule
+    {
+        get => Session?.CanChooseRule ?? false;
+        set { if (Session != null) Session.CanChooseRule = value; }
+    }
 
     void Awake()
     {
@@ -50,16 +60,28 @@ public class UnGameManager : MonoBehaviour
         else
         {
             Destroy(gameObject);
+            return;
         }
         _cardViewService = CardViewService.Instance;
-        // Жесткая установка правила
-        _currentRuleInGame = new A1();
-        _currentFinalRule = new B2();
     }
-    public Player LocalPlayer { get; private set; }
-    public Player LocalOpponent { get; private set; }
-    public void SetLocalPlayer(Player player) => LocalPlayer = player;
-    public void SetLocalOpponent(Player player) => LocalOpponent = player;
+
+    /// <summary>
+    /// Composition-root entry point: builds a GameSession, wires every UI
+    /// component to it, and kicks off the game. Called by
+    /// GameNetworkController.TargetSetPlayer once the network has handed us
+    /// the GameManager + players.
+    /// </summary>
+    public async void StartNewSession(GameManager gameManager, Player localPlayer, Player localOpponent)
+    {
+        // Hardcoded rules for now; Phase 4 lobby will let the host pick.
+        Session = new GameSession(gameManager, new A1(), new B2(), localPlayer, localOpponent);
+
+        _boardUI.Initialize(Session);
+        _playerHandUI.Initialize(Session);
+        _textUIManager.Initialize(Session);
+
+        await StartGame();
+    }
 
     private async Task StartGame()
     {
@@ -69,23 +91,6 @@ public class UnGameManager : MonoBehaviour
 
 
         HandlePlayerTurn();
-    }
-
-    public async void StartGameFromNetwork()
-    {
-        // Инициализируем UI после запуска игры
-        var playerHandUI = FindObjectOfType<PlayerHandUI>();
-        playerHandUI.Initialize();
-
-        // Wire the rule-effect lookup into the router. The current rule lives
-        // here, not in core, so we configure the adapter post-init.
-        if (_context.Router is PlayerInputAdapterRouter adapter)
-        {
-            adapter.SetRuleEffectLookup(id =>
-                _currentRuleInGame.Effects.FirstOrDefault(e => e.Id == id));
-        }
-
-        await StartGame(); // просто вызывает StartGame, когда пришла команда от сервера
     }
 
     private void PrepareFirstNight()
@@ -129,7 +134,7 @@ public class UnGameManager : MonoBehaviour
         await AnimationManager.Instance.WaitForAllAnimations();
 
         EnablePlayerDrag(CurrentPlayer);
-        
+
         if (CurrentPlayer.Hand.Count == 0)
         {
             _gameManager.EndGame();
@@ -144,7 +149,7 @@ public class UnGameManager : MonoBehaviour
     {
         _gameManager.PrintMessage("Конец игры");
         await FinalRule();
-        string winner =  LocalPlayer.Score > LocalOpponent.Score 
+        string winner =  LocalPlayer.Score > LocalOpponent.Score
             ? LocalPlayer.Name : LocalOpponent.Name;
         ResultContainer.Instance.ShowWinner(winner);
     }
@@ -184,7 +189,7 @@ public class UnGameManager : MonoBehaviour
         {
             var ruleContainer = RuleContainer.Instance.contentPanel;
 
-            RuleContainer.Instance.Show(_currentRuleInGame.Effects, openedByPlayer);
+            RuleContainer.Instance.Show(CurrentRuleInGame.Effects, openedByPlayer);
         }
     }
     public async void PlayCard(Card card)
@@ -192,7 +197,7 @@ public class UnGameManager : MonoBehaviour
         //Создаем Task для ожидания завершения PlayCard
         await _gameManager.PlayCard(card);
 
-        // Задержка - можно в будущем прикрутить анмиацию 
+        // Задержка - можно в будущем прикрутить анмиацию
         await Task.Delay(1000);
         //Ожидаем завершения Task в корутине
         await EndTurn();

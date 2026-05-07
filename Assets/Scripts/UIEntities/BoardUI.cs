@@ -1,3 +1,4 @@
+using Assets.Scripts;
 using Assets.Scripts.Views;
 using DG.Tweening;
 using ScaryTales;
@@ -9,10 +10,11 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR;
 
-// Избавься от дубликатов
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 public class BoardUI : MonoBehaviour
 {
     private CardViewService _cardViewService;
+    private GameSession _session;
 
     public Transform GameBoardPanel;
     public Transform OpponentTable;
@@ -26,18 +28,16 @@ public class BoardUI : MonoBehaviour
     private void Start()
     {
         UIBlockerOverlay.SetActive(false);
-        StartCoroutine(WaitForContextAndInit());
-
     }
 
-    private IEnumerator WaitForContextAndInit()
+    /// <summary>
+    /// Wires this BoardUI to a session. Called by UnGameManager.StartNewSession
+    /// once the network init has handed us a built game.
+    /// </summary>
+    public void Initialize(GameSession session)
     {
-        // Ждём, пока инициализируется контекст
-        while (UnGameManager.Instance.GameManager == null)
-        {
-            yield return null;
-        }
-        var context = UnGameManager.Instance.GameManager._context;
+        _session = session;
+        var context = session.Context;
         context.GameManager.OnCardMovedToBoard += HandleCardMovedToBoard;
         context.GameManager.OnCardMovedToBeforePlayer += HandleCardMovedToBeforePlayer;
         context.GameManager.OnCardMovedToTimeOfDaySlot += HandleCardMovedToTimeOfDaySlot;
@@ -62,7 +62,7 @@ public class BoardUI : MonoBehaviour
         var animationTask = AnumateCardTransformToPositionInLayout(cardView, GameBoardPanel);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
-        Debug.Log($"Карта {card.Name} перемещена на стол");
+        Debug.Log($"пїЅпїЅпїЅпїЅпїЅ {card.Name} пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅ");
     }
     private async void HandleCardMovedToBeforePlayer(Card card)
     {
@@ -78,19 +78,19 @@ public class BoardUI : MonoBehaviour
             cardView = _cardViewService.GetCardView(card);
         }
         cardView.FaceUp();
-        bool isLocalCard = unityManager.LocalPlayer == card.Owner;
+        bool isLocalCard = _session.LocalPlayer == card.Owner;
         var panel = isLocalCard ? LocalPlayerTable : OpponentTable;
         var animationTask = AnumateCardTransformToPositionInLayout(cardView, panel);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
-        Debug.Log($"Карта {card.Name} перемещена на стол перед игроком");
+        Debug.Log($"пїЅпїЅпїЅпїЅпїЅ {card.Name} пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ");
     }
 
     private async void HandleCardMovedToTimeOfDaySlot(Card card)
     {
-        Debug.Log($"Карта {card.Name} перемещена в слот времени суток");
+        Debug.Log($"пїЅпїЅпїЅпїЅпїЅ {card.Name} пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ");
 
-        // Получаем CardView для текущей карты
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ CardView пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         CardView cardView = _cardViewService.GetCardView(card);
         var unityManager = UnGameManager.Instance;
         var deck = unityManager.Deck;
@@ -103,7 +103,7 @@ public class BoardUI : MonoBehaviour
             cardView = _cardViewService.GetCardView(card);
         }
         cardView.FaceUp();
-        // Перемещаем CardView в слот времени суток
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ CardView пїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         await AnimateCardTransformToPosition(cardView, TimeOfDaySlot);
         cardView.transform.SetParent(TimeOfDaySlot);
         card.Owner = null;
@@ -111,7 +111,7 @@ public class BoardUI : MonoBehaviour
     }
     private async void HandleCardMovedToDiscardPile(Card card)
     {
-        Debug.Log($"Карта {card.Name} перемещена в сброс");
+        Debug.Log($"пїЅпїЅпїЅпїЅпїЅ {card.Name} пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ");
 
         CardView cardView = _cardViewService.GetCardView(card);
         if (cardView != null)
@@ -124,31 +124,31 @@ public class BoardUI : MonoBehaviour
         }
         else
         {
-            Debug.LogError($"CardView для карты {card.Name} не найден!");
+            Debug.LogError($"CardView пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ {card.Name} пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ!");
         }
     }
     public async Task AnimateCardTransformToPosition(CardView card, Transform to)
     {
         await Task.Delay(_animationDelay);
-        // Анимация перемещения карты в позицию руки
-        await card.transform.DOMove(to.position, 1f) // Длительность анимации: 1 секунда
-            .SetEase(Ease.OutQuad) // Плавное замедление
-            .AsyncWaitForCompletion(); // Ожидаем завершения анимации
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
+        await card.transform.DOMove(to.position, 1f) // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: 1 пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+            .SetEase(Ease.OutQuad) // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+            .AsyncWaitForCompletion(); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     }
 
     public async Task AnumateCardTransformToPositionInLayout(CardView card, Transform to)
     {
-        // Анимация перемещения карты в позицию руки
-        await card.transform.DOMove(to.position, 1f) // Длительность анимации: 1 секунда
-            .SetEase(Ease.OutQuad) // Плавное замедление
-            .AsyncWaitForCompletion(); // Ожидаем завершения анимации
-        // Делаем карту дочерним объектом руки
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
+        await card.transform.DOMove(to.position, 1f) // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: 1 пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+            .SetEase(Ease.OutQuad) // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+            .AsyncWaitForCompletion(); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+        // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
         card.transform.SetParent(to);
 
-        // Принудительное обновление расположения GridLayout
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ GridLayout
         LayoutRebuilder.ForceRebuildLayoutImmediate(to.GetComponent<RectTransform>());
 
-        // Ждём, пока GridLayoutGroup обновит позиции
+        // пїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ GridLayoutGroup пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         await Task.Yield();
     }
 }

@@ -1,3 +1,4 @@
+using Assets.Scripts;
 using ScaryTales;
 using ScaryTales.Abstractions;
 using System.Collections;
@@ -7,6 +8,7 @@ using UnityEngine;
 
 public class TextUIManager : MonoBehaviour
 {
+    private GameSession _session;
     private IGameContext _gameContext;
     public TMP_Text Player1Name;
     public TMP_Text Player2Name;
@@ -17,43 +19,19 @@ public class TextUIManager : MonoBehaviour
 
     public TMP_Text CurrentPlayerText;
 
-    //private void Awake()
-    //{
-    //    _gameContext = UnGameManager.Instance.GameManager._context;
-    //    _playerScorePanels[_gameContext.Players[0]] = Player1ScoreText;
-    //    _playerScorePanels[_gameContext.Players[1]] = Player2ScoreText;
-
-    //    Player1Name.text = _gameContext.Players[0].Name;
-    //    Player2Name.text = _gameContext.Players[1].Name;
-
-    //    _gameContext.GameManager.OnAddPointsToPlayer += HandleAddPointsToPlayer;
-    //    _gameContext.GameManager.OnMessagePrinted += HandleNotify;
-    //}
-    private void Start()
+    /// <summary>
+    /// Wires this text UI to a session. Called by UnGameManager.StartNewSession.
+    /// </summary>
+    public void Initialize(GameSession session)
     {
-        StartCoroutine(WaitForContextAndInit());
-    }
+        _session = session;
+        _gameContext = session.Context;
 
-    private IEnumerator WaitForContextAndInit()
-    {
-        // Ждём, пока инициализируется контекст
-        while (UnGameManager.Instance.GameManager == null)
-        {
-            yield return null;
-        }
+        _playerScorePanels[_session.LocalPlayer] = Player1ScoreText;
+        _playerScorePanels[_session.LocalOpponent] = Player2ScoreText;
 
-        var unManager = UnGameManager.Instance;
-        _gameContext = unManager.GameManager._context;
-
-        while (unManager.LocalPlayer == null || unManager.LocalOpponent == null)
-        {
-            yield return null;
-        }
-        _playerScorePanels[unManager.LocalPlayer] = Player1ScoreText;
-        _playerScorePanels[unManager.LocalOpponent] = Player2ScoreText;
-
-        Player1Name.text = unManager.LocalPlayer.Name;
-        Player2Name.text = unManager.LocalOpponent.Name;
+        Player1Name.text = _session.LocalPlayer.Name;
+        Player2Name.text = _session.LocalOpponent.Name;
 
         _gameContext.GameManager.OnAddPointsToPlayer += HandleAddPointsToPlayer;
         //_gameContext.GameManager.OnMessagePrinted += HandleNotify;
@@ -80,7 +58,7 @@ public class TextUIManager : MonoBehaviour
     {
         if (_playerScorePanels.TryGetValue(player, out TMP_Text panel))
         {
-            panel.text = "ПО: " + player.Score.ToString();
+            panel.text = "пїЅпїЅ: " + player.Score.ToString();
         }
     }
 
@@ -89,7 +67,7 @@ public class TextUIManager : MonoBehaviour
         if (CurrentPlayerText != null)
         {
             var currentPlayer = _gameContext.GameState.GetCurrentPlayer();
-            CurrentPlayerText.text = $"Сейчас ходит: {currentPlayer.Name}";
+            CurrentPlayerText.text = $"пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ: {currentPlayer.Name}";
         }
     }
 }
