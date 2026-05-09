@@ -1,4 +1,3 @@
-﻿using ScaryTales.Abstractions;
 using ScaryTales;
 using UnityEngine;
 
@@ -6,14 +5,10 @@ namespace Assets.Scripts.Factories
 {
     public class ItemViewFactory
     {
-        private readonly IGameManager _gameManager;
-        private readonly Transform _gameBoardPanel;
         private readonly GameObject _itemPrefab;
 
-        public ItemViewFactory(IGameManager gameManager, Transform gameBoardPanel, GameObject itemPrefab)
+        public ItemViewFactory(GameObject itemPrefab)
         {
-            _gameManager = gameManager;
-            _gameBoardPanel = gameBoardPanel;
             _itemPrefab = itemPrefab;
         }
 

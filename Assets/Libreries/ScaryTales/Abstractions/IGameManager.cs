@@ -87,6 +87,10 @@ namespace ScaryTales.Abstractions
         /// </summary>
         public void PutItemInPlayerItemBag(Item item, Player player);
         /// <summary>
+        /// Удалить предмет конкретного типа из инвентаря игрока (с уведомлением).
+        /// </summary>
+        public void RemoveItemFromPlayerItemBag(ItemType type, Player player);
+        /// <summary>
         /// Закончить игру
         /// </summary>
         public void EndGame();
@@ -100,10 +104,8 @@ namespace ScaryTales.Abstractions
         public event Action<Card>? OnCardMovedToBeforePlayer;
         public event Action<Card>? OnCardMovedToTimeOfDaySlot;
         public event Action<Item, Player>? OnItemAddToPlayer;
+        public event Action<Item, Player>? OnItemRemovedFromPlayer;
         public event Action<Player>? OnAddPointsToPlayer;
         public event Action<string>? OnMessagePrinted;
-
-        public Player LocalPlayer { get; set; }
-        public Player LocalOpponent { get; set; }
     }
 }

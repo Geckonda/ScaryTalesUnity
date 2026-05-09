@@ -1,11 +1,7 @@
-﻿using Assets.Libreries.ScaryTales.Abstractions;
-using ScaryTales.Abstractions;
 using ScaryTales.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ScaryTales
 {
@@ -14,12 +10,6 @@ namespace ScaryTales
         public int Id { get; set; }
         public string Name { get; private set; }
         public int Score { get; private set; }
-        /// <summary>
-        /// Выбирает карту из предоставленного списка
-        /// </summary>
-        private IPlayerInput _playerInput;
-
-        public IPlayerInput PlayerInput => _playerInput;
         /// <summary>
         /// Колода в руке игрока
         /// </summary>
@@ -41,19 +31,6 @@ namespace ScaryTales
         /// </summary>
         public int ItemsBagCount => _itemsBag.Count;
 
-        public Player(string name, IPlayerInput playerInput)
-        {
-            Name = name;
-            _hand = new List<Card>();
-            _itemsBag = new List<Item>();
-            Score = 0;
-            _playerInput = playerInput;
-        }
-        public Player(int id, string name, IPlayerInput playerInput)
-            :this(id, name)
-        {
-            _playerInput = playerInput;
-        }
         public Player(int id, string name)
         {
             Id = id;
@@ -69,7 +46,7 @@ namespace ScaryTales
         /// <param name="points">Очки для начисления</param>
         public void AddPoints(int points)
         {
-            if (points < 0) 
+            if (points < 0)
                 throw new ArgumentException("Число должно быть положительным");
             Score += points;
         }

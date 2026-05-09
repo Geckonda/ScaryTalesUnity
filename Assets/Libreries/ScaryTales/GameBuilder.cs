@@ -1,94 +1,37 @@
-﻿using Mirror.Examples.BilliardsPredicted;
 using ScaryTales.Abstractions;
 using ScaryTales.Cards;
 using ScaryTales.Decisions;
 using ScaryTales.Items;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ScaryTales
 {
     public class GameBuilder
     {
-        private readonly IPlayerInput _playerInput1;
-        private readonly IPlayerInput _playerInput2;
         private readonly INotifier _notifier;
         private readonly IGameBoard _gameBoard;
+        private readonly List<Player> _players;
 
-        private Player _player1;
-        private Player _player2;
-        public GameBuilder(IPlayerInput playerInput,
-            INotifier notifier,
-            IGameBoard gameBoard)
+        public GameBuilder(INotifier notifier, IGameBoard gameBoard, IEnumerable<Player> players)
         {
-            _playerInput1 = playerInput;
-            _playerInput2 = playerInput;
             _notifier = notifier;
             _gameBoard = gameBoard;
-            _player1 = new Player("Саша", _playerInput1);
-            _player2 = new Player("Вова", _playerInput2);
+            _players = players.ToList();
         }
-        public GameBuilder(IPlayerInput playerInput1,
-            IPlayerInput playerInput2,
-            INotifier notifier,
-            IGameBoard gameBoard)
-        {
-            _playerInput1 = playerInput1;
-            _playerInput2 = playerInput2;
-            _notifier = notifier;
-            _gameBoard = gameBoard;
 
-            _player1 = new Player("Саша", _playerInput1);
-            _player2 = new Player("Вова", _playerInput2);
-
-        }
-        public GameBuilder(IPlayerInput playerInput1,
-            IPlayerInput playerInput2,
-            INotifier notifier,
-            IGameBoard gameBoard,
-            Player player1,
-            Player player2)
-        {
-            _playerInput1 = playerInput1;
-            _playerInput2 = playerInput2;
-            _notifier = notifier;
-            _gameBoard = gameBoard;
-            _player1 = player1;
-            _player2 = player2;
-        }
-        public GameBuilder(INotifier notifier,
-                IGameBoard gameBoard,
-                Player player1,
-                Player player2)
-        {
-            _notifier = notifier;
-            _gameBoard = gameBoard;
-            _player1 = player1;
-            _player2 = player2;
-        }
-        public GameManager Build()
+        public GameManager Build(IDecisionRouter router)
         {
             var deck = new Deck(MakeCardTemplates());
             var items = new ItemManager(MakeItemTemplates());
-
-            // Список игроков
-            var players = new List<Player> { _player1, _player2 };
-
-            // Игровое состояние
+            var players = new List<Player>(_players);
             var gameState = new GameState(players);
-
-            // Phase 1 router: forwards decisions to each player's IPlayerInput
-            // until effects are migrated and IPlayerInput is removed (Phase 1 end / Phase 3).
-            var router = new PlayerInputAdapterRouter(players, _gameBoard, items);
-
-            // Создаем игровой менеджер
             return new GameManager(gameState, _gameBoard, players, deck, items, _notifier, router);
         }
 
-        private List<Card> MakeCardTemplates()
+        // Static so client-side ClientGameView can build the same Card
+        // catalog the server's Deck uses (so card IDs match across all peers).
+        public static List<Card> MakeCardTemplates()
         {
             return new List<Card>()
             {
@@ -112,7 +55,7 @@ namespace ScaryTales
                 new CharmCard(),
             };
         }
-        private List<Item> MakeItemTemplates()
+        public static List<Item> MakeItemTemplates()
         {
             return new List<Item>()
             {

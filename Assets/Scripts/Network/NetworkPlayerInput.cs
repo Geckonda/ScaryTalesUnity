@@ -1,143 +1,20 @@
-﻿using Assets.Libreries.ScaryTales.Abstractions;
 using Mirror;
-using ScaryTales;
-using ScaryTales.Abstractions;
-using ScaryTales.Enums;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using UnityEngine;
 
 namespace Assets.Scripts.Network
 {
     /// <summary>
-    /// Реализация ввода игрока через сеть.
-    /// Делегирует выбор карты, предмета и подтверждение действия через сетевой контроллер.
+    /// Empty per-connection NetworkBehaviour. Mirror's NetworkManager
+    /// spawns a player object per connection; this is what's attached to
+    /// that prefab. After Phase 3 it carries no game state — input now
+    /// flows via NetworkClient.Send(...intent...) and DomainEvents
+    /// arriving back via ClientGameView.
+    ///
+    /// Kept (rather than deleted) so the existing Player prefab in the
+    /// scene continues to resolve. Phase 5 follow-up: rename to
+    /// PlayerConnection or similar, or replace with NetworkIdentity-only
+    /// prefab and delete this entirely.
     /// </summary>
-    public class NetworkPlayerInput : NetworkBehaviour, IPlayerInput
+    public class NetworkPlayerInput : NetworkBehaviour
     {
-        private int _playerId;
-        private INetworkController _network;
-
-        /// <summary>
-        /// Конструктор сетевого ввода игрока.
-        /// </summary>
-        /// <param name="playerId">Уникальный ID игрока</param>
-        /// <param name="network">Сетевой контроллер, обрабатывающий взаимодействие с клиентом</param>
-        public void Initialize(int playerId, INetworkController network)
-        {
-            _playerId = playerId;
-            _network = network;
-        }
-
-        /// <summary>
-        /// Запрашивает у игрока выбор карты из списка.
-        /// </summary>
-        /// <param name="cards">Доступные карты</param>
-        /// <returns>Выбранная игроком карта</returns>
-        //public async Task<Card> SelectCard(List<Card> cards)
-        //{
-        //    await _network.SendAvailableCards(_playerId, cards);
-        //    var selectedId = await _network.WaitForCardSelection(_playerId);
-        //    return cards.FirstOrDefault(c => c.Id == selectedId);
-        //}
-
-        /// <summary>
-        /// Запрашивает у игрока выбор предмета из списка.
-        /// </summary>
-        /// <param name="items">Доступные предметы</param>
-        /// <returns>Выбранный игроком предмет</returns>
-        //public async Task<Item> SelectItem(List<Item> items)
-        //{
-        //    await _network.SendAvailableItems(_playerId, items);
-        //    var selectedId = await _network.WaitForItemSelection(_playerId);
-        //    return items.FirstOrDefault(i => i.Id == selectedId);
-        //}
-
-        /// <summary>
-        /// Запрашивает у игрока подтверждение выполнения действия.
-        /// </summary>
-        /// <param name="description">Описание действия (может быть выведено игроку)</param>
-        /// <returns>True, если игрок подтвердил действие; иначе — false</returns>
-        public async Task<bool> ConfirmAction(string description)
-        {
-            return await _network.WaitForYesOrNo(_playerId);
-        }
-
-        public Task<bool> YesOrNo()
-        {
-            throw new System.NotImplementedException();
-        }
-
-        private TaskCompletionSource<Item> _itemSelectionTcs;
-        private List<Item> _availableItems;
-        public async Task<Item> SelectItem(List<Item> availableItems)
-        {
-            _availableItems = availableItems;
-            // Ждём выбора от клиента, который реально играет
-            _itemSelectionTcs = new TaskCompletionSource<Item>();
-
-            // Ждать, пока этот TCS не будет завершён
-            return await _itemSelectionTcs.Task;
-        }
-
-        // Этот метод вызывается из RPC, когда сервер узнаёт, что выбрал другой игрок
-        public void OnItemSelectedFromRemote(int itemType)
-        {
-            var item = UnGameManager.Instance._context.ItemManager.GetCloneItemByType((ItemType)itemType);
-            if (item != null && _itemSelectionTcs != null && !_itemSelectionTcs.Task.IsCompleted)
-            {
-                _itemSelectionTcs.SetResult(item);
-            }
-        }
-
-        private TaskCompletionSource<Card> _cardSelectionTcs;
-        private List<Card> _availableCards;
-        public async Task<Card> SelectCard(List<Card> availableCards)
-        {
-            // Уничтожаем старый TCS, если он есть
-            if (_cardSelectionTcs != null && !_cardSelectionTcs.Task.IsCompleted)
-            {
-                _cardSelectionTcs.SetCanceled();
-            }
-            _availableCards = availableCards;
-            // Ждём выбора от клиента, который реально играет
-            _cardSelectionTcs = new TaskCompletionSource<Card>();
-
-            // Ждать, пока этот TCS не будет завершён
-            return await _cardSelectionTcs.Task;
-        }
-
-        // Этот метод вызывается из RPC, когда сервер узнаёт, что выбрал другой игрок
-        public void OnCardSelectedFromRemote(int cardId)
-        {
-            if (_cardSelectionTcs == null || _cardSelectionTcs.Task.IsCompleted)
-            {
-                Debug.LogWarning("CardSelectionTcs is not active or already completed.");
-                return;
-            }
-            
-            var card = UnGameManager.Instance._context.GameBoard.GetCardFromBoard(cardId)
-                ?? UnGameManager.Instance.LocalPlayer.Hand.FirstOrDefault(x => x.Id == cardId)
-                ?? UnGameManager.Instance.LocalOpponent.Hand.FirstOrDefault(x => x.Id == cardId);
-            if (card == null)
-            {
-                Debug.LogError($"Card with ID {cardId} not found on field.");
-                _cardSelectionTcs.SetCanceled(); // Отмена задачи, если карта не найдена
-                return;
-            }
-
-            _cardSelectionTcs.SetResult(card); // Успешное завершение
-        }
-
-        private TaskCompletionSource<IRuleEffect> _ruleEffectsSelectionTcs;
-        public async Task<IRuleEffect> SelectRuleEffect(List<IRuleEffect> effects)
-        {
-            // Ждём выбора от клиента, который реально играет
-            _ruleEffectsSelectionTcs = new TaskCompletionSource<IRuleEffect>();
-
-            // Ждать, пока этот TCS не будет завершён
-            return await _ruleEffectsSelectionTcs.Task;
-        }
     }
 }

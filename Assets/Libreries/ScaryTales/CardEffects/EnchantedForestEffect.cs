@@ -1,35 +1,35 @@
-﻿using ScaryTales.Abstractions;
+using ScaryTales.Abstractions;
 using ScaryTales.Decisions;
 using ScaryTales.Enums;
-using ScaryTales.Helpers;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace ScaryTales.CardEffects
 {
+    /// <summary>
+    /// "Draw 1 card. If Day, all players draw 1 card. If Night, all players
+    /// discard 1 card." (per docs/CARDS.md). Active player gets the initial
+    /// "draw 1" plus, on Day, an extra one as part of "all players draw".
+    /// </summary>
     public class EnchantedForestEffect : ICardEffect
     {
         public CardEffectTimeType Type => CardEffectTimeType.Instant;
 
-        // NOTE: 2-player concept (LocalPlayer + LocalOpponent). Phase 4 will
-        // generalize this to "every player picks a card" by iterating context.Players.
         public async Task ApplyEffect(IGameContext context)
         {
             var state = context.GameState;
             var manager = context.GameManager;
-            var localPlayer = manager.LocalPlayer;
-            var localOpponent = manager.LocalOpponent;
             var deck = context.Deck;
+            var current = state.GetCurrentPlayer();
+            var players = context.Players;
 
-            if(deck.CardsRemaining == 0)
+            if (deck.CardsRemaining == 0)
             {
                 manager.PrintMessage("В колоде не осталось карт.");
                 return;
             }
-            manager.DrawCard(localPlayer);
+            manager.DrawCard(current);
 
             if (deck.CardsRemaining == 0)
             {
@@ -40,36 +40,38 @@ namespace ScaryTales.CardEffects
             if (!state.IsNight)
             {
                 manager.PrintMessage("Все игроки вытягивают 1 карту из колоды");
-                manager.DrawCard(localPlayer);
-                manager.DrawCard(localOpponent);
+                foreach (var p in players)
+                    manager.DrawCard(p);
+                return;
             }
-            else
+
+            manager.PrintMessage("Все игроки сбрасывают 1 карту из своей руки");
+
+            // Snapshot each player's hand and request picks concurrently.
+            // Players with empty hands are skipped — nothing to discard.
+            var snapshots = new List<(Player player, List<Card> hand)>();
+            var pickTasks = new List<Task<CardPick>>();
+            foreach (var p in players)
             {
-                manager.PrintMessage("Все игроки сбрасывают 1 карту из своей руки");
+                var hand = p.Hand.ToList();
+                if (hand.Count == 0) continue;
+                snapshots.Add((p, hand));
+                pickTasks.Add(context.Router.PickCard(
+                    p.Id,
+                    new PickCardRequest(hand.Select(c => c.Id))));
+                manager.PrintMessage($"Игрок {p.Name} выбирает карту для сброса.");
+            }
 
-                var localHandSnapshot = localPlayer.Hand.ToList();
-                var opponentHandSnapshot = localOpponent.Hand.ToList();
+            var picks = await Task.WhenAll(pickTasks);
 
-                var localPickTask = context.Router.PickCard(
-                    localPlayer.Id,
-                    new PickCardRequest(localHandSnapshot.Select(c => c.Id)));
-                var opponentPickTask = context.Router.PickCard(
-                    localOpponent.Id,
-                    new PickCardRequest(opponentHandSnapshot.Select(c => c.Id)));
-
-                manager.PrintMessage($"Игрок {localPlayer.Name} выбирает карту для сброса.");
-                manager.PrintMessage($"Игрок {localOpponent.Name} выбирает карту для сброса.");
-
-                var picks = await Task.WhenAll(localPickTask, opponentPickTask);
-
-                var localCard = localHandSnapshot.First(c => c.Id == picks[0].CardId);
-                var opponentCard = opponentHandSnapshot.First(c => c.Id == picks[1].CardId);
-
-                localPlayer.RemoveCardFromHand(localCard);
-                manager.PutCardToDiscardPile(localCard);
-
-                localOpponent.RemoveCardFromHand(opponentCard);
-                manager.PutCardToDiscardPile(opponentCard);
+            for (int i = 0; i < snapshots.Count; i++)
+            {
+                var (player, hand) = snapshots[i];
+                var pick = picks[i];
+                var card = hand.FirstOrDefault(c => c.Id == pick.CardId);
+                if (card == null) continue;
+                player.RemoveCardFromHand(card);
+                manager.PutCardToDiscardPile(card);
             }
         }
     }

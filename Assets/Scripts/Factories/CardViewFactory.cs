@@ -1,24 +1,16 @@
-﻿using ScaryTales.Abstractions;
-using ScaryTales;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using UnityEngine;
 using Assets.Scripts.Utilities;
+using ScaryTales;
+using UnityEngine;
 
 namespace Assets.Scripts.Factories
 {
     public class CardViewFactory
     {
-        private readonly IGameManager _gameManager;
         private readonly Transform _gameBoardPanel;
         private readonly GameObject _cardPrefab;
 
-        public CardViewFactory(IGameManager gameManager, Transform gameBoardPanel, GameObject cardPrefab)
+        public CardViewFactory(Transform gameBoardPanel, GameObject cardPrefab)
         {
-            _gameManager = gameManager;
             _gameBoardPanel = gameBoardPanel;
             _cardPrefab = cardPrefab;
         }
@@ -38,13 +30,12 @@ namespace Assets.Scripts.Factories
 
             cardView.Initialize(card);
 
-            // Инициализация DragAndDrop
             DragAndDrop dragAndDrop = cardInstance.GetComponent<DragAndDrop>();
             if (dragAndDrop != null)
             {
-                dragAndDrop.Initialize(_gameManager, card, _gameBoardPanel, parent);
+                dragAndDrop.Initialize(card, _gameBoardPanel, parent);
 
-                if(CardSelectionService.CurrentSelectionHandler != null)
+                if (CardSelectionService.CurrentSelectionHandler != null)
                 {
                     dragAndDrop.OnCardSelected += CardSelectionService.CurrentSelectionHandler;
                 }
@@ -52,13 +43,14 @@ namespace Assets.Scripts.Factories
 
             return cardView;
         }
+
         public void EnableDrag(CardView cardView)
         {
             var dragAndDrop = cardView.GetComponent<DragAndDrop>();
             if (dragAndDrop == null)
                 dragAndDrop = cardView.gameObject.AddComponent<DragAndDrop>();
 
-            dragAndDrop.Initialize(_gameManager, cardView._card, _gameBoardPanel, cardView.transform.parent);
+            dragAndDrop.Initialize(cardView._card, _gameBoardPanel, cardView.transform.parent);
         }
 
         public void DisableDrag(CardView cardView)
@@ -67,7 +59,5 @@ namespace Assets.Scripts.Factories
             if (dragAndDrop != null)
                 GameObject.Destroy(dragAndDrop);
         }
-
     }
-
 }

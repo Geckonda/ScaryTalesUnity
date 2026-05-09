@@ -1,95 +1,90 @@
-﻿using Assets.Scripts;
-using ScaryTales;
-using ScaryTales.Abstractions;
-using System.Collections;
-using System.Collections.Generic;
-using System.Diagnostics;
-using UnityEngine;
+using Assets.Scripts.Network;
+using Assets.Scripts.UIEntities;
 using DG.Tweening;
+using ScaryTales;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using UnityEngine.XR;
+using UnityEngine;
 using UnityEngine.UI;
-using System.Linq;
 
 public class PlayerHandUI : MonoBehaviour
 {
-    private GameSession _session;
-    private IGameContext _context;
+    private ClientGameView _view;
+    private SeatLayout _seatLayout;
 
     private CardViewService _cardViewService;
 
-    public Transform PlayerHandPanel1; // Панель для карт первого игрока
-    public Transform PlayerHandPanel2; // Панель для карт второго игрока
     public Dictionary<Player, Transform> _playerHandPanels;
+
     void Awake()
     {
         _cardViewService = CardViewService.Instance;
     }
-    /// <summary>
-    /// Wires this hand UI to a session. Called by UnGameManager.StartNewSession.
-    /// </summary>
-    public void Initialize(GameSession session)
-    {
-        _session = session;
-        _context = session.Context;
 
-        if (_context == null || _session.LocalPlayer == null)
+    /// <summary>
+    /// Wires this hand UI to the client mirror and the seat layout.
+    /// Called by UnGameManager when GameStartedEvent arrives.
+    /// </summary>
+    public void Initialize(ClientGameView view, SeatLayout seatLayout)
+    {
+        _view = view;
+        _seatLayout = seatLayout;
+
+        if (_view.LocalPlayer == null)
         {
-            UnityEngine.Debug.LogError("[PlayerHandUI] Игра или LocalPlayer еще не готовы!");
+            Debug.LogError("[PlayerHandUI] LocalPlayer not ready.");
             return;
         }
 
-        _context.GameManager.OnCardAddedToHand += HandleCardAddedToHand;
-        _context.GameManager.OnCardAddedToHandFromDiscardPile += HandleCardAddedToHandFromDiscardPile;
+        _view.OnCardAddedToHand += HandleCardAddedToHand;
+        _view.OnCardAddedToHandFromDiscardPile += HandleCardAddedToHandFromDiscardPile;
 
-        var localPlayer = _session.LocalPlayer;
-        var opponent = _context.Players.First(p => p != localPlayer);
+        _playerHandPanels = new Dictionary<Player, Transform>();
+        var localSeat = _seatLayout?.LocalSeat;
+        if (localSeat?.HandPanel != null)
+            _playerHandPanels[_view.LocalPlayer] = localSeat.HandPanel;
 
-        _playerHandPanels = new Dictionary<Player, Transform>
+        for (int i = 0; i < _view.Opponents.Count; i++)
         {
-            { localPlayer, PlayerHandPanel1 },
-            { opponent, PlayerHandPanel2 }
-        };
+            var seat = _seatLayout?.GetOpponentSeat(i);
+            if (seat?.HandPanel != null)
+                _playerHandPanels[_view.Opponents[i]] = seat.HandPanel;
+        }
     }
 
     private async void HandleCardAddedToHand(Card card, Player player)
     {
         var unityManager = UnGameManager.Instance;
-        if (unityManager == null)
-            return;
+        if (unityManager == null) return;
 
-        if (!_playerHandPanels.TryGetValue(player, out var hand))
-            return;
+        if (!_playerHandPanels.TryGetValue(player, out var hand)) return;
 
         var deck = unityManager.Deck;
         var cardView = _cardViewService.GetCardView(card) ?? _cardViewService.CreateCardView(card, deck);
-        if (card.Owner != null && card.Owner == _session.LocalPlayer)
+        if (card.Owner != null && card.Owner == _view.LocalPlayer)
             cardView.FaceUp();
         else
             cardView.FaceDown();
 
-        // Здесь мы создаём настоящий Task, и только потом регистрируем
         var animationTask = AnimateCardToHand(cardView, hand);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
     }
+
     private async void HandleCardAddedToHandFromDiscardPile(Card card, Player player)
     {
         var unityManager = UnGameManager.Instance;
-        if (unityManager == null)
-            return;
+        if (unityManager == null) return;
 
-        if (!_playerHandPanels.TryGetValue(player, out var hand))
-            return;
+        if (!_playerHandPanels.TryGetValue(player, out var hand)) return;
 
         var discardPile = unityManager._boardUI.DiscardPile;
         var cardView = _cardViewService.CreateCardView(card, discardPile);
-        if (card.Owner != null && card.Owner == _session.LocalPlayer)
+        if (card.Owner != null && card.Owner == _view.LocalPlayer)
             cardView.FaceUp();
         else
             cardView.FaceDown();
 
-        // Здесь мы создаём настоящий Task, и только потом регистрируем
         var animationTask = AnimateCardToHand(cardView, hand);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
@@ -97,33 +92,25 @@ public class PlayerHandUI : MonoBehaviour
 
     private async Task AnimateCardToHand(CardView cardView, Transform hand)
     {
-        // Запускаем анимацию
         await cardView.transform.DOMove(hand.position, 1f)
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();
 
-        // Только после завершения tween'а — меняем родителя
         cardView.transform.SetParent(hand);
 
-        // Принудительно перестраиваем layout
         LayoutRebuilder.ForceRebuildLayoutImmediate(hand.GetComponent<RectTransform>());
 
-        // Ждём один кадр, чтобы UI точно перестроился
         await Task.Yield();
     }
+
     public void ClearAllCardListeners(Player player)
     {
-        if (!_playerHandPanels.TryGetValue(player, out var panel))
-            return;
+        if (!_playerHandPanels.TryGetValue(player, out var panel)) return;
 
         foreach (Transform cardTransform in panel)
         {
             var drag = cardTransform.GetComponent<DragAndDrop>();
-            if (drag != null)
-            {
-                drag.ClearAllListeners();
-            }
+            if (drag != null) drag.ClearAllListeners();
         }
     }
-
 }

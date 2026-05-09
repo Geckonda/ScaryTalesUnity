@@ -15,12 +15,10 @@ public class CardViewService
     public CardViewFactory CardViewFactory => _cardViewFactory;
     private CardViewService()
     {
-        // Получаем зависимости (например, через UnGameManager)
-        var gameManager = UnGameManager.Instance.GameManager;
         var gameBoardPanel = UnGameManager.Instance.GameBoardPanel;
         var cardPrefab = Resources.Load<GameObject>("CardPrefab");
 
-        _cardViewFactory = new CardViewFactory(gameManager, gameBoardPanel, cardPrefab);
+        _cardViewFactory = new CardViewFactory(gameBoardPanel, cardPrefab);
     }
 
     public void BundleCardAndCardView(Card card, CardView view)

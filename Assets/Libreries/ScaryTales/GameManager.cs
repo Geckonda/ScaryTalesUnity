@@ -23,11 +23,9 @@ namespace ScaryTales
         public event Action<Card>? OnCardMovedToBeforePlayer;
         public event Action<Card>? OnCardMovedToTimeOfDaySlot;
         public event Action<Item, Player>? OnItemAddToPlayer;
+        public event Action<Item, Player>? OnItemRemovedFromPlayer;
         public event Action<Player>? OnAddPointsToPlayer;
         public event Action<string>? OnMessagePrinted;
-
-        public Player LocalPlayer { get; set; }
-        public Player LocalOpponent { get; set; }
 
         public GameManager(IGameState gameState, IGameBoard gameBoard,
             List<Player> players, Deck deck, ItemManager items,
@@ -218,6 +216,16 @@ namespace ScaryTales
         {
             player.AddItemToItemBag(item);
             OnItemAddToPlayer?.Invoke(item, player);
+        }
+        public void RemoveItemFromPlayerItemBag(ItemType type, Player player)
+        {
+            // Snapshot the item being removed so subscribers can identify
+            // which one disappeared (player.RemoveItemFromItemBag(type) drops
+            // it without returning a reference).
+            var item = player.ShowItemsFromItemBag().FirstOrDefault(x => x.Type == type);
+            if (item == null) return;
+            player.RemoveItemFromItemBag(item);
+            OnItemRemovedFromPlayer?.Invoke(item, player);
         }
         public void EndGame()
         {

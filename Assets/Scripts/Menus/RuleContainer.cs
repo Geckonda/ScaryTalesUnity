@@ -47,7 +47,7 @@ namespace Assets.Scripts.Menus
             CloseBtn.gameObject.SetActive(openedByPlayer);
             UIBlockerOverlay.SetActive(true); // включает блокировку
 
-            //ClearContentPanelchildren();
+            //ClearContentPanelChildren();
             ConvertRuleEffectsToViews(ruleEffects);
             foreach (var view in _ruleEffectViews)
             {
@@ -86,7 +86,7 @@ namespace Assets.Scripts.Menus
             SkipBtn.gameObject.SetActive(!openedByPlayer);
             CloseBtn.gameObject.SetActive(true);
 
-            //ClearContentPanelchildren();
+            //ClearContentPanelChildren();
             foreach (var view in _ruleEffectViews)
             {
                 view.transform.SetParent(contentPanel, false);
@@ -112,7 +112,7 @@ namespace Assets.Scripts.Menus
                 });
             }
         }
-        public void ClearContentPanelchildren()
+        public void ClearContentPanelChildren()
         {
             // Очищаем контейнер перед добавлением новых элементов
             foreach (Transform child in contentPanel)
@@ -125,7 +125,7 @@ namespace Assets.Scripts.Menus
         public void Hide()
         {
             gameObject.SetActive(false);
-            ClearContentPanelchildren();
+            ClearContentPanelChildren();
             SkipBtn.gameObject.SetActive(true);
             CloseBtn.gameObject.SetActive(true);
             ShowBtn.gameObject.SetActive(true);

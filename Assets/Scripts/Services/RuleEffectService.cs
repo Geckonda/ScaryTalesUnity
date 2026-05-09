@@ -21,11 +21,8 @@ namespace Assets.Scripts.Services
 
         private RuleEffectService()
         {
-            var gameManager = UnGameManager.Instance.GameManager;
-            var gameBoardPanel = UnGameManager.Instance.GameBoardPanel;
             var ruleEffectPrefab = Resources.Load<GameObject>("RuleEffectPrefab");
-
-            _ruleEffectViewFactory = new RuleEffectViewFactory(gameManager, gameBoardPanel, ruleEffectPrefab);
+            _ruleEffectViewFactory = new RuleEffectViewFactory(ruleEffectPrefab);
         }
 
         public void BundleItemAndView(IRuleEffect ruleEffect, RuleEffectView view)

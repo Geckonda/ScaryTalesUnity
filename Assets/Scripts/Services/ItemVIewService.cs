@@ -14,11 +14,8 @@ public class ItemViewService
 
     private ItemViewService()
     {
-        var gameManager = UnGameManager.Instance.GameManager;
-        var gameBoardPanel = UnGameManager.Instance.GameBoardPanel;
         var itemPrefab = Resources.Load<GameObject>("ItemPrefab");
-
-        _itemViewFactory = new ItemViewFactory(gameManager, gameBoardPanel, itemPrefab);
+        _itemViewFactory = new ItemViewFactory(itemPrefab);
     }
 
     public void BundleItemAndView(Item item, ItemView view)

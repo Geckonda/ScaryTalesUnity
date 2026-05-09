@@ -35,7 +35,7 @@ namespace Assets.Libreries.ScaryTales.Rules.Effects
             var monsters = context.GameBoard.GetCardsOnBoard(CardType.Monster);
             var board = context.GameBoard;
 
-            player.RemoveItemFromItemBag(ItemType.Sword);
+            manager.RemoveItemFromPlayerItemBag(ItemType.Sword, player);
 
             var pick = await context.Router.PickCard(
                 player.Id,
