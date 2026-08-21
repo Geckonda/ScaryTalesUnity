@@ -96,7 +96,10 @@ public class PlayerHandUI : MonoBehaviour
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();
 
-        cardView.transform.SetParent(hand);
+        // worldPositionStays: false — the hand panel is rotated to face the
+        // table centre, so keeping the world pose would leave the card with
+        // a compensating local transform that fights the layout group.
+        cardView.transform.SetParent(hand, false);
 
         LayoutRebuilder.ForceRebuildLayoutImmediate(hand.GetComponent<RectTransform>());
 

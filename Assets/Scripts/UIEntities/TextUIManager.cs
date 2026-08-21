@@ -15,6 +15,9 @@ public class TextUIManager : MonoBehaviour
 
     private Dictionary<Player, TMP_Text> _playerScorePanels = new();
 
+    // Shared so Initialize and HandleAddPointsToPlayer can't drift apart.
+    private const string ScorePrefix = "ПО: ";
+
     /// <summary>
     /// Wires this text UI to the client mirror and the seat layout.
     /// Each seat carries its own NameText and ScoreText; this class just
@@ -33,7 +36,12 @@ public class TextUIManager : MonoBehaviour
             if (localSeat.NameText != null)
                 localSeat.NameText.text = _view.LocalPlayer.Name;
             if (localSeat.ScoreText != null)
+            {
                 _playerScorePanels[_view.LocalPlayer] = localSeat.ScoreText;
+                // Seed it now; otherwise the scene placeholder shows until
+                // this player first scores.
+                localSeat.ScoreText.text = ScorePrefix + _view.LocalPlayer.Score;
+            }
         }
 
         for (int i = 0; i < _view.Opponents.Count; i++)
@@ -43,7 +51,10 @@ public class TextUIManager : MonoBehaviour
             if (seat.NameText != null)
                 seat.NameText.text = _view.Opponents[i].Name;
             if (seat.ScoreText != null)
+            {
                 _playerScorePanels[_view.Opponents[i]] = seat.ScoreText;
+                seat.ScoreText.text = ScorePrefix + _view.Opponents[i].Score;
+            }
         }
 
         _view.OnAddPointsToPlayer += HandleAddPointsToPlayer;
@@ -68,7 +79,7 @@ public class TextUIManager : MonoBehaviour
     {
         if (_playerScorePanels.TryGetValue(player, out TMP_Text panel))
         {
-            panel.text = "ПО: " + player.Score.ToString();
+            panel.text = ScorePrefix + player.Score;
         }
     }
 

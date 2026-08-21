@@ -402,7 +402,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 44408487}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a8695521f0d02e499659fee002a26c2, type: 3}
+  m_Script: {fileID: 11500000, guid: 6c30a22b774c4a149a08363d2ace443c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   m_Padding:
@@ -410,13 +410,11 @@ MonoBehaviour:
     m_Right: 0
     m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 5
-  m_StartCorner: 0
-  m_StartAxis: 1
-  m_CellSize: {x: 150, y: 250}
-  m_Spacing: {x: 10, y: 10}
-  m_Constraint: 0
-  m_ConstraintCount: 2
+  m_ChildAlignment: 0
+  cardSize: {x: 150, y: 250}
+  spacing: 5
+  stackStep: 20
+  scale: 1
 --- !u!1 &60472258
 GameObject:
   m_ObjectHideFlags: 0
@@ -1416,7 +1414,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &402744850
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2222,7 +2220,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 567262335}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a8695521f0d02e499659fee002a26c2, type: 3}
+  m_Script: {fileID: 11500000, guid: 6c30a22b774c4a149a08363d2ace443c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   m_Padding:
@@ -2230,13 +2228,11 @@ MonoBehaviour:
     m_Right: 0
     m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 5
-  m_StartCorner: 0
-  m_StartAxis: 0
-  m_CellSize: {x: 150, y: 250}
-  m_Spacing: {x: 10, y: 10}
-  m_Constraint: 0
-  m_ConstraintCount: 2
+  m_ChildAlignment: 0
+  cardSize: {x: 150, y: 250}
+  spacing: 5
+  stackStep: 20
+  scale: 1
 --- !u!1 &630264852
 GameObject:
   m_ObjectHideFlags: 0
@@ -2390,7 +2386,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &639790873
 RectTransform:
   m_ObjectHideFlags: 0
@@ -5345,7 +5341,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1275038983
 RectTransform:
   m_ObjectHideFlags: 0
@@ -5953,7 +5949,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1594097200}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a8695521f0d02e499659fee002a26c2, type: 3}
+  m_Script: {fileID: 11500000, guid: 6c30a22b774c4a149a08363d2ace443c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   m_Padding:
@@ -5961,13 +5957,11 @@ MonoBehaviour:
     m_Right: 0
     m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 5
-  m_StartCorner: 0
-  m_StartAxis: 0
-  m_CellSize: {x: 150, y: 250}
-  m_Spacing: {x: 10, y: 10}
-  m_Constraint: 0
-  m_ConstraintCount: 2
+  m_ChildAlignment: 0
+  cardSize: {x: 150, y: 250}
+  spacing: 5
+  stackStep: 20
+  scale: 1
 --- !u!1 &1646979545
 GameObject:
   m_ObjectHideFlags: 0
@@ -7073,7 +7067,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1818922060}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a8695521f0d02e499659fee002a26c2, type: 3}
+  m_Script: {fileID: 11500000, guid: 6c30a22b774c4a149a08363d2ace443c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   m_Padding:
@@ -7081,13 +7075,11 @@ MonoBehaviour:
     m_Right: 0
     m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 5
-  m_StartCorner: 0
-  m_StartAxis: 0
-  m_CellSize: {x: 150, y: 250}
-  m_Spacing: {x: 10, y: 10}
-  m_Constraint: 0
-  m_ConstraintCount: 2
+  m_ChildAlignment: 0
+  cardSize: {x: 150, y: 250}
+  spacing: 5
+  stackStep: 20
+  scale: 1
 --- !u!1 &1833773107
 GameObject:
   m_ObjectHideFlags: 0
@@ -7681,7 +7673,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1987753799
 RectTransform:
   m_ObjectHideFlags: 0
@@ -8190,7 +8182,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2107280954
 RectTransform:
   m_ObjectHideFlags: 0

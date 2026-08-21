@@ -131,7 +131,11 @@ public class BoardUI : MonoBehaviour
         await card.transform.DOMove(to.position, 1f)
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();
-        card.transform.SetParent(to);
+        // worldPositionStays: false — the destination panel may be rotated
+        // and scaled (seats face the table centre), and keeping world pose
+        // would bake that compensation into localRotation/localScale right
+        // before the layout group overwrites them anyway.
+        card.transform.SetParent(to, false);
         LayoutRebuilder.ForceRebuildLayoutImmediate(to.GetComponent<RectTransform>());
         await Task.Yield();
     }
