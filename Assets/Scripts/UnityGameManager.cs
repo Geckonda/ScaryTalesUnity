@@ -89,6 +89,7 @@ public class UnGameManager : MonoBehaviour
         ClientView.OnTurnAdvanced += HandleTurnAdvanced;
         ClientView.OnDecisionRequested += HandleDecisionRequested;
         ClientView.OnGameEnded += HandleGameEnded;
+        ClientView.OnGameAborted += HandleGameAborted;
     }
 
     /// <summary>
@@ -377,6 +378,34 @@ public class UnGameManager : MonoBehaviour
         // MenuCanvas. Invoke (rather than Task.Delay) lets Unity manage
         // the timing on this MonoBehaviour and survives until SceneManager
         // unloads us.
+        Invoke(nameof(ReturnToMenuFromGameEnd), _returnToMenuDelay);
+    }
+
+    /// <summary>
+    /// The server ended the game early — today, because somebody left.
+    /// Same result panel and the same trip back to the menu as a normal
+    /// finish, but the text says what happened instead of naming a winner.
+    /// </summary>
+    private void HandleGameAborted(string reason, Player leftPlayer)
+    {
+        // Stop any prompt coroutine that is still waiting on a click for a
+        // decision the server has already given up on.
+        StopAllCoroutines();
+        DragAndDrop.SelectCard = false;
+        _canChooseRule = false;
+
+        // Null on a teardown that races the scene reload; the log line is
+        // then the only record, which is fine — we're leaving anyway.
+        if (ResultContainer.Instance != null)
+        {
+            ResultContainer.Instance.ShowMessage(
+                string.IsNullOrEmpty(reason) ? "Игра прервана." : reason);
+        }
+        Debug.LogWarning($"[Client] Game aborted (left: {leftPlayer?.Name ?? "n/a"}): {reason}");
+
+        // CancelInvoke first: a normal game-end may have already scheduled
+        // this, and we don't want two trips to the menu.
+        CancelInvoke(nameof(ReturnToMenuFromGameEnd));
         Invoke(nameof(ReturnToMenuFromGameEnd), _returnToMenuDelay);
     }
 

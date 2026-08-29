@@ -27,8 +27,6 @@ namespace Assets.Scripts.Network
     /// </summary>
     public class GameNetworkController : NetworkBehaviour
     {
-        public static GameNetworkController Instance { get; set; }
-
         // ---- Server-only state ----
         private Dictionary<int, NetworkConnectionToClient> _playerConnections = new();
         private GameSession _serverSession;
@@ -37,8 +35,18 @@ namespace Assets.Scripts.Network
         // Awaited by the server turn loop; completes with the chosen card
         // id when the active player's PlayCardIntent arrives.
         private TaskCompletionSource<int> _waitingForPlay;
+        // Phase 6.1. _gameOver is set by *both* endings — the natural one
+        // and an abort — and is what makes every teardown path idempotent.
+        // _aborted narrows that to "ended early", which is the only case
+        // where clients get a GameAbortedEvent instead of a GameEndedEvent.
+        private bool _gameOver;
+        private bool _aborted;
 
         public GameSession ServerSession => _serverSession;
+        public bool IsAborted => _aborted;
+        // Non-zero means the room is wedged waiting on somebody. Read by
+        // the abort path's log line so a stuck room is visible.
+        public int PendingDecisionCount => _router?.PendingDecisionCount ?? 0;
 
         [Header("Rules in play")]
         [Tooltip("Rule id from RuleCatalog used during the game. The server is the only place this is chosen; clients learn it from GameStartedEvent. A lobby picker would drive these two fields.")]
@@ -46,14 +54,6 @@ namespace Assets.Scripts.Network
 
         [Tooltip("Rule id from RuleCatalog scored at the end of the game.")]
         [SerializeField] private int _finalRuleId = RuleCatalog.DefaultFinalRuleId;
-
-        private void Awake()
-        {
-            if (Instance == null)
-                Instance = this;
-            else
-                Destroy(gameObject);
-        }
 
         // ---- Server-side composition root ----
 
@@ -153,12 +153,20 @@ namespace Assets.Scripts.Network
                     for (int i = 0; i < 5; i++)
                     {
                         await Task.Delay(50);
+                        ThrowIfGameOver();
                         gm.DrawCard(player);
                     }
                 }
 
                 while (!ctx.GameState.IsGameOver)
                 {
+                    // An abort that lands while the loop happens to be
+                    // running rather than awaiting has nothing to cancel,
+                    // so the loop has to check for itself — otherwise it
+                    // sails on and parks on a fresh _waitingForPlay that
+                    // nobody will ever answer.
+                    ThrowIfGameOver();
+
                     var current = ctx.GameState.GetCurrentPlayer();
                     NetworkServer.SendToAll(new TurnAdvancedEvent
                     {
@@ -184,10 +192,16 @@ namespace Assets.Scripts.Network
                         continue;
                     }
                     await gm.PlayCard(card);
+                    ThrowIfGameOver();
 
                     await gm.ActivateAllPlayerPermanentCardEffects(current);
+                    ThrowIfGameOver();
+
                     ctx.GameState.NextTurn();
                 }
+
+                if (_gameOver) return;
+                _gameOver = true;
 
                 int winnerId = ctx.Players.OrderByDescending(p => p.Score).First().Id;
                 var scores = ctx.Players.Select(p => p.Score).ToArray();
@@ -196,11 +210,103 @@ namespace Assets.Scripts.Network
                     WinnerId = winnerId,
                     FinalScores = scores,
                 });
+                Teardown();
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected: AbortGame cancelled a parked decision or the
+                // wait for a card, unwinding whatever effect was suspended.
+                // AbortGame has already told the clients why.
+                Debug.Log("[Server turn loop] stopped by abort.");
             }
             catch (Exception e)
             {
                 Debug.LogError($"[Server turn loop] {e}");
+                // An engine fault leaves the room in an unknown state.
+                // Ending it beats leaving everyone staring at a table that
+                // will never advance.
+                AbortGame(0, "Ошибка на сервере. Игра прервана.");
             }
+        }
+
+        /// <summary>
+        /// Bails out of the turn loop if the room ended while we were away.
+        /// Throwing (rather than returning a bool the caller might forget to
+        /// check) puts every abort on the single OperationCanceledException
+        /// path, whether the loop was suspended on a decision or just
+        /// between statements.
+        /// </summary>
+        private void ThrowIfGameOver()
+        {
+            if (_gameOver)
+                throw new OperationCanceledException("Game ended while the turn loop was running.");
+        }
+
+        // ---- Teardown (Phase 6.1) ----
+
+        /// <summary>
+        /// Ends the game early and tells everyone why. Safe to call more
+        /// than once and from any of the paths that can discover the room
+        /// is doomed — a player leaving, an engine fault, the server
+        /// shutting down.
+        ///
+        /// Cancelling the parked decisions is what actually unwedges the
+        /// room: the suspended effect resumes by throwing, the turn loop
+        /// unwinds, and nothing is left holding the session alive.
+        /// </summary>
+        [Server]
+        public void AbortGame(int leftPlayerId, string reason)
+        {
+            // A game that already reached its natural end is over, not
+            // aborted — don't overwrite the winner screen with a teardown
+            // notice when the server later stops.
+            if (_gameOver) return;
+            _gameOver = true;
+            _aborted = true;
+
+            int pending = _router?.PendingDecisionCount ?? 0;
+            Debug.LogWarning($"[Server] Aborting game: {reason} (pending decisions: {pending}).");
+
+            if (NetworkServer.active)
+            {
+                NetworkServer.SendToAll(new GameAbortedEvent
+                {
+                    LeftPlayerId = leftPlayerId,
+                    Reason = reason,
+                });
+            }
+
+            // Order matters: release the turn loop's own wait first, then
+            // the router's, so whichever the loop is sitting on throws.
+            _waitingForPlay?.TrySetCanceled();
+            _router?.CancelAll(reason);
+
+            Teardown();
+        }
+
+        /// <summary>
+        /// Drops this game's server-side handlers and releases the session.
+        /// Mirror keeps one handler per message type process-wide, so a
+        /// finished game left registered would intercept the next one's
+        /// intents.
+        /// </summary>
+        [Server]
+        private void Teardown()
+        {
+            if (NetworkServer.active)
+            {
+                NetworkServer.UnregisterHandler<PlayCardIntent>();
+                NetworkServer.UnregisterHandler<UseRuleEffectIntent>();
+            }
+            _router?.Dispose();
+        }
+
+        public override void OnStopServer()
+        {
+            // Covers the paths that kill the server without going through
+            // AbortGame (StopHost, application quit, scene reload).
+            AbortGame(0, "Сервер остановлен.");
+            base.OnStopServer();
         }
 
         // ---- Server-side intent handlers ----
@@ -208,6 +314,7 @@ namespace Assets.Scripts.Network
         [Server]
         private void OnPlayCardIntent(NetworkConnectionToClient conn, PlayCardIntent msg)
         {
+            if (_gameOver) return;
             var current = _serverSession?.CurrentPlayer;
             if (current == null) return;
             if (!_playerConnections.TryGetValue(current.Id, out var expectedConn) || expectedConn != conn)
@@ -215,13 +322,15 @@ namespace Assets.Scripts.Network
                 Debug.LogWarning("[Server] PlayCardIntent from wrong connection.");
                 return;
             }
-            if (_waitingForPlay != null && !_waitingForPlay.Task.IsCompleted)
-                _waitingForPlay.SetResult(msg.CardId);
+            // TrySetResult rather than SetResult: an abort can cancel this
+            // TCS between the IsCompleted check and the call.
+            _waitingForPlay?.TrySetResult(msg.CardId);
         }
 
         [Server]
         private async void OnUseRuleEffectIntent(NetworkConnectionToClient conn, UseRuleEffectIntent msg)
         {
+            if (_gameOver) return;
             var current = _serverSession?.CurrentPlayer;
             if (current == null) return;
             if (!_playerConnections.TryGetValue(current.Id, out var expectedConn) || expectedConn != conn)
@@ -237,6 +346,11 @@ namespace Assets.Scripts.Network
             try
             {
                 await effect.ApplyEffect(_serverSession.Context);
+            }
+            catch (OperationCanceledException)
+            {
+                // The room was aborted while this effect was waiting on a
+                // decision. Expected, and already reported to the clients.
             }
             catch (Exception e)
             {

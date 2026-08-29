@@ -88,6 +88,9 @@ namespace Assets.Scripts.Network
         public event Action<int> OnTurnAdvanced; // arg = currentPlayerId
         public event Action<bool> OnPhaseChanged; // arg = isNight
         public event Action<int> OnGameEnded;     // arg = winnerId
+        // Game torn down early — args are the reason to display and the
+        // player who left (or null if the abort wasn't player-caused).
+        public event Action<string, Player> OnGameAborted;
 
         // Decision flow events. UI listens to know when to show pick prompts
         // and when to dismiss them.
@@ -120,6 +123,7 @@ namespace Assets.Scripts.Network
             NetworkClient.RegisterHandler<DecisionRequestedEvent>(HandleDecisionRequested);
             NetworkClient.RegisterHandler<DecisionResolvedEvent>(HandleDecisionResolved);
             NetworkClient.RegisterHandler<GameEndedEvent>(HandleGameEnded);
+            NetworkClient.RegisterHandler<GameAbortedEvent>(HandleGameAborted);
         }
 
         // Helpers ----------------------------------------------------------
@@ -341,6 +345,14 @@ namespace Assets.Scripts.Network
         private void HandleGameEnded(GameEndedEvent evt)
         {
             OnGameEnded?.Invoke(evt.WinnerId);
+        }
+
+        private void HandleGameAborted(GameAbortedEvent evt)
+        {
+            // LeftPlayerId is 0 when the abort wasn't caused by a specific
+            // player (engine fault, server shutdown), and FindPlayer
+            // returns null for it — subscribers must cope with that.
+            OnGameAborted?.Invoke(evt.Reason, FindPlayer(evt.LeftPlayerId));
         }
     }
 }

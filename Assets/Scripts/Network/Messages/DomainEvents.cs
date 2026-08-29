@@ -197,4 +197,19 @@ namespace Assets.Scripts.Network.Messages
         public int WinnerId;
         public int[] FinalScores; // parallel to GameStartedEvent.Players
     }
+
+    /// <summary>
+    /// The game was torn down before it could finish. Today the only cause
+    /// is a player leaving mid-game (Phase 6.1) — the server cancels their
+    /// pending decisions, stops the turn loop, and tells everyone else why.
+    ///
+    /// Deliberately *not* a GameEndedEvent with a synthetic winner: an
+    /// aborted game has no winner and no meaningful final scores, and
+    /// clients must not render a podium for one.
+    /// </summary>
+    public struct GameAbortedEvent : NetworkMessage
+    {
+        public int LeftPlayerId; // whose departure ended it, or 0 if not player-caused
+        public string Reason;    // display text, already localized by the server
+    }
 }

@@ -11,6 +11,27 @@ using UnityEngine;
 namespace Assets.Scripts.Network
 {
     /// <summary>
+    /// Thrown into an effect that is awaiting a decision when that decision
+    /// can no longer be answered — today, because the deciding player left.
+    ///
+    /// Derives from OperationCanceledException so callers can catch it with
+    /// the ordinary cancellation idiom, but carries a reason and its own
+    /// type so an abandoned decision is distinguishable from any other
+    /// cancellation. Nothing in Assets/Libreries catches anything, so this
+    /// propagates cleanly out of an effect and up to the server turn loop.
+    /// </summary>
+    public class DecisionAbandonedException : OperationCanceledException
+    {
+        public int PlayerId { get; }
+
+        public DecisionAbandonedException(int playerId, string reason)
+            : base($"Decision abandoned for player {playerId}: {reason}")
+        {
+            PlayerId = playerId;
+        }
+    }
+
+    /// <summary>
     /// Server-only IDecisionRouter. Replaces PlayerInputAdapterRouter when
     /// the engine moves off the clients (Phase 3 cutover).
     ///
@@ -26,21 +47,35 @@ namespace Assets.Scripts.Network
     /// DecisionResolvedEvent is broadcast so non-deciding clients can dismiss
     /// any "waiting on player X" indicator.
     ///
-    /// Per Phase-1 non-goals, no timeout / cancellation: a disconnected
-    /// deciding player hangs the game indefinitely. Instrumented via
-    /// _parked.Count for visibility.
+    /// Phase 6.1: a parked decision is no longer immortal. CancelForPlayer /
+    /// CancelAll fault every matching TCS with a DecisionAbandonedException,
+    /// which unwinds the suspended effect and lets the room end instead of
+    /// wedging. PendingDecisionCount stays exposed so a stuck room is
+    /// visible in logs.
     /// </summary>
-    public class NetworkDecisionRouter : IDecisionRouter
+    public class NetworkDecisionRouter : IDecisionRouter, IDisposable
     {
-        // RequestId → boxed TaskCompletionSource<T>. Boxed because each
-        // request kind has its own resolution type; the typed lookup happens
-        // when the matching intent handler fires.
-        private readonly Dictionary<int, object> _parked = new();
-        // RequestId → playerId we asked, used to reject resolutions from
-        // the wrong connection.
-        private readonly Dictionary<int, int> _decidingPlayer = new();
+        /// <summary>
+        /// One suspended decision. Holds the request verbatim alongside the
+        /// TCS: cancelling is all we do with it today, but re-sending that
+        /// same DecisionRequestedEvent to a returning connection is exactly
+        /// what a future reconnect flow needs, and keeping it costs nothing.
+        /// </summary>
+        private sealed class PendingDecision
+        {
+            public int PlayerId;
+            public DecisionRequestedEvent Request;
+            // Faults the underlying TaskCompletionSource<T> without this
+            // class having to know T. Closed over at Park time.
+            public Action<Exception> Fail;
+            // Hands back the TaskCompletionSource<T> for a typed claim.
+            public object Tcs;
+        }
+
+        private readonly Dictionary<int, PendingDecision> _parked = new();
         private readonly IReadOnlyDictionary<int, NetworkConnectionToClient> _connections;
         private int _nextRequestId = 1;
+        private bool _disposed;
 
         public int PendingDecisionCount => _parked.Count;
 
@@ -55,78 +90,140 @@ namespace Assets.Scripts.Network
 
         public Task<CardPick> PickCard(int playerId, PickCardRequest request)
         {
-            var (id, tcs) = Park<CardPick>(playerId);
-            NetworkServer.SendToAll(new DecisionRequestedEvent
-            {
-                RequestId = id,
-                PlayerId = playerId,
-                Kind = (int)DecisionKind.PickCard,
-                CandidateIds = request.CandidateCardIds.ToArray(),
-                Prompt = string.Empty,
-            });
-            return tcs.Task;
+            return Ask<CardPick>(playerId, DecisionKind.PickCard,
+                request.CandidateCardIds.ToArray(), string.Empty);
         }
 
         public Task<ItemPick> PickItem(int playerId, PickItemRequest request)
         {
-            var (id, tcs) = Park<ItemPick>(playerId);
-            NetworkServer.SendToAll(new DecisionRequestedEvent
-            {
-                RequestId = id,
-                PlayerId = playerId,
-                Kind = (int)DecisionKind.PickItem,
-                CandidateIds = request.CandidateItemTypes.Select(t => (int)t).ToArray(),
-                Prompt = string.Empty,
-            });
-            return tcs.Task;
+            return Ask<ItemPick>(playerId, DecisionKind.PickItem,
+                request.CandidateItemTypes.Select(t => (int)t).ToArray(), string.Empty);
         }
 
         public Task<RuleEffectPick> PickRuleEffect(int playerId, PickRuleEffectRequest request)
         {
-            var (id, tcs) = Park<RuleEffectPick>(playerId);
-            NetworkServer.SendToAll(new DecisionRequestedEvent
-            {
-                RequestId = id,
-                PlayerId = playerId,
-                Kind = (int)DecisionKind.PickRuleEffect,
-                CandidateIds = request.CandidateRuleEffectIds.ToArray(),
-                Prompt = string.Empty,
-            });
-            return tcs.Task;
+            return Ask<RuleEffectPick>(playerId, DecisionKind.PickRuleEffect,
+                request.CandidateRuleEffectIds.ToArray(), string.Empty);
         }
 
         public Task<ConfirmPick> Confirm(int playerId, ConfirmRequest request)
         {
-            var (id, tcs) = Park<ConfirmPick>(playerId);
-            NetworkServer.SendToAll(new DecisionRequestedEvent
+            return Ask<ConfirmPick>(playerId, DecisionKind.Confirm,
+                Array.Empty<int>(), request.Prompt ?? string.Empty);
+        }
+
+        /// <summary>
+        /// Parks a typed TCS, broadcasts the matching request, and hands the
+        /// effect an awaitable. All four PickX methods differ only in the
+        /// resolution type and the candidate-id namespace, so they share
+        /// this body.
+        /// </summary>
+        private Task<T> Ask<T>(int playerId, DecisionKind kind, int[] candidateIds, string prompt)
+        {
+            var id = _nextRequestId++;
+            var request = new DecisionRequestedEvent
             {
                 RequestId = id,
                 PlayerId = playerId,
-                Kind = (int)DecisionKind.Confirm,
-                CandidateIds = Array.Empty<int>(),
-                Prompt = request.Prompt ?? string.Empty,
-            });
-            return tcs.Task;
-        }
+                Kind = (int)kind,
+                CandidateIds = candidateIds,
+                Prompt = prompt,
+            };
 
-        private (int id, TaskCompletionSource<T> tcs) Park<T>(int playerId)
-        {
-            var id = _nextRequestId++;
             // RunContinuationsAsynchronously: completion happens on the
             // network handler thread (Mirror runs handlers on the main
             // thread, but it's a defensive choice that decouples the
             // resumption from the handler stack).
             var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _parked[id] = tcs;
-            _decidingPlayer[id] = playerId;
-            return (id, tcs);
+            _parked[id] = new PendingDecision
+            {
+                PlayerId = playerId,
+                Request = request,
+                Tcs = tcs,
+                Fail = e => tcs.TrySetException(e),
+            };
+
+            NetworkServer.SendToAll(request);
+            return tcs.Task;
         }
+
+        // ---- Cancellation (Phase 6.1) ----
+
+        /// <summary>
+        /// Abandons every decision this player still owes an answer to.
+        /// Each suspended effect resumes by throwing
+        /// DecisionAbandonedException, which unwinds to the server turn
+        /// loop. Returns how many were cancelled.
+        /// </summary>
+        public int CancelForPlayer(int playerId, string reason)
+        {
+            var doomed = _parked
+                .Where(kv => kv.Value.PlayerId == playerId)
+                .Select(kv => kv.Key)
+                .ToList();
+            return CancelRequests(doomed, reason);
+        }
+
+        /// <summary>
+        /// Abandons every parked decision, whoever owes it. Used when the
+        /// room is being torn down.
+        /// </summary>
+        public int CancelAll(string reason)
+        {
+            return CancelRequests(_parked.Keys.ToList(), reason);
+        }
+
+        private int CancelRequests(List<int> requestIds, string reason)
+        {
+            foreach (var requestId in requestIds)
+            {
+                if (!_parked.TryGetValue(requestId, out var pending)) continue;
+                _parked.Remove(requestId);
+
+                Debug.Log($"[NetworkDecisionRouter] Abandoning request {requestId} " +
+                          $"({(DecisionKind)pending.Request.Kind}, {pending.Request.CandidateIds?.Length ?? 0} candidates) " +
+                          $"owed by player {pending.PlayerId}: {reason}");
+
+                // Fault rather than complete: an effect that gets a fake
+                // answer would mutate canonical state on its way out, and
+                // the room is ending anyway.
+                pending.Fail(new DecisionAbandonedException(pending.PlayerId, reason));
+
+                // Clients drop any prompt or "waiting on X" indicator for it.
+                BroadcastResolved(requestId);
+            }
+            return requestIds.Count;
+        }
+
+        /// <summary>
+        /// Releases every parked decision and takes this router's handlers
+        /// off NetworkServer. Mirror keeps one handler per message type
+        /// process-wide, so a dead router left registered would swallow the
+        /// next game's resolutions.
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            CancelAll("router disposed");
+
+            if (NetworkServer.active)
+            {
+                NetworkServer.UnregisterHandler<ResolveCardPickIntent>();
+                NetworkServer.UnregisterHandler<ResolveItemPickIntent>();
+                NetworkServer.UnregisterHandler<ResolveRuleEffectPickIntent>();
+                NetworkServer.UnregisterHandler<ResolveConfirmIntent>();
+            }
+        }
+
+        // ---- Resolution handlers ----
 
         private void OnResolveCardPick(NetworkConnectionToClient conn, ResolveCardPickIntent msg)
         {
             if (TryClaim<CardPick>(conn, msg.RequestId, out var tcs))
             {
-                tcs.SetResult(new CardPick(msg.CardId));
+                tcs.TrySetResult(new CardPick(msg.CardId));
                 BroadcastResolved(msg.RequestId);
             }
         }
@@ -135,7 +232,7 @@ namespace Assets.Scripts.Network
         {
             if (TryClaim<ItemPick>(conn, msg.RequestId, out var tcs))
             {
-                tcs.SetResult(new ItemPick((ItemType)msg.ItemType));
+                tcs.TrySetResult(new ItemPick((ItemType)msg.ItemType));
                 BroadcastResolved(msg.RequestId);
             }
         }
@@ -145,7 +242,7 @@ namespace Assets.Scripts.Network
             if (TryClaim<RuleEffectPick>(conn, msg.RequestId, out var tcs))
             {
                 int? picked = msg.HasPick ? msg.RuleEffectId : (int?)null;
-                tcs.SetResult(new RuleEffectPick(picked));
+                tcs.TrySetResult(new RuleEffectPick(picked));
                 BroadcastResolved(msg.RequestId);
             }
         }
@@ -154,7 +251,7 @@ namespace Assets.Scripts.Network
         {
             if (TryClaim<ConfirmPick>(conn, msg.RequestId, out var tcs))
             {
-                tcs.SetResult(new ConfirmPick(msg.Confirmed));
+                tcs.TrySetResult(new ConfirmPick(msg.Confirmed));
                 BroadcastResolved(msg.RequestId);
             }
         }
@@ -162,23 +259,22 @@ namespace Assets.Scripts.Network
         private bool TryClaim<T>(NetworkConnectionToClient conn, int requestId, out TaskCompletionSource<T> tcs)
         {
             tcs = null;
-            if (!_parked.TryGetValue(requestId, out var boxed))
+            if (!_parked.TryGetValue(requestId, out var pending))
             {
+                // Also the normal path for a resolution that raced an
+                // abandonment — the client answered a prompt we already
+                // gave up on.
                 Debug.LogWarning($"[NetworkDecisionRouter] Unknown requestId {requestId}");
                 return false;
             }
-            if (boxed is TaskCompletionSource<T> typed)
+            if (pending.Tcs is TaskCompletionSource<T> typed)
             {
-                if (_decidingPlayer.TryGetValue(requestId, out var expectedPlayerId))
+                if (!_connections.TryGetValue(pending.PlayerId, out var expectedConn) || expectedConn != conn)
                 {
-                    if (!_connections.TryGetValue(expectedPlayerId, out var expectedConn) || expectedConn != conn)
-                    {
-                        Debug.LogWarning($"[NetworkDecisionRouter] requestId {requestId}: resolution from wrong connection (expected player {expectedPlayerId})");
-                        return false;
-                    }
+                    Debug.LogWarning($"[NetworkDecisionRouter] requestId {requestId}: resolution from wrong connection (expected player {pending.PlayerId})");
+                    return false;
                 }
                 _parked.Remove(requestId);
-                _decidingPlayer.Remove(requestId);
                 tcs = typed;
                 return true;
             }
@@ -188,6 +284,7 @@ namespace Assets.Scripts.Network
 
         private static void BroadcastResolved(int requestId)
         {
+            if (!NetworkServer.active) return;
             NetworkServer.SendToAll(new DecisionResolvedEvent { RequestId = requestId });
         }
     }
