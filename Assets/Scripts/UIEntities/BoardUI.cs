@@ -22,7 +22,8 @@ public class BoardUI : MonoBehaviour
     public Transform DiscardPile;
     public GameObject UIBlockerOverlay;
 
-    private int _animationDelay = 2000;
+    [Tooltip("Pause (ms) before a card animates to the discard pile or the time-of-day slot, so players can read it first.")]
+    [SerializeField] private int _animationDelay = 2000;
     private void Start()
     {
         if (UIBlockerOverlay != null) UIBlockerOverlay.SetActive(false);
