@@ -274,11 +274,12 @@ namespace Assets.Scripts.Network
             // would break the moment a second room existed.
             // ServerIntentDispatcher owns them and routes by connection.
 
-            // Host-model convenience: the host machine also runs a client, so
+            // Host-model convenience: a host machine also runs a client, so
             // hand its UnGameManager the canonical session for host-only debug
-            // tooling. Meaningless on a dedicated server, and ambiguous once
-            // one host holds several rooms — it simply takes the last one.
-            if (UnGameManager.Instance != null)
+            // tooling. Skipped on a dedicated server, where the local
+            // UnGameManager belongs to nobody — and where handing it a room at
+            // random (whichever started last) would be actively misleading.
+            if (!GameConnectionManager.IsDedicatedServer && UnGameManager.Instance != null)
                 UnGameManager.Instance.SetHostSession(_session);
 
             // Per-client GameStartedEvent so each recipient learns their own

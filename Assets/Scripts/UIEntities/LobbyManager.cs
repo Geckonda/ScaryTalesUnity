@@ -1,3 +1,4 @@
+using Assets.Scripts.Network;
 using Assets.Scripts.Network.Messages;
 using Mirror;
 using TMPro;
@@ -53,6 +54,15 @@ namespace Assets.Scripts.UIEntities
             Refresh();
         }
 
+        private void OnDestroy()
+        {
+            // RoomClient's events are static and outlive the scene, so a
+            // destroyed listener has to take itself off or the next scene's
+            // messages reach a dead object.
+            RoomClient.Joined -= OnRoomJoined;
+            RoomClient.LobbyStateChanged -= OnLobbyState;
+        }
+
         private void OnEnable()
         {
             RegisterHandlers();
@@ -73,11 +83,13 @@ namespace Assets.Scripts.UIEntities
         private void RegisterHandlers()
         {
             if (_handlersRegistered) return;
-            // NetworkClient.RegisterHandler can be called any time; a second
-            // call with the same type replaces the first. The guard just keeps
-            // it tidy across enable/disable cycles.
-            NetworkClient.RegisterHandler<RoomJoinedEvent>(OnRoomJoined);
-            NetworkClient.RegisterHandler<LobbyStateUpdate>(OnLobbyState);
+            // Through RoomClient rather than NetworkClient directly: Mirror
+            // keeps one handler per message type, so registering
+            // RoomJoinedEvent here *and* in MenuManager would leave whichever
+            // ran first permanently deaf.
+            RoomClient.Bind();
+            RoomClient.Joined += OnRoomJoined;
+            RoomClient.LobbyStateChanged += OnLobbyState;
             _handlersRegistered = true;
         }
 

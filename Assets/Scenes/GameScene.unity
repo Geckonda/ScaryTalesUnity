@@ -4115,8 +4115,13 @@ MonoBehaviour:
   _maxPlayers: 4
   _autoStartWhenFull: 0
   _maxRooms: 32
+  _fixedRoomCode: LOCALHOST
   _inGameRuleId: 1
   _finalRuleId: 2
+  _autoStartDedicatedServer: 1
+  _serverFlag: -server
+  _portFlag: -port
+  _hideUiOnDedicatedServer: 1
 --- !u!114 &929659993
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6311,7 +6316,8 @@ MonoBehaviour:
   roomNameInput: {fileID: 2140800904}
   networkManager: {fileID: 929659992}
   serverAddress: localhost
-  hostLocallyOnCreate: 1
+  hostLocallyOnCreate: 0
+  fallbackRoomCode: LOCALHOST
   connectTimeout: 5
   statusText: {fileID: 0}
 --- !u!114 &1680424249

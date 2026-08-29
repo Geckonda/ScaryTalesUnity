@@ -38,9 +38,24 @@ public class MenuManager : MonoBehaviour
 
     private void Awake()
     {
-        // Registered here rather than in LobbyManager so a refusal is still
-        // reported when the join never gets far enough to show a lobby.
-        NetworkClient.RegisterHandler<RoomJoinFailedEvent>(OnRoomJoinFailed);
+        // Both outcomes are reported here as well as in LobbyManager, because
+        // LobbyManager lives on the lobby panel and only speaks once the panel
+        // is up. A create or join that never gets that far has to say so
+        // somewhere, or the button looks dead.
+        Assets.Scripts.Network.RoomClient.Bind();
+        Assets.Scripts.Network.RoomClient.Joined += OnRoomJoined;
+        Assets.Scripts.Network.RoomClient.JoinFailed += OnRoomJoinFailed;
+    }
+
+    private void OnDestroy()
+    {
+        Assets.Scripts.Network.RoomClient.Joined -= OnRoomJoined;
+        Assets.Scripts.Network.RoomClient.JoinFailed -= OnRoomJoinFailed;
+    }
+
+    private void OnRoomJoined(RoomJoinedEvent evt)
+    {
+        Report($"Комната {evt.Code}" + (evt.IsOwner ? " создана." : " — вы вошли."));
     }
 
     public void CreateRoom()
@@ -94,11 +109,65 @@ public class MenuManager : MonoBehaviour
         if (!NetworkClient.active && !NetworkServer.active)
         {
             networkManager.networkAddress = ResolveAddress();
-            if (asHost) networkManager.StartHost();
-            else networkManager.StartClient();
+            if (!TryStartNetwork(asHost)) return;
         }
 
         _pending = StartCoroutine(SendWhenConnected(onConnected));
+    }
+
+    /// <summary>
+    /// Brings Mirror up, hosting only if that can actually work.
+    ///
+    /// <para>Hosting binds the transport's port, and if a dedicated server (or
+    /// another copy of the game) already holds it, <c>StartHost()</c> throws a
+    /// SocketException straight out of the click handler — the button then
+    /// does nothing at all, with only a stack trace in a log nobody is
+    /// watching. The port is checked first rather than catching afterwards,
+    /// because a failed StartHost leaves Mirror half-initialized and
+    /// recovering from that is worse than not getting into it.</para>
+    ///
+    /// <para>Falling back to a client is not a consolation prize: something is
+    /// already serving on this address, and connecting to it is what the
+    /// player wanted.</para>
+    /// </summary>
+    private bool TryStartNetwork(bool asHost)
+    {
+        if (asHost && !IsListenPortFree())
+        {
+            Debug.LogWarning("[Menu] Port already in use — a server is running here; connecting to it as a client.");
+            asHost = false;
+        }
+
+        try
+        {
+            if (asHost) networkManager.StartHost();
+            else networkManager.StartClient();
+            return true;
+        }
+        catch (System.Exception e)
+        {
+            Report("Не удалось запустить сеть — подробности в логе.");
+            Debug.LogException(e);
+            return false;
+        }
+    }
+
+    private bool IsListenPortFree()
+    {
+        if (!(Transport.active is PortTransport portTransport)) return true;
+        try
+        {
+            // Binding and immediately releasing is the only reliable way to
+            // ask; there is no "is this port taken" that isn't a race, and
+            // losing that race just means we host and Mirror throws — which
+            // the caller reports rather than swallowing.
+            using (new System.Net.Sockets.UdpClient(portTransport.Port)) { }
+            return true;
+        }
+        catch (System.Net.Sockets.SocketException)
+        {
+            return false;
+        }
     }
 
     private string ResolveAddress()
@@ -128,9 +197,9 @@ public class MenuManager : MonoBehaviour
         _pending = null;
     }
 
-    private void OnRoomJoinFailed(RoomJoinFailedEvent evt)
+    private void OnRoomJoinFailed(RoomJoinFailure reason)
     {
-        Report(DescribeFailure((RoomJoinFailure)evt.Reason));
+        Report(DescribeFailure(reason));
     }
 
     private static string DescribeFailure(RoomJoinFailure reason)
@@ -151,6 +220,9 @@ public class MenuManager : MonoBehaviour
     private void Report(string message)
     {
         if (statusText != null) statusText.text = message;
-        if (!string.IsNullOrEmpty(message)) Debug.Log($"[Menu] {message}");
+        // Logged as a warning as well as shown, because statusText is an
+        // optional slot: with it unwired this is the only trace a click left,
+        // and a pressed button that reports nothing looks broken.
+        if (!string.IsNullOrEmpty(message)) Debug.LogWarning($"[Menu] {message}");
     }
 }

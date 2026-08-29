@@ -41,8 +41,120 @@ namespace Assets.Scripts.Network
         [Tooltip("Rule id from RuleCatalog scored at the end of the game.")]
         [SerializeField] private int _finalRuleId = Assets.Libreries.ScaryTales.Rules.RuleCatalog.DefaultFinalRuleId;
 
+        [Header("Dedicated server")]
+        [Tooltip("Start as a server with no player of its own when the process is headless or was launched with the server flag below.")]
+        [SerializeField] private bool _autoStartDedicatedServer = true;
+
+        [Tooltip("Command-line flag that makes this process a dedicated server. Lets an ordinary (non-headless) build act as one — which is how you run a real server locally without making a Dedicated Server build.")]
+        [SerializeField] private string _serverFlag = "-server";
+
+        [Tooltip("Command-line flag that overrides the listen port, e.g. -port 7778. Useful for running a server alongside an editor on one machine.")]
+        [SerializeField] private string _portFlag = "-port";
+
+        [Tooltip("Hide the game and menu UI when running as a dedicated server. The canvases would otherwise idle harmlessly, but a server has no business drawing a card table.")]
+        [SerializeField] private bool _hideUiOnDedicatedServer = true;
+
         private RoomRegistry _registry;
         private ServerIntentDispatcher _dispatcher;
+
+        /// <summary>
+        /// True on a process that runs the engine for other people and plays
+        /// no part in the game itself. The distinction matters wherever the
+        /// old host model assumed "server" implied "and also a player here" —
+        /// see <see cref="ReturnToMenu"/>.
+        /// </summary>
+        public static bool IsDedicatedServer { get; private set; }
+
+        // ---- Dedicated server entry point (Phase 6.5) ----
+
+        public override void Start()
+        {
+            // Mirror's own headlessStartMode path first; if the scene has it
+            // configured, it has already started something and we leave it be.
+            base.Start();
+            if (NetworkServer.active || NetworkClient.active) return;
+            if (!_autoStartDedicatedServer || !WantsDedicatedServer()) return;
+
+            IsDedicatedServer = true;
+            ApplyPortOverride();
+            if (_hideUiOnDedicatedServer) HideClientUi();
+
+            // Mirror caps the frame rate only when it detects a headless
+            // process; a normal build running with -server would otherwise
+            // render nothing as fast as it possibly can.
+            Application.targetFrameRate = sendRate;
+
+            Debug.Log("[Server] Starting as a dedicated server (no local player).");
+            StartServer();
+        }
+
+        /// <summary>
+        /// Two ways in. Headless covers a Dedicated Server build or
+        /// <c>-batchmode -nographics</c>; the flag covers a normal build you
+        /// want to run as a server, which is the only practical way to test
+        /// several rooms without building a separate server target
+        /// (<c>Utils.IsHeadless()</c> is graphics-device based, so an ordinary
+        /// windowed build never satisfies it).
+        /// </summary>
+        private bool WantsDedicatedServer() =>
+            Utils.IsHeadless() || HasCommandLineFlag(_serverFlag);
+
+        private void ApplyPortOverride()
+        {
+            if (!TryGetCommandLineValue(_portFlag, out var raw)) return;
+            if (!ushort.TryParse(raw, out var port))
+            {
+                Debug.LogError($"[Server] Ignoring {_portFlag} '{raw}': not a port number.");
+                return;
+            }
+            if (Transport.active is PortTransport portTransport)
+            {
+                portTransport.Port = port;
+                Debug.Log($"[Server] Listening port overridden to {port}.");
+            }
+            else
+            {
+                Debug.LogWarning($"[Server] Transport {Transport.active?.GetType().Name} has no port to override.");
+            }
+        }
+
+        /// <summary>
+        /// Switches off every canvas in the scene. The UI is already inert on
+        /// a server — it is driven by ClientGameView, which is fed by
+        /// NetworkClient, which never connects here — so this is about not
+        /// spending frames on layout rather than about correctness.
+        /// </summary>
+        private static void HideClientUi()
+        {
+            var canvases = FindObjectsOfType<Canvas>();
+            foreach (var canvas in canvases)
+                canvas.gameObject.SetActive(false);
+            Debug.Log($"[Server] Client UI hidden ({canvases.Length} canvases).");
+        }
+
+        private static bool HasCommandLineFlag(string flag)
+        {
+            if (string.IsNullOrWhiteSpace(flag)) return false;
+            foreach (var arg in System.Environment.GetCommandLineArgs())
+                if (string.Equals(arg, flag, System.StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        private static bool TryGetCommandLineValue(string flag, out string value)
+        {
+            value = null;
+            if (string.IsNullOrWhiteSpace(flag)) return false;
+            var args = System.Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (string.Equals(args[i], flag, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    value = args[i + 1];
+                    return true;
+                }
+            }
+            return false;
+        }
 
         // ---- Server lifecycle ----
 
@@ -122,11 +234,7 @@ namespace Assets.Scripts.Network
 
         private void OnCreateRoom(NetworkConnectionToClient conn, CreateRoomIntent msg)
         {
-            if (_registry.TryGetByConnection(conn.connectionId, out _))
-            {
-                Refuse(conn, RoomJoinFailure.AlreadyInRoom);
-                return;
-            }
+            if (!TryLeaveCurrentRoom(conn)) return;
             if (_registry.RoomCount >= _maxRooms)
             {
                 Debug.LogWarning($"[Server] Room creation refused: at capacity ({_maxRooms}).");
@@ -170,13 +278,33 @@ namespace Assets.Scripts.Network
             return _registry.AllocateCode();
         }
 
-        private void OnJoinRoom(NetworkConnectionToClient conn, JoinRoomIntent msg)
+        /// <summary>
+        /// Clears the way for a create or join: a connection sitting in a room
+        /// that has not started yet is simply moved out of it, because that is
+        /// plainly what the player meant by pressing the button again. Once
+        /// their game is running they are committed, and the request is
+        /// refused instead.
+        ///
+        /// Without this, one stray click left a connection stuck in a room
+        /// with no way back — there is no Leave button — and every subsequent
+        /// press answered AlreadyInRoom forever.
+        /// </summary>
+        private bool TryLeaveCurrentRoom(NetworkConnectionToClient conn)
         {
-            if (_registry.TryGetByConnection(conn.connectionId, out _))
+            if (!_registry.TryGetByConnection(conn.connectionId, out var current)) return true;
+            if (current.IsGameStarted)
             {
                 Refuse(conn, RoomJoinFailure.AlreadyInRoom);
-                return;
+                return false;
             }
+            Debug.Log($"[Server] Connection {conn.connectionId} leaving room {current.Code} to join another.");
+            ReleaseConnection(conn);
+            return true;
+        }
+
+        private void OnJoinRoom(NetworkConnectionToClient conn, JoinRoomIntent msg)
+        {
+            if (!TryLeaveCurrentRoom(conn)) return;
             if (!_registry.TryGetByCode(msg.Code, out var room))
             {
                 Refuse(conn, RoomJoinFailure.UnknownCode);
@@ -298,6 +426,16 @@ namespace Assets.Scripts.Network
         /// </summary>
         public static void ReturnToMenu()
         {
+            // A dedicated server has no menu to return to and must not tear
+            // itself down because one room ended: the other rooms are still
+            // playing. Room cleanup is ResetServer's job, and it is already
+            // split out for exactly this reason.
+            if (IsDedicatedServer)
+            {
+                Debug.Log("[Server] ReturnToMenu ignored on a dedicated server.");
+                return;
+            }
+
             if (_returningToMenu) return;
             _returningToMenu = true;
 
