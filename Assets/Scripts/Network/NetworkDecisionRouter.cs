@@ -73,15 +73,15 @@ namespace Assets.Scripts.Network
         }
 
         private readonly Dictionary<int, PendingDecision> _parked = new();
-        private readonly IReadOnlyDictionary<int, NetworkConnectionToClient> _connections;
+        private readonly RoomChannel _channel;
         private int _nextRequestId = 1;
         private bool _disposed;
 
         public int PendingDecisionCount => _parked.Count;
 
-        public NetworkDecisionRouter(IReadOnlyDictionary<int, NetworkConnectionToClient> connections)
+        public NetworkDecisionRouter(RoomChannel channel)
         {
-            _connections = connections;
+            _channel = channel;
             NetworkServer.RegisterHandler<ResolveCardPickIntent>(OnResolveCardPick);
             NetworkServer.RegisterHandler<ResolveItemPickIntent>(OnResolveItemPick);
             NetworkServer.RegisterHandler<ResolveRuleEffectPickIntent>(OnResolveRuleEffectPick);
@@ -143,7 +143,7 @@ namespace Assets.Scripts.Network
                 Fail = e => tcs.TrySetException(e),
             };
 
-            NetworkServer.SendToAll(request);
+            _channel.SendToRoom(request);
             return tcs.Task;
         }
 
@@ -269,7 +269,7 @@ namespace Assets.Scripts.Network
             }
             if (pending.Tcs is TaskCompletionSource<T> typed)
             {
-                if (!_connections.TryGetValue(pending.PlayerId, out var expectedConn) || expectedConn != conn)
+                if (!_channel.IsSeatedAt(pending.PlayerId, conn))
                 {
                     Debug.LogWarning($"[NetworkDecisionRouter] requestId {requestId}: resolution from wrong connection (expected player {pending.PlayerId})");
                     return false;
@@ -282,10 +282,9 @@ namespace Assets.Scripts.Network
             return false;
         }
 
-        private static void BroadcastResolved(int requestId)
+        private void BroadcastResolved(int requestId)
         {
-            if (!NetworkServer.active) return;
-            NetworkServer.SendToAll(new DecisionResolvedEvent { RequestId = requestId });
+            _channel.SendToRoom(new DecisionResolvedEvent { RequestId = requestId });
         }
     }
 }

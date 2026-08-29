@@ -1,23 +1,28 @@
 using Assets.Scripts;
 using Assets.Scripts.Network.Messages;
-using Mirror;
 using ScaryTales;
 
 namespace Assets.Scripts.Network
 {
     /// <summary>
-    /// Server-only. Subscribes to the canonical GameSession's GameManager
-    /// events and re-emits each as a wire DomainEvent broadcast to every
-    /// connected client. Clients consume them via ClientGameView and update
+    /// Server-only. Subscribes to one GameSession's GameManager events and
+    /// re-emits each as a wire DomainEvent, delivered to that session's room
+    /// and nowhere else. Clients consume them via ClientGameView and update
     /// their local mirror.
+    ///
+    /// Phase 6.2: every send goes through the RoomChannel this broadcaster
+    /// was built with. There is deliberately no way to reach a wider
+    /// audience from here.
     /// </summary>
     public class ServerEventBroadcaster
     {
         private readonly GameSession _session;
+        private readonly RoomChannel _channel;
 
-        public ServerEventBroadcaster(GameSession session)
+        public ServerEventBroadcaster(GameSession session, RoomChannel channel)
         {
             _session = session;
+            _channel = channel;
             var gm = session.GameManager;
             gm.OnCardAddedToHand += HandleCardAddedToHand;
             gm.OnCardAddedToHandFromDiscardPile += HandleCardAddedToHandFromDiscard;
@@ -34,7 +39,7 @@ namespace Assets.Scripts.Network
 
         private void HandleCardAddedToHand(Card card, Player player)
         {
-            NetworkServer.SendToAll(new CardDrawnEvent
+            _channel.SendToRoom(new CardDrawnEvent
             {
                 PlayerId = player.Id,
                 CardId = card.Id,
@@ -43,7 +48,7 @@ namespace Assets.Scripts.Network
 
         private void HandleCardAddedToHandFromDiscard(Card card, Player player)
         {
-            NetworkServer.SendToAll(new CardAddedToHandFromDiscardEvent
+            _channel.SendToRoom(new CardAddedToHandFromDiscardEvent
             {
                 PlayerId = player.Id,
                 CardId = card.Id,
@@ -55,7 +60,7 @@ namespace Assets.Scripts.Network
             // Owner may already be cleared by the time this fires depending
             // on play order; fall back to current player.
             var ownerId = card.Owner?.Id ?? _session.CurrentPlayer?.Id ?? 0;
-            NetworkServer.SendToAll(new CardPlayedEvent
+            _channel.SendToRoom(new CardPlayedEvent
             {
                 PlayerId = ownerId,
                 CardId = card.Id,
@@ -64,12 +69,12 @@ namespace Assets.Scripts.Network
 
         private void HandleCardMovedToBoard(Card card)
         {
-            NetworkServer.SendToAll(new CardMovedToBoardEvent { CardId = card.Id });
+            _channel.SendToRoom(new CardMovedToBoardEvent { CardId = card.Id });
         }
 
         private void HandleCardMovedToBeforePlayer(Card card)
         {
-            NetworkServer.SendToAll(new CardMovedToBeforePlayerEvent
+            _channel.SendToRoom(new CardMovedToBeforePlayerEvent
             {
                 CardId = card.Id,
                 OwnerId = card.Owner?.Id ?? 0,
@@ -78,17 +83,17 @@ namespace Assets.Scripts.Network
 
         private void HandleCardMovedToTimeOfDay(Card card)
         {
-            NetworkServer.SendToAll(new CardMovedToTimeOfDaySlotEvent { CardId = card.Id });
+            _channel.SendToRoom(new CardMovedToTimeOfDaySlotEvent { CardId = card.Id });
         }
 
         private void HandleCardMovedToDiscard(Card card)
         {
-            NetworkServer.SendToAll(new CardMovedToDiscardPileEvent { CardId = card.Id });
+            _channel.SendToRoom(new CardMovedToDiscardPileEvent { CardId = card.Id });
         }
 
         private void HandleItemAdded(Item item, Player player)
         {
-            NetworkServer.SendToAll(new ItemAddedToPlayerEvent
+            _channel.SendToRoom(new ItemAddedToPlayerEvent
             {
                 PlayerId = player.Id,
                 ItemId = item.Id,
@@ -98,7 +103,7 @@ namespace Assets.Scripts.Network
 
         private void HandleItemRemoved(Item item, Player player)
         {
-            NetworkServer.SendToAll(new ItemRemovedFromPlayerEvent
+            _channel.SendToRoom(new ItemRemovedFromPlayerEvent
             {
                 PlayerId = player.Id,
                 ItemId = item.Id,
@@ -108,7 +113,7 @@ namespace Assets.Scripts.Network
 
         private void HandlePointsAwarded(Player player)
         {
-            NetworkServer.SendToAll(new PointsAwardedEvent
+            _channel.SendToRoom(new PointsAwardedEvent
             {
                 PlayerId = player.Id,
                 NewScore = player.Score,
@@ -117,7 +122,7 @@ namespace Assets.Scripts.Network
 
         private void HandleMessagePrinted(string message)
         {
-            NetworkServer.SendToAll(new MessagePrintedEvent { Message = message });
+            _channel.SendToRoom(new MessagePrintedEvent { Message = message });
         }
     }
 }

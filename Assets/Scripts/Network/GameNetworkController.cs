@@ -28,7 +28,9 @@ namespace Assets.Scripts.Network
     public class GameNetworkController : NetworkBehaviour
     {
         // ---- Server-only state ----
-        private Dictionary<int, NetworkConnectionToClient> _playerConnections = new();
+        // This room's membership and its only route to the clients. Phase
+        // 6.2: nothing here reaches NetworkServer.SendToAll any more.
+        private RoomChannel _channel;
         private GameSession _serverSession;
         private NetworkDecisionRouter _router;
         private ServerEventBroadcaster _broadcaster;
@@ -58,10 +60,10 @@ namespace Assets.Scripts.Network
         // ---- Server-side composition root ----
 
         [Server]
-        public void InitializeGame(List<Player> players, Dictionary<int, NetworkConnectionToClient> connectionMap)
+        public void InitializeGame(List<Player> players, RoomChannel channel)
         {
-            _playerConnections = connectionMap;
-            _router = new NetworkDecisionRouter(_playerConnections);
+            _channel = channel;
+            _router = new NetworkDecisionRouter(_channel);
 
             var notifier = new UnityNotifier("Server");
             var board = new GameBoard();
@@ -89,7 +91,7 @@ namespace Assets.Scripts.Network
 
             _serverSession = new GameSession(gameManager, inGameRule, finalRule);
 
-            _broadcaster = new ServerEventBroadcaster(_serverSession);
+            _broadcaster = new ServerEventBroadcaster(_serverSession, _channel);
 
             NetworkServer.RegisterHandler<PlayCardIntent>(OnPlayCardIntent);
             NetworkServer.RegisterHandler<UseRuleEffectIntent>(OnUseRuleEffectIntent);
@@ -110,22 +112,17 @@ namespace Assets.Scripts.Network
 
             foreach (var p in players)
             {
-                if (_playerConnections.TryGetValue(p.Id, out var conn))
+                bool sent = _channel.SendToSeat(p.Id, new GameStartedEvent
                 {
-                    conn.Send(new GameStartedEvent
-                    {
-                        Players = playerInfos,
-                        DeckOrder = deckIds,
-                        StartPlayerId = startPlayerId,
-                        LocalPlayerId = p.Id,
-                        CurrentRuleId = _inGameRuleId,
-                        CurrentFinalRuleId = _finalRuleId,
-                    });
-                }
-                else
-                {
+                    Players = playerInfos,
+                    DeckOrder = deckIds,
+                    StartPlayerId = startPlayerId,
+                    LocalPlayerId = p.Id,
+                    CurrentRuleId = _inGameRuleId,
+                    CurrentFinalRuleId = _finalRuleId,
+                });
+                if (!sent)
                     Debug.LogError($"[InitializeGame] missing connection for player {p.Id}");
-                }
             }
 
             // Kick off the canonical turn loop. async void on a server-side
@@ -168,7 +165,7 @@ namespace Assets.Scripts.Network
                     ThrowIfGameOver();
 
                     var current = ctx.GameState.GetCurrentPlayer();
-                    NetworkServer.SendToAll(new TurnAdvancedEvent
+                    _channel.SendToRoom(new TurnAdvancedEvent
                     {
                         CurrentPlayerId = current.Id,
                         TurnCount = ctx.GameState.TurnCount,
@@ -205,7 +202,7 @@ namespace Assets.Scripts.Network
 
                 int winnerId = ctx.Players.OrderByDescending(p => p.Score).First().Id;
                 var scores = ctx.Players.Select(p => p.Score).ToArray();
-                NetworkServer.SendToAll(new GameEndedEvent
+                _channel.SendToRoom(new GameEndedEvent
                 {
                     WinnerId = winnerId,
                     FinalScores = scores,
@@ -269,7 +266,7 @@ namespace Assets.Scripts.Network
 
             if (NetworkServer.active)
             {
-                NetworkServer.SendToAll(new GameAbortedEvent
+                _channel.SendToRoom(new GameAbortedEvent
                 {
                     LeftPlayerId = leftPlayerId,
                     Reason = reason,
@@ -317,7 +314,7 @@ namespace Assets.Scripts.Network
             if (_gameOver) return;
             var current = _serverSession?.CurrentPlayer;
             if (current == null) return;
-            if (!_playerConnections.TryGetValue(current.Id, out var expectedConn) || expectedConn != conn)
+            if (!_channel.IsSeatedAt(current.Id, conn))
             {
                 Debug.LogWarning("[Server] PlayCardIntent from wrong connection.");
                 return;
@@ -333,7 +330,7 @@ namespace Assets.Scripts.Network
             if (_gameOver) return;
             var current = _serverSession?.CurrentPlayer;
             if (current == null) return;
-            if (!_playerConnections.TryGetValue(current.Id, out var expectedConn) || expectedConn != conn)
+            if (!_channel.IsSeatedAt(current.Id, conn))
                 return;
 
             var effect = _serverSession.CurrentRuleInGame.Effects.FirstOrDefault(e => e.Id == msg.RuleEffectId);

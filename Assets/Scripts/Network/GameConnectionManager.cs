@@ -16,7 +16,7 @@ namespace Assets.Scripts.Network
     /// a <b>seat id</b> (what <see cref="Player.Id"/> is, stable for the
     /// life of the room, what goes out on the wire) and a
     /// <b>connection id</b> (Mirror's, which a player loses the moment
-    /// they drop and never gets back). <see cref="_connectionMap"/> is the
+    /// they drop and never gets back). <see cref="RoomChannel"/> is the
     /// single mutable binding between them, and it is the hook a reconnect
     /// flow would rebind — see <see cref="OnSeatVacated"/>.
     /// </summary>
@@ -35,9 +35,9 @@ namespace Assets.Scripts.Network
 
         private List<Player> _players = new();
 
-        // Seat id → the connection currently sitting in it. The only
-        // mutable link between a seat and a network connection.
-        private Dictionary<int, NetworkConnectionToClient> _connectionMap = new();
+        // This room's seats and the only way to reach them. Owns the
+        // seat → connection binding; see RoomChannel.
+        private RoomChannel _channel = new();
 
         // Reverse index: Mirror's connection id → seat id. Needed because
         // OnServerDisconnect only hands us a connection.
@@ -83,7 +83,7 @@ namespace Assets.Scripts.Network
             int seatId = _nextSeatId++;
             var player = new Player(seatId, $"Player{_players.Count + 1}");
             _players.Add(player);
-            _connectionMap[seatId] = conn;
+            _channel.Bind(seatId, conn);
             _seatByConnection[conn.connectionId] = seatId;
 
             Debug.Log($"[Server] {player.Name} took seat {seatId}: {_players.Count}/{_maxPlayers}");
@@ -117,7 +117,7 @@ namespace Assets.Scripts.Network
             }
 
             _seatByConnection.Remove(conn.connectionId);
-            _connectionMap.Remove(seatId);
+            _channel.Unbind(seatId);
 
             OnSeatVacated(seatId);
 
@@ -139,7 +139,7 @@ namespace Assets.Scripts.Network
         /// GameAbortedEvent still resolves to a name on the clients — and so a
         /// future reconnect flow has a seat to hand back. Adding it means
         /// replacing the immediate AbortGame with a grace window, and rebinding
-        /// <c>_connectionMap[seatId]</c> when the player returns. Note that a
+        /// the channel's binding for that seat when the player returns. Note that a
         /// grace window is not enough on its own: the room would also have to
         /// stop asking the missing seat for decisions while it waits, which is
         /// why this ends the room today instead of half-waiting.</para>
@@ -176,7 +176,7 @@ namespace Assets.Scripts.Network
         private void BroadcastLobbyState()
         {
             if (!NetworkServer.active) return;
-            NetworkServer.SendToAll(new LobbyStateUpdate
+            _channel.SendToRoom(new LobbyStateUpdate
             {
                 PlayerCount = _players.Count,
                 MinPlayers = _minPlayers,
@@ -265,7 +265,7 @@ namespace Assets.Scripts.Network
             // these same objects, and emptying them out from under a
             // still-unwinding turn loop would be a needless hazard.
             _players = new List<Player>();
-            _connectionMap = new Dictionary<int, NetworkConnectionToClient>();
+            _channel = new RoomChannel();
             _seatByConnection = new Dictionary<int, int>();
             _nextSeatId = 1;
             _gameStarted = false;
@@ -294,7 +294,7 @@ namespace Assets.Scripts.Network
             NetworkServer.Spawn(controllerObj);
 
             _controller = controllerObj.GetComponent<GameNetworkController>();
-            _controller.InitializeGame(_players, _connectionMap);
+            _controller.InitializeGame(_players, _channel);
         }
     }
 }
