@@ -9,6 +9,18 @@ public class ItemViewService
     private static ItemViewService _instance;
     public static ItemViewService Instance => _instance ??= new ItemViewService();
 
+    /// <summary>
+    /// Drops the cached instance so the next access builds a fresh one.
+    ///
+    /// This is a plain C# static, so it is NOT subject to Unity's fake-null:
+    /// it survives the scene reload that ends every game, still holding the
+    /// destroyed scene's Transforms and views. Creating a card against a
+    /// destroyed parent gives it no parent at all, which is why cards ended up
+    /// loose in the scene on a second game. Called from UnGameManager.Awake,
+    /// which is once per scene load — exactly the lifetime these want.
+    /// </summary>
+    public static void Reset() => _instance = null;
+
     private readonly ItemViewFactory _itemViewFactory;
     private readonly Dictionary<Item, ItemView> _itemToViewMap = new();
 

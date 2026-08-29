@@ -80,6 +80,24 @@ public class UnGameManager : MonoBehaviour
             Destroy(gameObject);
             return;
         }
+        // Everything below is per-scene state living in a static, and a game
+        // ends by reloading the scene — so without this it is the *previous*
+        // game's state that the next one starts from.
+        //
+        // The three view services are plain C# classes, so Unity's fake-null
+        // never applies to them: their cached factories still point at the
+        // destroyed scene's Transforms, and a card created against a destroyed
+        // parent gets no parent at all — which is how cards ended up loose in
+        // the scene instead of in a hand.
+        CardViewService.Reset();
+        ItemViewService.Reset();
+        RuleEffectService.Reset();
+        // Left true by a game that ended while a card was selectable, which
+        // made every card in the next game draggable from the start.
+        DragAndDrop.SelectCard = false;
+        // Would otherwise still point into a coroutine of the finished game.
+        CardSelectionService.CurrentSelectionHandler = null;
+
         _cardViewService = CardViewService.Instance;
 
         // Construct the client mirror early so its NetworkClient handlers
