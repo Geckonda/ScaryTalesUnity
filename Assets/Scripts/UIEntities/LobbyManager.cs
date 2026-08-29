@@ -1,7 +1,5 @@
-﻿using Assets.Scripts.Network;
 using Assets.Scripts.Network.Messages;
 using Mirror;
-using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,67 +7,61 @@ using UnityEngine.UI;
 namespace Assets.Scripts.UIEntities
 {
     /// <summary>
-    /// Drives the pre-game lobby UI.
+    /// Drives the pre-game lobby UI (Phase 6.6).
     ///
-    /// Visibility:
-    /// - The lobby panel auto-hides when no network role is active and
-    ///   auto-shows when either NetworkServer is active (host) or
-    ///   NetworkClient is connected. It hides again when the game starts.
-    ///
-    /// Roster:
-    /// - On the host, the player list is read directly from the local
-    ///   GameConnectionManager.
-    /// - On non-host clients, the server broadcasts a LobbyStateUpdate
-    ///   message every roster change; this script's NetworkClient handler
-    ///   stashes the latest state and renders it into the waiting text.
+    /// <para>Entirely client-side now. It used to read the server's roster
+    /// directly whenever <c>NetworkServer.active</c> said "you are the host" —
+    /// which stops meaning anything once the server is its own process. Both
+    /// facts it needs arrive over the wire instead: <c>RoomJoinedEvent</c> says
+    /// which room you are in and whether you own it, <c>LobbyStateUpdate</c>
+    /// says who else is here and whether the game may start.</para>
     /// </summary>
     public class LobbyManager : MonoBehaviour
     {
-        [Tooltip("Root GameObject for the lobby UI; auto-toggled based on connection state and game start.")]
+        [Tooltip("Root GameObject for the lobby UI; shown once you are in a room, hidden when the game starts.")]
         [SerializeField] private GameObject _lobbyPanel;
 
-        [Tooltip("TMP text shown on the host: \"Players: 2/4 + names\".")]
+        [Tooltip("TMP text for the room code and player list.")]
         [SerializeField] private TMP_Text _statusText;
 
-        [Tooltip("Host-only Start button. Hidden on non-host clients.")]
+        [Tooltip("Start button. Shown only to the player who created the room.")]
         [SerializeField] private Button _startButton;
 
-        [Tooltip("TMP text shown on non-host clients while waiting for the host to start.")]
+        [Tooltip("TMP text shown to everyone who is not the room's creator.")]
         [SerializeField] private TMP_Text _waitingText;
 
         [Tooltip("Extra GameObjects to deactivate when the game actually starts (e.g. your MenuCanvas with Create Room / Join Room buttons).")]
         [SerializeField] private GameObject[] _hideOnGameStart;
 
-        private GameConnectionManager _net;
-        private bool _netSubscribed;
-        private bool _viewSubscribed;
-        private bool _gameStarted;
-        private bool _lobbyHandlerRegistered;
+        // Everything below arrives from the server; none of it is inferred.
+        private bool _inRoom;
+        private bool _isOwner;
+        private string _code = string.Empty;
+        private string _roomName = string.Empty;
         private bool _hasLobbyState;
-        private LobbyStateUpdate _lastLobbyState;
+        private LobbyStateUpdate _lobbyState;
+        private bool _gameStarted;
+
+        private bool _handlersRegistered;
+        private bool _viewSubscribed;
 
         private void Awake()
         {
             if (_startButton != null)
                 _startButton.onClick.AddListener(OnStartClicked);
-            RegisterLobbyHandler();
-            TrySubscribe();
+            RegisterHandlers();
+            Refresh();
         }
 
         private void OnEnable()
         {
-            RegisterLobbyHandler();
-            TrySubscribe();
+            RegisterHandlers();
+            TrySubscribeToView();
             Refresh();
         }
 
         private void OnDisable()
         {
-            if (_net != null && _netSubscribed)
-            {
-                _net.OnRosterChanged -= Refresh;
-                _netSubscribed = false;
-            }
             var view = UnGameManager.Instance != null ? UnGameManager.Instance.ClientView : null;
             if (view != null && _viewSubscribed)
             {
@@ -78,107 +70,100 @@ namespace Assets.Scripts.UIEntities
             }
         }
 
-        private void TrySubscribe()
+        private void RegisterHandlers()
         {
-            if (!_netSubscribed)
-            {
-                _net = NetworkManager.singleton as GameConnectionManager;
-                if (_net != null)
-                {
-                    _net.OnRosterChanged += Refresh;
-                    _netSubscribed = true;
-                }
-            }
-            if (!_viewSubscribed)
-            {
-                var view = UnGameManager.Instance != null ? UnGameManager.Instance.ClientView : null;
-                if (view != null)
-                {
-                    view.OnGameStarted += HandleGameStarted;
-                    _viewSubscribed = true;
-                }
-            }
+            if (_handlersRegistered) return;
+            // NetworkClient.RegisterHandler can be called any time; a second
+            // call with the same type replaces the first. The guard just keeps
+            // it tidy across enable/disable cycles.
+            NetworkClient.RegisterHandler<RoomJoinedEvent>(OnRoomJoined);
+            NetworkClient.RegisterHandler<LobbyStateUpdate>(OnLobbyState);
+            _handlersRegistered = true;
         }
 
-        private void RegisterLobbyHandler()
+        private void TrySubscribeToView()
         {
-            if (_lobbyHandlerRegistered) return;
-            // Mirror's NetworkClient.RegisterHandler can be called any
-            // time; subsequent calls with the same type replace the
-            // previous handler. Idempotent guard via _lobbyHandlerRegistered
-            // keeps it tidy across enable/disable cycles.
-            NetworkClient.RegisterHandler<LobbyStateUpdate>(OnLobbyStateMessage);
-            _lobbyHandlerRegistered = true;
+            if (_viewSubscribed) return;
+            var view = UnGameManager.Instance != null ? UnGameManager.Instance.ClientView : null;
+            if (view == null) return;
+            view.OnGameStarted += HandleGameStarted;
+            _viewSubscribed = true;
         }
 
         private void Update()
         {
-            if (_netSubscribed && _viewSubscribed) return;
-            TrySubscribe();
+            // UnGameManager may construct its ClientGameView after this
+            // component wakes; keep trying until it exists.
+            if (!_viewSubscribed) TrySubscribeToView();
+        }
+
+        private void OnRoomJoined(RoomJoinedEvent evt)
+        {
+            _inRoom = true;
+            _isOwner = evt.IsOwner;
+            _code = evt.Code;
+            _roomName = evt.RoomName;
             Refresh();
         }
 
-        private void OnLobbyStateMessage(LobbyStateUpdate msg)
+        private void OnLobbyState(LobbyStateUpdate msg)
         {
-            _lastLobbyState = msg;
+            _lobbyState = msg;
             _hasLobbyState = true;
             Refresh();
         }
 
         private void Refresh()
         {
-            // Once the game has started, this script is done driving
-            // visibility — HandleGameStarted hid the panel and the scene
-            // reload on game-end / disconnect resets the whole thing.
+            // Once the game has started this script is done driving
+            // visibility — HandleGameStarted hid the panel, and the scene
+            // reload on game-end resets everything.
             if (_gameStarted) return;
 
-            bool isHost = NetworkServer.active;
-            bool clientConnected = NetworkClient.isConnected;
-            bool inLobby = isHost || clientConnected;
-
             if (_lobbyPanel != null)
-                _lobbyPanel.SetActive(inLobby);
-            if (!inLobby) return;
+                _lobbyPanel.SetActive(_inRoom);
+            if (!_inRoom) return;
 
+            // _statusText and _waitingText occupy the same place in the
+            // panel, so exactly one of them may ever be active. The owner
+            // gets the status line and the Start button; everyone else gets
+            // the waiting line. Both texts carry the code, because whoever is
+            // looking may be the one reading it out to a friend.
             if (_startButton != null)
-                _startButton.gameObject.SetActive(isHost);
+                _startButton.gameObject.SetActive(_isOwner);
             if (_statusText != null)
-                _statusText.gameObject.SetActive(isHost);
+                _statusText.gameObject.SetActive(_isOwner);
             if (_waitingText != null)
-                _waitingText.gameObject.SetActive(!isHost);
+                _waitingText.gameObject.SetActive(!_isOwner);
 
-            if (isHost)
+            string roster = _hasLobbyState
+                ? $"Игроки: {_lobbyState.PlayerCount}/{_lobbyState.MaxPlayers}\n{string.Join(", ", _lobbyState.PlayerNames ?? new string[0])}"
+                : "Ожидание...";
+            string header = string.IsNullOrEmpty(_roomName) || _roomName == _code
+                ? $"Код комнаты: {_code}"
+                : $"{_roomName} — код: {_code}";
+
+            // Write only into the one that is showing — filling both is how
+            // the same text ended up rendered twice on top of itself.
+            if (_isOwner)
             {
-                if (_net == null) return;
                 if (_statusText != null)
-                {
-                    var names = string.Join(", ", _net.Players.Select(p => p.Name));
-                    _statusText.text = $"Players: {_net.PlayerCount}/{_net.MaxPlayers}\n{names}";
-                }
+                    _statusText.text = $"{header}\n{roster}";
                 if (_startButton != null)
-                    _startButton.interactable = _net.CanStart;
+                    _startButton.interactable = _hasLobbyState && _lobbyState.CanStart;
             }
-            else
+            else if (_waitingText != null)
             {
-                if (_waitingText == null) return;
-                if (!_hasLobbyState)
-                {
-                    _waitingText.text = "Connecting...";
-                    return;
-                }
-                var names = _lastLobbyState.PlayerNames != null
-                    ? string.Join(", ", _lastLobbyState.PlayerNames)
-                    : string.Empty;
-                _waitingText.text =
-                    $"Connected. Waiting for host to start...\n";
+                _waitingText.text = $"{header}\n{roster}\nЖдём, пока создатель начнёт игру...";
             }
         }
 
         private void OnStartClicked()
         {
-            if (!NetworkServer.active) return;
-            if (_net == null) return;
-            _net.StartGameNow();
+            if (!_inRoom || !_isOwner) return;
+            // Sent rather than called directly: on a dedicated server the
+            // creator is an ordinary client with no access to the room object.
+            NetworkClient.Send(new StartGameIntent());
         }
 
         private void HandleGameStarted()

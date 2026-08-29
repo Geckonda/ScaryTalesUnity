@@ -1776,7 +1776,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 IP \u043A\u043E\u043C\u043D\u0430\u0442\u044B"
+  m_text: "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043A\u043E\u0434 \u043A\u043E\u043C\u043D\u0430\u0442\u044B"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -2078,6 +2078,7 @@ MonoBehaviour:
   TimeOfDaySlot: {fileID: 27147263}
   DiscardPile: {fileID: 646332350}
   UIBlockerOverlay: {fileID: 60472258}
+  _animationDelay: 2000
 --- !u!1 &562380935
 GameObject:
   m_ObjectHideFlags: 0
@@ -2647,39 +2648,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5199506c7dae0974cac43b0625e24247, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _radius: 600
   _seats:
   - {fileID: 292339641}
   - {fileID: 1833773110}
   - {fileID: 1851691017}
   - {fileID: 732642118}
-  _opponents2P:
-  - Override: 1
-    HandPanelZRotation: 180
-    FanAngle: 50
-    FanVerticalOffset: -310
-  _opponents3P:
-  - Override: 1
-    HandPanelZRotation: 150
-    FanAngle: 50
-    FanVerticalOffset: -70
-  - Override: 1
-    HandPanelZRotation: -150
-    FanAngle: 50
-    FanVerticalOffset: -70
-  _opponents4P:
-  - Override: 0
-    HandPanelZRotation: 0
-    FanAngle: 50
-    FanVerticalOffset: -70
-  - Override: 0
-    HandPanelZRotation: 0
-    FanAngle: 50
-    FanVerticalOffset: -70
-  - Override: 0
-    HandPanelZRotation: 0
-    FanAngle: 50
-    FanVerticalOffset: -70
+  _slots2P: []
+  _slots3P: []
+  _slots4P: []
 --- !u!1 &702460189
 GameObject:
   m_ObjectHideFlags: 0
@@ -4138,7 +4114,9 @@ MonoBehaviour:
   _minPlayers: 2
   _maxPlayers: 4
   _autoStartWhenFull: 0
-  gameNetworkControllerPrefab: {fileID: 1273123086134853622, guid: d1ec2145f43e2e148a5adf63c9e321aa, type: 3}
+  _maxRooms: 32
+  _inGameRuleId: 1
+  _finalRuleId: 2
 --- !u!114 &929659993
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6332,6 +6310,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   roomNameInput: {fileID: 2140800904}
   networkManager: {fileID: 929659992}
+  serverAddress: localhost
+  hostLocallyOnCreate: 1
+  connectTimeout: 5
+  statusText: {fileID: 0}
 --- !u!114 &1680424249
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6528,8 +6510,8 @@ MonoBehaviour:
   m_ChildAlignment: 0
   cardSize: {x: 150, y: 250}
   spacing: 5
-  shrinkThreshold: 5
-  shrinkStep: 0.95
+  stackStep: 20
+  scale: 1
 --- !u!1 &1699977347
 GameObject:
   m_ObjectHideFlags: 0

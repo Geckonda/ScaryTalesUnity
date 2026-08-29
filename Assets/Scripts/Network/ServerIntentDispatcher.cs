@@ -1,6 +1,5 @@
 using Assets.Scripts.Network.Messages;
 using Mirror;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Assets.Scripts.Network
@@ -26,18 +25,22 @@ namespace Assets.Scripts.Network
     /// this layer answers "which room?", not "may you?".</para>
     ///
     /// <para>Rooms must therefore <b>not</b> unregister handlers when they end.
-    /// A finished room leaves the index (<see cref="UnbindRoom"/>); the
+    /// A finished room leaves the registry's connection index; the
     /// handlers stay up for everyone else. Handlers are cleared wholesale by
     /// <c>NetworkServer.Shutdown()</c>, which is why registration belongs to
     /// server start rather than to any one game.</para>
     /// </summary>
     public class ServerIntentDispatcher
     {
-        // Mirror's connection id → the room that connection is playing in.
-        // Not seat id: an arriving message only carries its connection.
-        private readonly Dictionary<int, Room> _roomByConnection = new();
+        // Where "which room is this connection in" is answered. Owned by the
+        // registry rather than duplicated here, so the routing table and the
+        // room list cannot drift apart.
+        private readonly RoomRegistry _registry;
 
-        public int BoundConnectionCount => _roomByConnection.Count;
+        public ServerIntentDispatcher(RoomRegistry registry)
+        {
+            _registry = registry;
+        }
 
         /// <summary>
         /// Claims every intent message type. Call once per server start —
@@ -53,35 +56,8 @@ namespace Assets.Scripts.Network
             NetworkServer.RegisterHandler<ResolveItemPickIntent>(OnResolveItemPick);
             NetworkServer.RegisterHandler<ResolveRuleEffectPickIntent>(OnResolveRuleEffectPick);
             NetworkServer.RegisterHandler<ResolveConfirmIntent>(OnResolveConfirm);
+            NetworkServer.RegisterHandler<StartGameIntent>(OnStartGame);
         }
-
-        // ---- Index maintenance ----
-
-        /// <summary>
-        /// Points a connection at the room it just joined. Bound at join
-        /// rather than at game start: the room exists from lobby time now, so
-        /// there is no window where a connection has a room but the index
-        /// does not know it.
-        /// </summary>
-        public void Bind(int connectionId, Room room) => _roomByConnection[connectionId] = room;
-
-        public void Unbind(int connectionId) => _roomByConnection.Remove(connectionId);
-
-        /// <summary>
-        /// Drops every connection pointing at a finished room, so its former
-        /// players' late intents resolve to nothing instead of poking a dead
-        /// session.
-        /// </summary>
-        public void UnbindRoom(Room room)
-        {
-            var doomed = new List<int>();
-            foreach (var kv in _roomByConnection)
-                if (kv.Value == room) doomed.Add(kv.Key);
-            foreach (var connectionId in doomed)
-                _roomByConnection.Remove(connectionId);
-        }
-
-        public void Clear() => _roomByConnection.Clear();
 
         // ---- Dispatch ----
 
@@ -89,7 +65,7 @@ namespace Assets.Scripts.Network
         {
             room = null;
             if (conn == null) return false;
-            if (!_roomByConnection.TryGetValue(conn.connectionId, out room) || room == null)
+            if (!_registry.TryGetByConnection(conn.connectionId, out room) || room == null)
             {
                 // Normal enough to be a warning rather than an error: a
                 // client can send an intent it queued just as its room ended.
@@ -97,6 +73,11 @@ namespace Assets.Scripts.Network
                 return false;
             }
             return true;
+        }
+
+        private void OnStartGame(NetworkConnectionToClient conn, StartGameIntent msg)
+        {
+            if (TryResolveRoom(conn, out var room)) room.HandleStartGame(conn);
         }
 
         private void OnPlayCard(NetworkConnectionToClient conn, PlayCardIntent msg)

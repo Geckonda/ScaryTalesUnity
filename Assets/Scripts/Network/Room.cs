@@ -67,6 +67,19 @@ namespace Assets.Scripts.Network
         private bool _gameOver;
         private bool _aborted;
 
+        // ---- Identity ----
+        /// <summary>Short code players type to join. Assigned by the registry.</summary>
+        public string Code { get; }
+        /// <summary>Cosmetic, chosen by whoever created the room.</summary>
+        public string Name { get; }
+        /// <summary>
+        /// Seat of the player who created the room — the only one allowed to
+        /// start the game. 0 until someone joins. Deliberately a seat rather
+        /// than a connection, so ownership survives the connection (the same
+        /// reasoning as Player.Id in 6.1).
+        /// </summary>
+        public int OwnerSeatId { get; private set; }
+
         // ---- Observation ----
         public IReadOnlyList<Player> Players => _players;
         public int PlayerCount => _players.Count;
@@ -75,20 +88,23 @@ namespace Assets.Scripts.Network
         public bool IsGameStarted => _gameStarted;
         public bool IsAborted => _aborted;
         public bool CanStart => !_gameStarted && _players.Count >= _minPlayers;
-        public bool IsEmpty => _players.Count == 0;
+        /// <summary>
+        /// No live connections left. Not the same as an empty roster: a
+        /// mid-game departure deliberately keeps its seat (see OnSeatVacated),
+        /// so the roster can be non-empty while nobody is actually here.
+        /// This is the condition the owner destroys a room on.
+        /// </summary>
+        public bool IsAbandoned => Channel.Count == 0;
         public GameSession Session => _session;
         /// <summary>ServerIntentDispatcher reaches the router through here.</summary>
         public NetworkDecisionRouter Router => _router;
         /// <summary>Non-zero means the room is waiting on somebody.</summary>
         public int PendingDecisionCount => _router?.PendingDecisionCount ?? 0;
 
-        /// <summary>Raised when someone joins or leaves the lobby.</summary>
-        public event Action<Room> RosterChanged;
-        /// <summary>Raised once when the game is over, however it ended.</summary>
-        public event Action<Room> Finished;
-
-        public Room(int minPlayers, int maxPlayers, int inGameRuleId, int finalRuleId)
+        public Room(string code, string name, int minPlayers, int maxPlayers, int inGameRuleId, int finalRuleId)
         {
+            Code = code;
+            Name = name;
             _minPlayers = minPlayers;
             _maxPlayers = maxPlayers;
             _inGameRuleId = inGameRuleId;
@@ -99,14 +115,8 @@ namespace Assets.Scripts.Network
 
         public enum JoinResult { Ok, RoomFull, GameInProgress }
 
-        /// <summary>
-        /// Whether this room would take another player right now. Separate
-        /// from <see cref="TryAddPlayer"/> because the caller has to decide
-        /// *before* Mirror spawns the connection's player object but can only
-        /// seat it *after* — so the check and the mutation happen either side
-        /// of that call.
-        /// </summary>
-        public JoinResult CanAccept()
+        /// <summary>Whether this room would take another player right now.</summary>
+        private JoinResult CanAccept()
         {
             if (_players.Count >= _maxPlayers) return JoinResult.RoomFull;
             if (_gameStarted) return JoinResult.GameInProgress;
@@ -129,8 +139,9 @@ namespace Assets.Scripts.Network
             _players.Add(player);
             Channel.Bind(seatId, conn);
             _seatByConnection[conn.connectionId] = seatId;
+            // First one in owns the room.
+            if (OwnerSeatId == 0) OwnerSeatId = seatId;
 
-            RosterChanged?.Invoke(this);
             BroadcastLobbyState();
             return JoinResult.Ok;
         }
@@ -179,8 +190,7 @@ namespace Assets.Scripts.Network
             if (!_gameStarted)
             {
                 _players.RemoveAll(p => p.Id == seatId);
-                Debug.Log($"[Room] {name} left the lobby: {_players.Count}/{_maxPlayers}");
-                RosterChanged?.Invoke(this);
+                Debug.Log($"[Room {Code}] {name} left the lobby: {_players.Count}/{_maxPlayers}");
                 BroadcastLobbyState();
                 return;
             }
@@ -198,10 +208,27 @@ namespace Assets.Scripts.Network
                 MinPlayers = _minPlayers,
                 MaxPlayers = _maxPlayers,
                 PlayerNames = _players.Select(p => p.Name).ToArray(),
+                CanStart = CanStart,
             });
         }
 
         // ---- Composition root for this room's game ----
+
+        /// <summary>
+        /// Entry point for the owner's StartGameIntent. The check is against
+        /// the owner's *seat*, so a stray intent from another player in the
+        /// room — or from a connection that has since been reseated — is
+        /// refused rather than trusted.
+        /// </summary>
+        public void HandleStartGame(NetworkConnectionToClient conn)
+        {
+            if (!Channel.IsSeatedAt(OwnerSeatId, conn))
+            {
+                Debug.LogWarning($"[Room {Code}] StartGameIntent from a non-owner; ignored.");
+                return;
+            }
+            StartGame();
+        }
 
         public void StartGame()
         {
@@ -434,13 +461,12 @@ namespace Assets.Scripts.Network
         /// Note what it does not do: unregister Mirror handlers. Those are
         /// process-wide and shared by every room, so a finished room pulling
         /// them down would silence all the others. Retiring a room is purely
-        /// an index operation on ServerIntentDispatcher, which the owner does
-        /// in response to <see cref="Finished"/>.
+        /// an index operation on the RoomRegistry, which the owner does when
+        /// the last connection actually leaves.
         /// </summary>
         private void Teardown()
         {
             _router?.Dispose();
-            Finished?.Invoke(this);
         }
 
         // ---- Intent handlers ----
