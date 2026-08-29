@@ -1,7 +1,6 @@
 ﻿using Assets.Libreries.ScaryTales;
 using Assets.Libreries.ScaryTales.Abstractions;
-using Assets.Libreries.ScaryTales.Rules.Templates.A;
-using Assets.Libreries.ScaryTales.Rules.Templates.B;
+using Assets.Libreries.ScaryTales.Rules;
 using Assets.Scripts;
 using Assets.Scripts.Menus;
 using Assets.Scripts.Network;
@@ -45,9 +44,10 @@ public class UnGameManager : MonoBehaviour
     public Transform GameBoardPanel;
     public Transform Deck;
 
-    // Hardcoded rules — every machine builds the same defaults so the
-    // active client knows their rule options without polling the server.
-    // Phase 4 lobby will let the host pick.
+    // Rules are chosen by the server and arrive as ids in GameStartedEvent;
+    // we rebuild them from RuleCatalog. Null until the game starts — every
+    // reader must cope with that, because the rules panel is reachable from
+    // a button that exists before the first game.
     private Rule _currentRuleInGame;
     private Rule _currentFinalRule;
     public Rule CurrentRuleInGame => _currentRuleInGame;
@@ -82,9 +82,6 @@ public class UnGameManager : MonoBehaviour
         }
         _cardViewService = CardViewService.Instance;
 
-        _currentRuleInGame = new A1();
-        _currentFinalRule = new B2();
-
         // Construct the client mirror early so its NetworkClient handlers
         // are registered before GameStartedEvent arrives.
         ClientView = new ClientGameView();
@@ -107,6 +104,16 @@ public class UnGameManager : MonoBehaviour
 
     private void HandleGameStarted()
     {
+        // Rebuild the server's rule choice from its ids. A null here means
+        // this build doesn't know a rule the server used — a version
+        // mismatch, worth shouting about rather than silently substituting.
+        _currentRuleInGame = RuleCatalog.Create(ClientView.CurrentRuleId);
+        _currentFinalRule = RuleCatalog.Create(ClientView.CurrentFinalRuleId);
+        if (_currentRuleInGame == null)
+            Debug.LogError($"[UnGameManager] server sent unknown in-game rule id {ClientView.CurrentRuleId}; rule UI will be empty.");
+        if (_currentFinalRule == null)
+            Debug.LogError($"[UnGameManager] server sent unknown final rule id {ClientView.CurrentFinalRuleId}.");
+
         // Position seats around the table based on the actual roster size,
         // then hand each UI component a reference to the seat layout so it
         // can read seat slots instead of caring about coordinates.
@@ -275,8 +282,9 @@ public class UnGameManager : MonoBehaviour
 
     private IEnumerator PromptRuleEffectPick(int requestId, int[] candidateIds)
     {
+        var available = RuleEffects();
         var effects = candidateIds
-            .Select(id => _currentRuleInGame.Effects.FirstOrDefault(e => e.Id == id))
+            .Select(id => available.FirstOrDefault(e => e.Id == id))
             .Where(e => e != null)
             .ToList();
 
@@ -306,6 +314,15 @@ public class UnGameManager : MonoBehaviour
 
     // ---- Player-initiated rule UI ----
 
+    /// <summary>
+    /// Effects of the rule the server picked, or an empty list before the
+    /// game has started (the rules button exists on the menu screen too).
+    /// Note that Rule.Effects allocates a fresh list on every call, so read
+    /// it once per use rather than in a loop.
+    /// </summary>
+    private List<IRuleEffect> RuleEffects() =>
+        _currentRuleInGame?.Effects ?? new List<IRuleEffect>();
+
     public void ShowGameRules(bool openedByPlayer)
     {
         if (CurrentPlayer == LocalPlayer && _canChooseRule)
@@ -314,7 +331,7 @@ public class UnGameManager : MonoBehaviour
         }
         else
         {
-            RuleContainer.Instance.Show(_currentRuleInGame.Effects, openedByPlayer);
+            RuleContainer.Instance.Show(RuleEffects(), openedByPlayer);
         }
     }
 
@@ -327,7 +344,7 @@ public class UnGameManager : MonoBehaviour
             chosen = e;
             resolved = true;
         };
-        RuleContainer.Instance.Show(_currentRuleInGame.Effects, false);
+        RuleContainer.Instance.Show(RuleEffects(), false);
 
         while (!resolved) yield return null;
 

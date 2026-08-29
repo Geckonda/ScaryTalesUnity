@@ -44,6 +44,12 @@ namespace Assets.Scripts.Network
         public int TurnCount { get; private set; }
         public Player CurrentPlayer => FindPlayer(CurrentPlayerId);
 
+        // Which rules the server chose for this game. Ids only — the UI
+        // rebuilds the Rule objects from RuleCatalog, so no client hardcodes
+        // its own copy and hopes it matches the server's.
+        public int CurrentRuleId { get; private set; }
+        public int CurrentFinalRuleId { get; private set; }
+
         // Card catalog: every Card object shared by id, built once at game
         // start. Deck order arrives separately and only governs face-down
         // sequencing, not identity.
@@ -151,6 +157,8 @@ namespace Assets.Scripts.Network
             Opponents = Players.Where(p => p.Id != evt.LocalPlayerId).ToList();
             CurrentPlayerId = evt.StartPlayerId;
             DeckOrder = evt.DeckOrder?.ToList() ?? new List<int>();
+            CurrentRuleId = evt.CurrentRuleId;
+            CurrentFinalRuleId = evt.CurrentFinalRuleId;
             IsNight = false;
             TurnCount = 0;
 

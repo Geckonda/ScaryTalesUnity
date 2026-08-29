@@ -1,5 +1,4 @@
-﻿using Assets.Libreries.ScaryTales.Rules.Templates.A;
-using Assets.Libreries.ScaryTales.Rules.Templates.B;
+﻿using Assets.Libreries.ScaryTales.Rules;
 using Assets.Scripts;
 using Assets.Scripts.Network.Messages;
 using Mirror;
@@ -41,6 +40,13 @@ namespace Assets.Scripts.Network
 
         public GameSession ServerSession => _serverSession;
 
+        [Header("Rules in play")]
+        [Tooltip("Rule id from RuleCatalog used during the game. The server is the only place this is chosen; clients learn it from GameStartedEvent. A lobby picker would drive these two fields.")]
+        [SerializeField] private int _inGameRuleId = RuleCatalog.DefaultInGameRuleId;
+
+        [Tooltip("Rule id from RuleCatalog scored at the end of the game.")]
+        [SerializeField] private int _finalRuleId = RuleCatalog.DefaultFinalRuleId;
+
         private void Awake()
         {
             if (Instance == null)
@@ -62,9 +68,26 @@ namespace Assets.Scripts.Network
             var builder = new GameBuilder(notifier, board, players);
             var gameManager = builder.Build(_router);
 
-            // Hardcoded rules match the legacy UnGameManager defaults.
-            // Phase 4.2 lobby will let the host pick.
-            _serverSession = new GameSession(gameManager, new A1(), new B2());
+            // The server is the only authority on which rules are in play;
+            // the ids go out in GameStartedEvent so clients rebuild the same
+            // ones instead of hardcoding their own copy.
+            var inGameRule = RuleCatalog.Create(_inGameRuleId);
+            if (inGameRule == null)
+            {
+                Debug.LogError($"[InitializeGame] unknown in-game rule id {_inGameRuleId}; falling back to the default.");
+                _inGameRuleId = RuleCatalog.DefaultInGameRuleId;
+                inGameRule = RuleCatalog.Create(_inGameRuleId);
+            }
+
+            var finalRule = RuleCatalog.Create(_finalRuleId);
+            if (finalRule == null)
+            {
+                Debug.LogError($"[InitializeGame] unknown final rule id {_finalRuleId}; falling back to the default.");
+                _finalRuleId = RuleCatalog.DefaultFinalRuleId;
+                finalRule = RuleCatalog.Create(_finalRuleId);
+            }
+
+            _serverSession = new GameSession(gameManager, inGameRule, finalRule);
 
             _broadcaster = new ServerEventBroadcaster(_serverSession);
 
@@ -95,8 +118,8 @@ namespace Assets.Scripts.Network
                         DeckOrder = deckIds,
                         StartPlayerId = startPlayerId,
                         LocalPlayerId = p.Id,
-                        CurrentRuleId = 0,
-                        CurrentFinalRuleId = 0,
+                        CurrentRuleId = _inGameRuleId,
+                        CurrentFinalRuleId = _finalRuleId,
                     });
                 }
                 else
