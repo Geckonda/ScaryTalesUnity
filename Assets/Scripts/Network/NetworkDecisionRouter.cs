@@ -82,10 +82,9 @@ namespace Assets.Scripts.Network
         public NetworkDecisionRouter(RoomChannel channel)
         {
             _channel = channel;
-            NetworkServer.RegisterHandler<ResolveCardPickIntent>(OnResolveCardPick);
-            NetworkServer.RegisterHandler<ResolveItemPickIntent>(OnResolveItemPick);
-            NetworkServer.RegisterHandler<ResolveRuleEffectPickIntent>(OnResolveRuleEffectPick);
-            NetworkServer.RegisterHandler<ResolveConfirmIntent>(OnResolveConfirm);
+            // Phase 6.3: this router no longer claims Mirror's handlers.
+            // ServerIntentDispatcher owns them process-wide and calls the
+            // OnResolve* methods below on whichever room the sender is in.
         }
 
         public Task<CardPick> PickCard(int playerId, PickCardRequest request)
@@ -196,10 +195,13 @@ namespace Assets.Scripts.Network
         }
 
         /// <summary>
-        /// Releases every parked decision and takes this router's handlers
-        /// off NetworkServer. Mirror keeps one handler per message type
-        /// process-wide, so a dead router left registered would swallow the
-        /// next game's resolutions.
+        /// Releases every parked decision.
+        ///
+        /// It deliberately does *not* unregister anything from NetworkServer
+        /// any more. Under 6.3 the handlers are process-wide and shared by
+        /// every room; a finished room that unregistered them would cut off
+        /// all the others. Leaving the index is what retires a room now —
+        /// see <see cref="ServerIntentDispatcher.UnbindRoom"/>.
         /// </summary>
         public void Dispose()
         {
@@ -207,19 +209,13 @@ namespace Assets.Scripts.Network
             _disposed = true;
 
             CancelAll("router disposed");
-
-            if (NetworkServer.active)
-            {
-                NetworkServer.UnregisterHandler<ResolveCardPickIntent>();
-                NetworkServer.UnregisterHandler<ResolveItemPickIntent>();
-                NetworkServer.UnregisterHandler<ResolveRuleEffectPickIntent>();
-                NetworkServer.UnregisterHandler<ResolveConfirmIntent>();
-            }
         }
 
         // ---- Resolution handlers ----
+        // Public because ServerIntentDispatcher calls them after resolving
+        // which room the sender belongs to. Not registered with Mirror here.
 
-        private void OnResolveCardPick(NetworkConnectionToClient conn, ResolveCardPickIntent msg)
+        public void OnResolveCardPick(NetworkConnectionToClient conn, ResolveCardPickIntent msg)
         {
             if (TryClaim<CardPick>(conn, msg.RequestId, out var tcs))
             {
@@ -228,7 +224,7 @@ namespace Assets.Scripts.Network
             }
         }
 
-        private void OnResolveItemPick(NetworkConnectionToClient conn, ResolveItemPickIntent msg)
+        public void OnResolveItemPick(NetworkConnectionToClient conn, ResolveItemPickIntent msg)
         {
             if (TryClaim<ItemPick>(conn, msg.RequestId, out var tcs))
             {
@@ -237,7 +233,7 @@ namespace Assets.Scripts.Network
             }
         }
 
-        private void OnResolveRuleEffectPick(NetworkConnectionToClient conn, ResolveRuleEffectPickIntent msg)
+        public void OnResolveRuleEffectPick(NetworkConnectionToClient conn, ResolveRuleEffectPickIntent msg)
         {
             if (TryClaim<RuleEffectPick>(conn, msg.RequestId, out var tcs))
             {
@@ -247,7 +243,7 @@ namespace Assets.Scripts.Network
             }
         }
 
-        private void OnResolveConfirm(NetworkConnectionToClient conn, ResolveConfirmIntent msg)
+        public void OnResolveConfirm(NetworkConnectionToClient conn, ResolveConfirmIntent msg)
         {
             if (TryClaim<ConfirmPick>(conn, msg.RequestId, out var tcs))
             {

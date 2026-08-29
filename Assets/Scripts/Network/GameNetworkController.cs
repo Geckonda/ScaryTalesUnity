@@ -46,6 +46,9 @@ namespace Assets.Scripts.Network
 
         public GameSession ServerSession => _serverSession;
         public bool IsAborted => _aborted;
+        // Phase 6.3: ServerIntentDispatcher reaches the router through here
+        // to deliver Resolve*Intents addressed to this room.
+        public NetworkDecisionRouter Router => _router;
         // Non-zero means the room is wedged waiting on somebody. Read by
         // the abort path's log line so a stuck room is visible.
         public int PendingDecisionCount => _router?.PendingDecisionCount ?? 0;
@@ -93,8 +96,11 @@ namespace Assets.Scripts.Network
 
             _broadcaster = new ServerEventBroadcaster(_serverSession, _channel);
 
-            NetworkServer.RegisterHandler<PlayCardIntent>(OnPlayCardIntent);
-            NetworkServer.RegisterHandler<UseRuleEffectIntent>(OnUseRuleEffectIntent);
+            // Intent handlers are NOT registered here. Mirror keeps one per
+            // message type process-wide, so claiming them per game is what
+            // would silently break the moment a second room existed.
+            // ServerIntentDispatcher owns them; GameConnectionManager binds
+            // this room's connections into its index.
 
             // The host machine also runs the host's UnGameManager — give it
             // a reference to the canonical session so any host-only debug
@@ -282,21 +288,26 @@ namespace Assets.Scripts.Network
         }
 
         /// <summary>
-        /// Drops this game's server-side handlers and releases the session.
-        /// Mirror keeps one handler per message type process-wide, so a
-        /// finished game left registered would intercept the next one's
-        /// intents.
+        /// Releases this game's session and its parked decisions.
+        ///
+        /// Note what it no longer does: unregister Mirror handlers. Under
+        /// 6.3 those are process-wide and shared, so a finished room pulling
+        /// them down would silence every other room. Retiring a room is now
+        /// purely an index operation — see <c>OnRoomFinished</c> in
+        /// GameConnectionManager.
         /// </summary>
         [Server]
         private void Teardown()
         {
-            if (NetworkServer.active)
-            {
-                NetworkServer.UnregisterHandler<PlayCardIntent>();
-                NetworkServer.UnregisterHandler<UseRuleEffectIntent>();
-            }
             _router?.Dispose();
+            RoomFinished?.Invoke(this);
         }
+
+        /// <summary>
+        /// Raised once when this room's game is over, however it ended. The
+        /// owner listens to drop the room out of the dispatcher's index.
+        /// </summary>
+        public event Action<GameNetworkController> RoomFinished;
 
         public override void OnStopServer()
         {
@@ -307,9 +318,12 @@ namespace Assets.Scripts.Network
         }
 
         // ---- Server-side intent handlers ----
+        // Called by ServerIntentDispatcher once it has resolved that the
+        // sender belongs to this room. Authorization (is it really this
+        // player's turn) stays here, where the session is.
 
         [Server]
-        private void OnPlayCardIntent(NetworkConnectionToClient conn, PlayCardIntent msg)
+        public void HandlePlayCard(NetworkConnectionToClient conn, PlayCardIntent msg)
         {
             if (_gameOver) return;
             var current = _serverSession?.CurrentPlayer;
@@ -325,7 +339,7 @@ namespace Assets.Scripts.Network
         }
 
         [Server]
-        private async void OnUseRuleEffectIntent(NetworkConnectionToClient conn, UseRuleEffectIntent msg)
+        public async void HandleUseRuleEffect(NetworkConnectionToClient conn, UseRuleEffectIntent msg)
         {
             if (_gameOver) return;
             var current = _serverSession?.CurrentPlayer;

@@ -51,6 +51,11 @@ namespace Assets.Scripts.Network
         private bool _gameStarted = false;
         private GameNetworkController _controller;
 
+        // Phase 6.3: the server's single set of intent handlers. Lives for
+        // the life of the server, not the life of a game, because Mirror
+        // keeps one handler per message type process-wide.
+        private ServerIntentDispatcher _dispatcher;
+
         // Fires on the server when a player joins or leaves the lobby.
         // LobbyManager listens for this to refresh its UI. Non-host clients
         // don't see this event because the roster is server-side state —
@@ -118,6 +123,9 @@ namespace Assets.Scripts.Network
 
             _seatByConnection.Remove(conn.connectionId);
             _channel.Unbind(seatId);
+            // Anything this connection sends from now on resolves to no
+            // room rather than into the game it just left.
+            _dispatcher?.Unbind(conn.connectionId);
 
             OnSeatVacated(seatId);
 
@@ -242,6 +250,33 @@ namespace Assets.Scripts.Network
             ReturnToMenu();
         }
 
+        public override void OnStartServer()
+        {
+            base.OnStartServer();
+            EnsureDispatcher();
+        }
+
+        /// <summary>
+        /// Creates this server's one intent dispatcher and claims every
+        /// intent message type, once.
+        ///
+        /// Idempotent, and called from <see cref="StartGameNow"/> as well as
+        /// from OnStartServer, because Mirror does not guarantee the order we
+        /// would like: <c>SetupServer()</c> calls <c>NetworkServer.Listen()</c>
+        /// and only later does <c>FinishStartHost()</c> call
+        /// <c>OnStartServer()</c> — with an async scene load in between when
+        /// <c>onlineScene</c> is set. Clients can therefore be accepted before
+        /// this ever ran. Binding a room against a null dispatcher would
+        /// silently deliver no intents at all, with nothing in the log, so it
+        /// is worth the guard rather than the assumption.
+        /// </summary>
+        private void EnsureDispatcher()
+        {
+            if (_dispatcher != null) return;
+            _dispatcher = new ServerIntentDispatcher();
+            _dispatcher.RegisterHandlers();
+        }
+
         public override void OnStopServer()
         {
             // NetworkManager is DontDestroyOnLoad, so it survives the scene
@@ -269,7 +304,14 @@ namespace Assets.Scripts.Network
             _seatByConnection = new Dictionary<int, int>();
             _nextSeatId = 1;
             _gameStarted = false;
+            if (_controller != null)
+                _controller.RoomFinished -= OnRoomFinished;
             _controller = null;
+            // Dropped, not cleared: NetworkServer.Shutdown() clears the
+            // handler table immediately after OnStopServer, so these
+            // delegates go with it and the next server start builds a fresh
+            // dispatcher with an empty index.
+            _dispatcher = null;
             OnRosterChanged?.Invoke();
         }
 
@@ -294,7 +336,27 @@ namespace Assets.Scripts.Network
             NetworkServer.Spawn(controllerObj);
 
             _controller = controllerObj.GetComponent<GameNetworkController>();
+
+            // Point this room's connections at it *before* the game starts
+            // producing decisions to answer. Nothing could have arrived
+            // earlier: the lobby's only action is the host's Start button,
+            // which is a direct call rather than a message.
+            EnsureDispatcher();
+            _dispatcher.BindRoom(_channel, _controller);
+            _controller.RoomFinished += OnRoomFinished;
+
             _controller.InitializeGame(_players, _channel);
+        }
+
+        /// <summary>
+        /// A room's game is over, however it ended. Drop it from the
+        /// dispatcher's index so late intents from its former players
+        /// resolve to nothing instead of poking a dead session.
+        /// </summary>
+        private void OnRoomFinished(GameNetworkController room)
+        {
+            room.RoomFinished -= OnRoomFinished;
+            _dispatcher?.UnbindRoom(room);
         }
     }
 }
