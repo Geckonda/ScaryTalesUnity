@@ -17,7 +17,28 @@ public class MenuManager : MonoBehaviour
     [Tooltip("Room name when creating, room code when joining.")]
     [SerializeField] private TMP_InputField roomNameInput;
 
+    [Tooltip("Fallback only — the live NetworkManager is found via NetworkManager.singleton. See the Net property.")]
     [SerializeField] private NetworkManager networkManager;
+
+    /// <summary>
+    /// The NetworkManager that is actually alive.
+    ///
+    /// <para><b>Not the serialized reference.</b> Mirror's NetworkManager is
+    /// DontDestroyOnLoad (it even reparents itself to the scene root to make
+    /// that work), so it survives the scene reload that
+    /// <c>GameConnectionManager.ReturnToMenu</c> does at the end of a game.
+    /// The reloaded scene then brings its own NetworkManager, which Mirror
+    /// destroys as a duplicate — and <c>networkManager</c> above points at
+    /// exactly that dead duplicate. Calling StartClient on it threw
+    /// NullReferenceException from inside InitializeSingleton, which is why a
+    /// second game could not be started without restarting the whole
+    /// process.</para>
+    ///
+    /// <para>The serialized field is kept only as a fallback for the very
+    /// first frames, before any singleton exists.</para>
+    /// </summary>
+    private NetworkManager Net =>
+        NetworkManager.singleton != null ? NetworkManager.singleton : networkManager;
 
     [Tooltip("Address of the game server. 'localhost' for testing against your own machine; the VM's address once it is up.")]
     [SerializeField] private string serverAddress = "localhost";
@@ -108,7 +129,12 @@ public class MenuManager : MonoBehaviour
 
         if (!NetworkClient.active && !NetworkServer.active)
         {
-            networkManager.networkAddress = ResolveAddress();
+            if (Net == null)
+            {
+                Report("Сеть недоступна: NetworkManager не найден.");
+                return;
+            }
+            Net.networkAddress = ResolveAddress();
             if (!TryStartNetwork(asHost)) return;
         }
 
@@ -140,8 +166,8 @@ public class MenuManager : MonoBehaviour
 
         try
         {
-            if (asHost) networkManager.StartHost();
-            else networkManager.StartClient();
+            if (asHost) Net.StartHost();
+            else Net.StartClient();
             return true;
         }
         catch (System.Exception e)
