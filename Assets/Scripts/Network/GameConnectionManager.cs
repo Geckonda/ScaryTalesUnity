@@ -1,103 +1,128 @@
-using Assets.Scripts.Network.Messages;
 using Mirror;
 using ScaryTales;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace Assets.Scripts.Network
 {
     /// <summary>
-    /// Owns the lobby roster and the seat↔connection binding for one room.
+    /// Translates Mirror's server callbacks into operations on rooms, and
+    /// owns the pieces that are genuinely per-server rather than per-game:
+    /// the room registry and the intent dispatcher.
     ///
-    /// Phase 6.1 separated two things that used to be the same number:
-    /// a <b>seat id</b> (what <see cref="Player.Id"/> is, stable for the
-    /// life of the room, what goes out on the wire) and a
-    /// <b>connection id</b> (Mirror's, which a player loses the moment
-    /// they drop and never gets back). <see cref="RoomChannel"/> is the
-    /// single mutable binding between them, and it is the hook a reconnect
-    /// flow would rebind — see <see cref="OnSeatVacated"/>.
+    /// <para>Phase 6.4a moved everything else into <see cref="Room"/> — the
+    /// roster, the seats, the session, the turn loop, the departure policy.
+    /// What is left here is address translation and lifecycle.</para>
+    ///
+    /// <para><b>Still exactly one room.</b> The registry is a single field, not
+    /// a dictionary, because nothing can yet ask for a second one: creating
+    /// and joining by code is 6.4b, and it needs the client work in 6.6 to be
+    /// usable at all. The seam is <see cref="EnsureRoom"/> and
+    /// <see cref="RoomFor"/> — everything downstream of them is already
+    /// per-room.</para>
     /// </summary>
     public class GameConnectionManager : NetworkManager
     {
-        [Tooltip("Minimum players the host can start a game with.")]
+        [Tooltip("Minimum players a room can start a game with.")]
         [SerializeField] private int _minPlayers = 2;
 
-        [Tooltip("Maximum players accepted into the lobby. Connections beyond this are rejected.")]
+        [Tooltip("Maximum players accepted into a room. Connections beyond this are rejected.")]
         [SerializeField] private int _maxPlayers = 4;
 
-        [Tooltip("If true, the game starts automatically when the roster reaches MaxPlayers — the legacy behavior. Toggle off when you have a LobbyManager with a Start button so the host controls the moment of game start.")]
+        [Tooltip("If true, a room starts its game automatically when it reaches MaxPlayers — the legacy behavior. Toggle off when you have a LobbyManager with a Start button so the host controls the moment of game start.")]
         [SerializeField] private bool _autoStartWhenFull = true;
 
-        [SerializeField] private GameObject gameNetworkControllerPrefab;
+        [Header("Rules in play")]
+        [Tooltip("Rule id from RuleCatalog used during the game. The server is the only place this is chosen; clients learn it from GameStartedEvent. A lobby picker would drive these two fields.")]
+        [SerializeField] private int _inGameRuleId = Assets.Libreries.ScaryTales.Rules.RuleCatalog.DefaultInGameRuleId;
 
-        private List<Player> _players = new();
+        [Tooltip("Rule id from RuleCatalog scored at the end of the game.")]
+        [SerializeField] private int _finalRuleId = Assets.Libreries.ScaryTales.Rules.RuleCatalog.DefaultFinalRuleId;
 
-        // This room's seats and the only way to reach them. Owns the
-        // seat → connection binding; see RoomChannel.
-        private RoomChannel _channel = new();
+        // The single room. Becomes Dictionary<string /*code*/, Room> in 6.4b.
+        private Room _room;
 
-        // Reverse index: Mirror's connection id → seat id. Needed because
-        // OnServerDisconnect only hands us a connection.
-        private Dictionary<int, int> _seatByConnection = new();
-
-        // Monotonic, never reused within a room, and never 0 — 0 is the
-        // "no player" sentinel on the wire (GameAbortedEvent.LeftPlayerId,
-        // ServerEventBroadcaster's owner fallbacks).
-        private int _nextSeatId = 1;
-
-        private bool _gameStarted = false;
-        private GameNetworkController _controller;
-
-        // Phase 6.3: the server's single set of intent handlers. Lives for
-        // the life of the server, not the life of a game, because Mirror
-        // keeps one handler per message type process-wide.
+        // The server's one set of intent handlers. Lives for the life of the
+        // server, not of a game, because Mirror keeps one handler per message
+        // type process-wide.
         private ServerIntentDispatcher _dispatcher;
 
-        // Fires on the server when a player joins or leaves the lobby.
-        // LobbyManager listens for this to refresh its UI. Non-host clients
-        // don't see this event because the roster is server-side state —
-        // they just show a generic "waiting for host" status.
+        // Fires on the server when a player joins or leaves. LobbyManager
+        // listens for this to refresh its UI. Non-host clients don't see it —
+        // the roster is server-side state, and they get LobbyStateUpdate.
         public event Action OnRosterChanged;
 
-        public IReadOnlyList<Player> Players => _players;
-        public int PlayerCount => _players.Count;
+        // Lobby-facing forwarders. LobbyManager reads these and does not know
+        // rooms exist; when 6.4b lands they will resolve against the local
+        // player's room rather than the only one.
+        private static readonly IReadOnlyList<Player> NoPlayers = new List<Player>();
+        public IReadOnlyList<Player> Players => _room?.Players ?? NoPlayers;
+        public int PlayerCount => _room?.PlayerCount ?? 0;
         public int MinPlayers => _minPlayers;
         public int MaxPlayers => _maxPlayers;
-        public bool CanStart => !_gameStarted && _players.Count >= _minPlayers;
+        public bool CanStart => _room != null && _room.CanStart;
+
+        // ---- Room registry ----
+
+        /// <summary>
+        /// The room a connection belongs to. One room today, so membership is
+        /// the only question; 6.4b makes this a dictionary lookup.
+        /// </summary>
+        private Room RoomFor(NetworkConnectionToClient conn) =>
+            _room != null && conn != null && _room.HasConnection(conn.connectionId) ? _room : null;
+
+        private Room EnsureRoom()
+        {
+            if (_room != null) return _room;
+            _room = new Room(_minPlayers, _maxPlayers, _inGameRuleId, _finalRuleId);
+            _room.RosterChanged += HandleRosterChanged;
+            _room.Finished += HandleRoomFinished;
+            return _room;
+        }
+
+        private void HandleRosterChanged(Room room) => OnRosterChanged?.Invoke();
+
+        /// <summary>
+        /// A room's game is over, however it ended. Drop its connections from
+        /// the dispatcher index so late intents resolve to nothing instead of
+        /// poking a dead session.
+        /// </summary>
+        private void HandleRoomFinished(Room room)
+        {
+            _dispatcher?.UnbindRoom(room);
+        }
+
+        // ---- Mirror server callbacks ----
 
         public override void OnServerAddPlayer(NetworkConnectionToClient conn)
         {
-            if (_players.Count >= _maxPlayers)
+            EnsureDispatcher();
+            var room = EnsureRoom();
+
+            var result = room.CanAccept();
+            if (result != Room.JoinResult.Ok)
             {
-                Debug.LogWarning($"[Server] Connection {conn.connectionId} rejected: lobby full ({_maxPlayers}).");
-                conn.Disconnect();
-                return;
-            }
-            if (_gameStarted)
-            {
-                Debug.LogWarning($"[Server] Connection {conn.connectionId} rejected: game already in progress.");
+                Debug.LogWarning($"[Server] Connection {conn.connectionId} rejected: {result}.");
                 conn.Disconnect();
                 return;
             }
 
             base.OnServerAddPlayer(conn);
 
-            int seatId = _nextSeatId++;
-            var player = new Player(seatId, $"Player{_players.Count + 1}");
-            _players.Add(player);
-            _channel.Bind(seatId, conn);
-            _seatByConnection[conn.connectionId] = seatId;
-
-            Debug.Log($"[Server] {player.Name} took seat {seatId}: {_players.Count}/{_maxPlayers}");
-            OnRosterChanged?.Invoke();
-            BroadcastLobbyState();
-
-            if (_autoStartWhenFull && _players.Count >= _maxPlayers)
+            if (room.TryAddPlayer(conn, out var player) != Room.JoinResult.Ok)
             {
-                Debug.Log("[Server] Auto-starting game (lobby full).");
+                conn.Disconnect();
+                return;
+            }
+            _dispatcher.Bind(conn.connectionId, room);
+
+            Debug.Log($"[Server] {player.Name} took seat {player.Id}: {room.PlayerCount}/{_maxPlayers}");
+
+            if (_autoStartWhenFull && room.PlayerCount >= _maxPlayers)
+            {
+                Debug.Log("[Server] Auto-starting game (room full).");
                 StartGameNow();
             }
         }
@@ -113,85 +138,103 @@ namespace Assets.Scripts.Network
                 return;
             }
 
-            if (!_seatByConnection.TryGetValue(conn.connectionId, out int seatId))
+            var room = RoomFor(conn);
+            if (room == null)
             {
-                // Never got a seat — rejected at the door, or already
-                // released by an earlier call.
+                // Never seated — rejected at the door, or already released.
                 base.OnServerDisconnect(conn);
                 return;
             }
 
-            _seatByConnection.Remove(conn.connectionId);
-            _channel.Unbind(seatId);
-            // Anything this connection sends from now on resolves to no
-            // room rather than into the game it just left.
+            // Anything this connection sends from now on resolves to no room
+            // rather than into the game it just left.
             _dispatcher?.Unbind(conn.connectionId);
-
-            OnSeatVacated(seatId);
+            // The room applies its own departure policy (end the game if one
+            // was running); it may raise Finished from inside this call.
+            room.RemoveConnection(conn.connectionId);
 
             base.OnServerDisconnect(conn);
         }
 
+        public override void OnStartServer()
+        {
+            base.OnStartServer();
+            EnsureDispatcher();
+        }
+
         /// <summary>
-        /// The one place that decides what a player leaving means. Called
-        /// after the seat has been unbound from its connection but while the
-        /// seat itself still exists.
+        /// Creates this server's one intent dispatcher and claims every
+        /// intent message type, once.
         ///
-        /// <para><b>Current policy (Phase 6.1): a mid-game departure ends the
-        /// room.</b> The alternative — carrying on a player short — needs the
-        /// engine to drop somebody from the turn order mid-game, which is a
-        /// change to Assets/Libreries and a re-audit of all 18 effects.</para>
-        ///
-        /// <para>This is also the seam for reconnect. The seat is deliberately
-        /// left in <c>_players</c> rather than trimmed, so the id in
-        /// GameAbortedEvent still resolves to a name on the clients — and so a
-        /// future reconnect flow has a seat to hand back. Adding it means
-        /// replacing the immediate AbortGame with a grace window, and rebinding
-        /// the channel's binding for that seat when the player returns. Note that a
-        /// grace window is not enough on its own: the room would also have to
-        /// stop asking the missing seat for decisions while it waits, which is
-        /// why this ends the room today instead of half-waiting.</para>
+        /// Idempotent, and called from OnServerAddPlayer as well as from
+        /// OnStartServer, because Mirror does not guarantee the order we would
+        /// like: <c>SetupServer()</c> calls <c>NetworkServer.Listen()</c> and
+        /// only later does <c>FinishStartHost()</c> call <c>OnStartServer()</c>
+        /// — with an async scene load in between when <c>onlineScene</c> is
+        /// set. Clients can therefore be accepted before this ever ran, and
+        /// binding against a null dispatcher would silently deliver no intents
+        /// at all, with nothing in the log.
+        /// </summary>
+        private void EnsureDispatcher()
+        {
+            if (_dispatcher != null) return;
+            _dispatcher = new ServerIntentDispatcher();
+            _dispatcher.RegisterHandlers();
+        }
+
+        public override void OnStopServer()
+        {
+            // NetworkManager is DontDestroyOnLoad, so it survives the scene
+            // reload that ReturnToMenu triggers. Without this the next
+            // StartHost would come up with the finished room still in place
+            // and reject every join.
+            ResetServer();
+            base.OnStopServer();
+        }
+
+        /// <summary>
+        /// Drops all rooms and the dispatcher. Split from ReturnToMenu because
+        /// a headless server (Phase 6.5) recycles rooms with no notion of
+        /// "show the menu".
+        /// </summary>
+        private void ResetServer()
+        {
+            if (_room != null)
+            {
+                // Room is no longer a NetworkBehaviour, so it gets no
+                // OnStopServer of its own — the owner has to end it. Without
+                // this, stopping the server mid-game would leave parked
+                // decisions uncancelled and skip the notice to the clients.
+                // A no-op if the game already ended.
+                _room.AbortGame(0, "Сервер остановлен.");
+                _room.RosterChanged -= HandleRosterChanged;
+                _room.Finished -= HandleRoomFinished;
+                _room = null;
+            }
+            // Dropped, not cleared: NetworkServer.Shutdown() clears the
+            // handler table immediately after OnStopServer, so these delegates
+            // go with it and the next server start builds a fresh dispatcher
+            // with an empty index.
+            _dispatcher = null;
+            OnRosterChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Server-only. Called by the host's LobbyManager when they click
+        /// Start.
         /// </summary>
         [Server]
-        private void OnSeatVacated(int seatId)
+        public void StartGameNow()
         {
-            var player = _players.FirstOrDefault(p => p.Id == seatId);
-            string name = player?.Name ?? $"Player {seatId}";
-
-            if (!_gameStarted)
+            if (_room == null)
             {
-                _players.RemoveAll(p => p.Id == seatId);
-                Debug.Log($"[Server] {name} left the lobby: {_players.Count}/{_maxPlayers}");
-                OnRosterChanged?.Invoke();
-                BroadcastLobbyState();
+                Debug.LogWarning("[Server] StartGameNow ignored: no room.");
                 return;
             }
-
-            Debug.LogWarning($"[Server] {name} (seat {seatId}) left mid-game — ending the room.");
-            if (_controller != null)
-            {
-                _controller.AbortGame(seatId, $"{name} покинул игру. Партия завершена.");
-            }
-            else
-            {
-                // Nothing left to cancel the parked decisions, which is
-                // exactly the wedge Phase 6.1 exists to prevent.
-                Debug.LogError("[Server] No GameNetworkController to abort the room — pending decisions may be stranded.");
-            }
+            _room.StartGame();
         }
 
-        [Server]
-        private void BroadcastLobbyState()
-        {
-            if (!NetworkServer.active) return;
-            _channel.SendToRoom(new LobbyStateUpdate
-            {
-                PlayerCount = _players.Count,
-                MinPlayers = _minPlayers,
-                MaxPlayers = _maxPlayers,
-                PlayerNames = _players.Select(p => p.Name).ToArray(),
-            });
-        }
+        // ---- Client-side / shared ----
 
         // Re-entrancy guard. ReturnToMenu → StopHost → StopClient →
         // OnClientDisconnect → ReturnToMenu is a genuine cycle in Mirror's
@@ -248,115 +291,6 @@ namespace Assets.Scripts.Network
             // reconnect flow — players just bounce back to the lobby
             // entry and start over.
             ReturnToMenu();
-        }
-
-        public override void OnStartServer()
-        {
-            base.OnStartServer();
-            EnsureDispatcher();
-        }
-
-        /// <summary>
-        /// Creates this server's one intent dispatcher and claims every
-        /// intent message type, once.
-        ///
-        /// Idempotent, and called from <see cref="StartGameNow"/> as well as
-        /// from OnStartServer, because Mirror does not guarantee the order we
-        /// would like: <c>SetupServer()</c> calls <c>NetworkServer.Listen()</c>
-        /// and only later does <c>FinishStartHost()</c> call
-        /// <c>OnStartServer()</c> — with an async scene load in between when
-        /// <c>onlineScene</c> is set. Clients can therefore be accepted before
-        /// this ever ran. Binding a room against a null dispatcher would
-        /// silently deliver no intents at all, with nothing in the log, so it
-        /// is worth the guard rather than the assumption.
-        /// </summary>
-        private void EnsureDispatcher()
-        {
-            if (_dispatcher != null) return;
-            _dispatcher = new ServerIntentDispatcher();
-            _dispatcher.RegisterHandlers();
-        }
-
-        public override void OnStopServer()
-        {
-            // NetworkManager is DontDestroyOnLoad, so it survives the scene
-            // reload that ReturnToMenu triggers. Without this the next
-            // StartHost would come up with _gameStarted still true and
-            // reject every join.
-            ResetRoom();
-            base.OnStopServer();
-        }
-
-        /// <summary>
-        /// Returns the room to its pre-lobby state. Split out from
-        /// ReturnToMenu because a headless server (Phase 6.5) needs to
-        /// recycle a room without any notion of "show the menu".
-        /// </summary>
-        [Server]
-        private void ResetRoom()
-        {
-            // Fresh instances rather than Clear(): the finished game's
-            // controller, router and GameBuilder all hold references to
-            // these same objects, and emptying them out from under a
-            // still-unwinding turn loop would be a needless hazard.
-            _players = new List<Player>();
-            _channel = new RoomChannel();
-            _seatByConnection = new Dictionary<int, int>();
-            _nextSeatId = 1;
-            _gameStarted = false;
-            if (_controller != null)
-                _controller.RoomFinished -= OnRoomFinished;
-            _controller = null;
-            // Dropped, not cleared: NetworkServer.Shutdown() clears the
-            // handler table immediately after OnStopServer, so these
-            // delegates go with it and the next server start builds a fresh
-            // dispatcher with an empty index.
-            _dispatcher = null;
-            OnRosterChanged?.Invoke();
-        }
-
-        /// <summary>
-        /// Server-only. Called by the host's LobbyManager when they click
-        /// Start. Spawns the GameNetworkController and kicks off
-        /// InitializeGame.
-        /// </summary>
-        [Server]
-        public void StartGameNow()
-        {
-            if (!CanStart)
-            {
-                Debug.LogWarning($"[Server] StartGameNow ignored: gameStarted={_gameStarted}, players={_players.Count}/min={_minPlayers}.");
-                return;
-            }
-            _gameStarted = true;
-
-            Debug.Log($"[Server] Starting game with {_players.Count} players.");
-
-            var controllerObj = Instantiate(gameNetworkControllerPrefab);
-            NetworkServer.Spawn(controllerObj);
-
-            _controller = controllerObj.GetComponent<GameNetworkController>();
-
-            // Point this room's connections at it *before* the game starts
-            // producing decisions to answer. Nothing could have arrived
-            // earlier: the lobby's only action is the host's Start button,
-            // which is a direct call rather than a message.
-            EnsureDispatcher();
-            _dispatcher.BindRoom(_channel, _controller);
-            _controller.RoomFinished += OnRoomFinished;
-
-            _controller.InitializeGame(_players, _channel);
-        }
-
-        /// <summary>
-        /// A room's game is over, however it ended. Drop it from the
-        /// dispatcher's index so late intents from its former players
-        /// resolve to nothing instead of poking a dead session.
-        /// </summary>
-        private void OnRoomFinished(GameNetworkController room)
-        {
-            room.RoomFinished -= OnRoomFinished;
-            _dispatcher?.UnbindRoom(room);
         }
     }
 }

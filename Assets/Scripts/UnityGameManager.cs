@@ -93,7 +93,7 @@ public class UnGameManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Called by GameNetworkController on the host machine after the
+    /// Called by the Room on the host machine after the
     /// canonical session is built. Non-host clients leave HostSession null.
     /// </summary>
     public void SetHostSession(GameSession session)

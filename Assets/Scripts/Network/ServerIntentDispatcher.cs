@@ -11,9 +11,10 @@ namespace Assets.Scripts.Network
     ///
     /// <para><b>The problem this solves:</b> Mirror keeps exactly one handler
     /// per message type, process-wide. Registration used to happen per game —
-    /// <c>GameNetworkController.InitializeGame</c> claimed `PlayCardIntent`
-    /// and `UseRuleEffectIntent`, and the <c>NetworkDecisionRouter</c>
-    /// constructor claimed the four `Resolve*Intent`s. With one room that is
+    /// the old <c>GameNetworkController.InitializeGame</c> claimed
+    /// `PlayCardIntent` and `UseRuleEffectIntent`, and the
+    /// <c>NetworkDecisionRouter</c> constructor claimed the four
+    /// `Resolve*Intent`s. With one room that is
     /// invisible. With two, the second room's registration silently replaces
     /// the first, and the first room stops receiving anything its players
     /// send — no error, no warning, just a dead room.</para>
@@ -34,7 +35,7 @@ namespace Assets.Scripts.Network
     {
         // Mirror's connection id → the room that connection is playing in.
         // Not seat id: an arriving message only carries its connection.
-        private readonly Dictionary<int, GameNetworkController> _roomByConnection = new();
+        private readonly Dictionary<int, Room> _roomByConnection = new();
 
         public int BoundConnectionCount => _roomByConnection.Count;
 
@@ -57,19 +58,12 @@ namespace Assets.Scripts.Network
         // ---- Index maintenance ----
 
         /// <summary>
-        /// Points every connection currently seated in <paramref name="channel"/>
-        /// at <paramref name="room"/>. Called when a room starts its game;
-        /// before that no intents can arrive, because the lobby's only action
-        /// (the host's Start button) is a direct call, not a message.
+        /// Points a connection at the room it just joined. Bound at join
+        /// rather than at game start: the room exists from lobby time now, so
+        /// there is no window where a connection has a room but the index
+        /// does not know it.
         /// </summary>
-        public void BindRoom(RoomChannel channel, GameNetworkController room)
-        {
-            foreach (var conn in channel.Seats.Values)
-            {
-                if (conn != null)
-                    _roomByConnection[conn.connectionId] = room;
-            }
-        }
+        public void Bind(int connectionId, Room room) => _roomByConnection[connectionId] = room;
 
         public void Unbind(int connectionId) => _roomByConnection.Remove(connectionId);
 
@@ -78,7 +72,7 @@ namespace Assets.Scripts.Network
         /// players' late intents resolve to nothing instead of poking a dead
         /// session.
         /// </summary>
-        public void UnbindRoom(GameNetworkController room)
+        public void UnbindRoom(Room room)
         {
             var doomed = new List<int>();
             foreach (var kv in _roomByConnection)
@@ -91,7 +85,7 @@ namespace Assets.Scripts.Network
 
         // ---- Dispatch ----
 
-        private bool TryResolveRoom(NetworkConnectionToClient conn, out GameNetworkController room)
+        private bool TryResolveRoom(NetworkConnectionToClient conn, out Room room)
         {
             room = null;
             if (conn == null) return false;
