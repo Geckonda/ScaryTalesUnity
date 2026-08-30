@@ -211,7 +211,7 @@ public class UnGameManager : MonoBehaviour
     {
         DragAndDrop.SelectCard = false;
         _canChooseRule = (CurrentPlayer == LocalPlayer);
-        _textUIManager.UpdateCurrentPlayerText();
+        _textUIManager.RefreshTurnHighlight();
 
         if (CurrentPlayer == LocalPlayer)
         {
@@ -273,16 +273,12 @@ public class UnGameManager : MonoBehaviour
     {
         bool isMine = LocalPlayer != null && evt.PlayerId == LocalPlayer.Id;
 
-        // Сказать всем, чего ждёт стол — включая того, кто ждёт сам себя.
-        // Раньше во время чужого выбора игра просто замирала молча, и пауза
-        // выглядела как зависание.
+        // Подсветить того, от кого стол ждёт решения. Раньше во время
+        // чужого выбора игра замирала молча, и пауза выглядела как зависание.
+        // Показываем это тем же жестом, что и «чей ход» — цветом ника на его
+        // месте, а не отдельной строкой.
         if (_textUIManager != null)
-        {
-            var decider = ClientView.FindPlayer(evt.PlayerId);
-            _textUIManager.ShowPrompt(isMine
-                ? "Ваш выбор"
-                : $"Ждём: {decider?.Name ?? "игрока"}...");
-        }
+            _textUIManager.SetDeciding(evt.PlayerId);
 
         if (!isMine) return;
 
@@ -312,7 +308,7 @@ public class UnGameManager : MonoBehaviour
 
     private void HandleDecisionResolved(int requestId)
     {
-        if (_textUIManager != null) _textUIManager.ClearPrompt();
+        if (_textUIManager != null) _textUIManager.ClearDeciding();
     }
 
     private IEnumerator PromptCardPick(int requestId, int[] candidateIds)
