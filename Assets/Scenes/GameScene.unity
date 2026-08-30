@@ -790,8 +790,8 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1735627901}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 500, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -2912,6 +2912,8 @@ MonoBehaviour:
   _slots2P: []
   _slots3P: []
   _slots4P: []
+  _cardScale: 1
+  _logCardSizes: 1
 --- !u!1 &693609888
 GameObject:
   m_ObjectHideFlags: 0
@@ -2946,10 +2948,10 @@ RectTransform:
   - {fileID: 1014416347}
   m_Father: {fileID: 1735627901}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 250, y: 75}
+  m_SizeDelta: {x: 250, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &693609890
 MonoBehaviour:
@@ -5618,12 +5620,11 @@ MonoBehaviour:
     m_Bottom: 0
   m_ChildAlignment: 0
   cellSize: {x: 150, y: 250}
-  spacing: {x: 20, y: 0}
   verticalOffset: -110
   scale: 1.3
   ellipseHeight: 30
-  spacingX: 20
   rotationAngle: 10
+  overlap: 0.3
 --- !u!1 &1076732957
 GameObject:
   m_ObjectHideFlags: 0
@@ -7900,6 +7901,7 @@ GameObject:
   - component: {fileID: 1735627904}
   - component: {fileID: 1735627903}
   - component: {fileID: 1735627902}
+  - component: {fileID: 1735627905}
   m_Layer: 3
   m_Name: Result
   m_TagString: Untagged
@@ -7980,6 +7982,32 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1735627900}
   m_CullTransparentMesh: 1
+--- !u!114 &1735627905
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1735627900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Padding:
+    m_Left: 0
+    m_Right: 0
+    m_Top: 0
+    m_Bottom: 0
+  m_ChildAlignment: 4
+  m_Spacing: 0
+  m_ChildForceExpandWidth: 1
+  m_ChildForceExpandHeight: 1
+  m_ChildControlWidth: 0
+  m_ChildControlHeight: 0
+  m_ChildScaleWidth: 0
+  m_ChildScaleHeight: 0
+  m_ReverseArrangement: 0
 --- !u!1 &1783830374
 GameObject:
   m_ObjectHideFlags: 0
@@ -9921,12 +9949,11 @@ MonoBehaviour:
     m_Bottom: 0
   m_ChildAlignment: 0
   cellSize: {x: 150, y: 250}
-  spacing: {x: 20, y: 0}
   verticalOffset: -90
   scale: 1.3
   ellipseHeight: 30
-  spacingX: 20
   rotationAngle: 10
+  overlap: 0.3
 --- !u!1 &2109685232
 GameObject:
   m_ObjectHideFlags: 0
