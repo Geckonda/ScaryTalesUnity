@@ -4079,7 +4079,7 @@ MonoBehaviour:
   runInBackground: 1
   headlessStartMode: 0
   editorAutoStart: 0
-  sendRate: 60
+  sendRate: 30
   unreliableBaselineRate: 1
   unreliableRedundancy: 0
   offlineScene: 
@@ -4115,7 +4115,7 @@ MonoBehaviour:
   _maxPlayers: 4
   _autoStartWhenFull: 0
   _maxRooms: 32
-  _fixedRoomCode: LOCALHOST
+  _fixedRoomCode: 
   _inGameRuleId: 1
   _finalRuleId: 2
   _autoStartDedicatedServer: 1
@@ -6315,9 +6315,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   roomNameInput: {fileID: 2140800904}
   networkManager: {fileID: 929659992}
-  serverAddress: localhost
+  serverAddress: 94.232.42.149
   hostLocallyOnCreate: 0
-  fallbackRoomCode: LOCALHOST
+  fallbackRoomCode: 
   connectTimeout: 5
   statusText: {fileID: 0}
 --- !u!114 &1680424249

@@ -1,0 +1,22 @@
+services:
+  scarytales:
+    build: .
+    image: scarytales-server
+    container_name: scarytales-server
+    restart: unless-stopped
+    ports:
+      # The /udp suffix is not optional. Docker publishes TCP by default, and
+      # a TCP-only mapping on a UDP game looks exactly like a firewall
+      # problem: the container runs, the port is "open", nothing connects.
+      - "7777:7777/udp"
+    # A card game's whole state is a few dictionaries; this is a ceiling, not
+    # a reservation. Raise only if you actually see it hit.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
