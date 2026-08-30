@@ -110,6 +110,7 @@ public class BoardUI : MonoBehaviour
         var animationTask = AnimateCardTransformToPosition(cardView, TimeOfDaySlot, 0);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
+        if (cardView == null || TimeOfDaySlot == null) return;
 
         cardView.transform.SetParent(TimeOfDaySlot);
         card.Owner = null;
@@ -133,7 +134,9 @@ public class BoardUI : MonoBehaviour
                 cardView, DiscardPile, leavingTimeOfDaySlot ? 0 : _discardReadDelay);
             AnimationManager.Instance.Register(animationTask);
             await animationTask;
-            DiscardPileView.Instance.SetSuit();
+            if (cardView == null) return;
+
+            if (DiscardPileView.Instance != null) DiscardPileView.Instance.SetSuit();
             Destroy(cardView.gameObject);
         }
         else
@@ -145,6 +148,13 @@ public class BoardUI : MonoBehaviour
     public async Task AnimateCardTransformToPosition(CardView card, Transform to, int delayMs)
     {
         if (delayMs > 0) await Task.Delay(delayMs);
+        // Пауза и полёт переживают перезагрузку сцены (выход в меню посреди
+        // партии), а карта с местом назначения — нет. Проверяем после каждого
+        // await: уничтоженный объект Unity равен null по своей перегрузке ==,
+        // но обращение к нему бросает MissingReferenceException — а бросать
+        // его отсюда некуда, эти задачи ждут из async void.
+        if (card == null || to == null) return;
+
         await card.transform.DOMove(to.position, _moveDuration)
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();
@@ -155,12 +165,17 @@ public class BoardUI : MonoBehaviour
         await card.transform.DOMove(to.position, _moveDuration)
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();
+        if (card == null || to == null) return;
+
         // worldPositionStays: false — the destination panel may be rotated
         // and scaled (seats face the table centre), and keeping world pose
         // would bake that compensation into localRotation/localScale right
         // before the layout group overwrites them anyway.
         card.transform.SetParent(to, false);
-        LayoutRebuilder.ForceRebuildLayoutImmediate(to.GetComponent<RectTransform>());
+
+        var toRect = to.GetComponent<RectTransform>();
+        if (toRect != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(toRect);
         await Task.Yield();
     }
 }

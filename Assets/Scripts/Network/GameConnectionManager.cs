@@ -483,10 +483,23 @@ namespace Assets.Scripts.Network
         public override void OnClientDisconnect()
         {
             base.OnClientDisconnect();
-            // Disconnect mid-game (server quit, network failure, kicked):
-            // reset to the menu state. Per Phase-3 non-goals there's no
-            // reconnect flow — players just bounce back to the menu and
-            // start over.
+
+            // Уходим по собственному решению (кнопка «Выйти», меню по Esc):
+            // ReturnToMenu уже работает, и это его же отключение вернулось
+            // сюда по кругу.
+            if (_returningToMenu) return;
+
+            // Связь оборвалась не по нашей воле: сервер остановлен, хост
+            // вышел, сеть отвалилась. Молча перезагрузить сцену — значит
+            // выбросить игрока в главное меню без единого слова о том, что
+            // случилось. Партия для него кончилась, а конец партии игрок
+            // должен увидеть и закрыть сам, как любой другой.
+            if (UnGameManager.Instance != null
+                && UnGameManager.Instance.HandleConnectionLost())
+                return;
+
+            // Показывать нечего — мы в лобби или в меню (не удалось
+            // подключиться, сервер отказал). Тогда прежнее поведение.
             ReturnToMenu();
         }
     }

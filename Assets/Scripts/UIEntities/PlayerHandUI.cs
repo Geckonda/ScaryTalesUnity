@@ -58,6 +58,17 @@ public class PlayerHandUI : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Панель руки игрока, если она известна. Нужна не только раздаче:
+    /// брошенная мимо стола карта возвращается в руку своего владельца,
+    /// определяя её на месте (см. <c>DragAndDrop.ReturnToHand</c>).
+    /// </summary>
+    public Transform GetHandPanel(Player player)
+    {
+        if (_playerHandPanels == null || player == null) return null;
+        return _playerHandPanels.TryGetValue(player, out var panel) ? panel : null;
+    }
+
     private async void HandleCardAddedToHand(Card card, Player player)
     {
         var unityManager = UnGameManager.Instance;
@@ -106,12 +117,22 @@ public class PlayerHandUI : MonoBehaviour
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();
 
+        // За время полёта сцену могли перезагрузить — выход в меню посреди
+        // партии делает ровно это, — и тогда карты с панелью уже уничтожены.
+        // Проверять надо ЗДЕСЬ, после await: на входе они были живы.
+        // Уничтоженный объект Unity равен null по своей перегрузке ==, но
+        // обращение к нему бросает MissingReferenceException, а бросить его
+        // отсюда некуда: метод зовут из async void.
+        if (cardView == null || hand == null) return;
+
         // worldPositionStays: false — the hand panel is rotated to face the
         // table centre, so keeping the world pose would leave the card with
         // a compensating local transform that fights the layout group.
         cardView.transform.SetParent(hand, false);
 
-        LayoutRebuilder.ForceRebuildLayoutImmediate(hand.GetComponent<RectTransform>());
+        var handRect = hand.GetComponent<RectTransform>();
+        if (handRect != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(handRect);
 
         await Task.Yield();
     }

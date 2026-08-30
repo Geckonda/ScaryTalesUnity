@@ -184,8 +184,15 @@ public class UnGameManager : MonoBehaviour
 
     // ---- Lifecycle handlers driven by ClientGameView ----
 
+    // Идёт ли партия на этом клиенте. Нужен ровно одному вопросу: если связь
+    // оборвалась, есть ли что показывать игроку, или он ещё в лобби и
+    // показывать нечего. См. HandleConnectionLost.
+    private bool _inGame;
+
     private void HandleGameStarted()
     {
+        _inGame = true;
+
         // Rebuild the server's rule choice from its ids. A null here means
         // this build doesn't know a rule the server used — a version
         // mismatch, worth shouting about rather than silently substituting.
@@ -461,30 +468,35 @@ public class UnGameManager : MonoBehaviour
         ItemContainer.Instance.Show(items);
     }
 
-    [SerializeField] private float _returnToMenuDelay = 5f;
-
     private void HandleGameEnded(int winnerId)
     {
+        // Партия кончилась — больше ничего не тащим и правил не выбираем.
+        // Раньше это делал за нас уход в меню через пять секунд; теперь
+        // экран результата висит, пока игрок сам не решит уйти.
+        _inGame = false;
+        DragAndDrop.SelectCard = false;
+        _canChooseRule = false;
+
         var winner = ClientView.FindPlayer(winnerId);
         ResultContainer.Instance.ShowWinner(winner?.Name ?? "?");
-        // After the result has been visible for a moment, tear down the
-        // network and reload the scene so everyone lands back on the
-        // MenuCanvas. Invoke (rather than Task.Delay) lets Unity manage
-        // the timing on this MonoBehaviour and survives until SceneManager
-        // unloads us.
-        Invoke(nameof(ReturnToMenuFromGameEnd), _returnToMenuDelay);
+
+        // Автовыхода отсюда нет намеренно: когда уходить — решает игрок.
+        // Уводят в меню кнопка «Выйти» на экране результата и меню по Esc,
+        // и обе зовут один и тот же GameConnectionManager.ReturnToMenu().
     }
 
     /// <summary>
     /// The server ended the game early — today, because somebody left.
-    /// Same result panel and the same trip back to the menu as a normal
-    /// finish, but the text says what happened instead of naming a winner.
+    /// Same result panel as a normal finish, and the same "leave when you
+    /// choose to" rule, but the text says what happened instead of naming
+    /// a winner.
     /// </summary>
     private void HandleGameAborted(string reason, Player leftPlayer)
     {
         // Stop any prompt coroutine that is still waiting on a click for a
         // decision the server has already given up on.
         StopAllCoroutines();
+        _inGame = false;
         DragAndDrop.SelectCard = false;
         _canChooseRule = false;
 
@@ -497,15 +509,39 @@ public class UnGameManager : MonoBehaviour
         }
         Debug.LogWarning($"[Client] Game aborted (left: {leftPlayer?.Name ?? "n/a"}): {reason}");
 
-        // CancelInvoke first: a normal game-end may have already scheduled
-        // this, and we don't want two trips to the menu.
-        CancelInvoke(nameof(ReturnToMenuFromGameEnd));
-        Invoke(nameof(ReturnToMenuFromGameEnd), _returnToMenuDelay);
+        // Как и при обычном конце партии, в меню не уходим сами: игрок
+        // должен успеть прочитать, почему всё оборвалось.
     }
 
-    private void ReturnToMenuFromGameEnd()
+    /// <summary>
+    /// Связь оборвалась не по нашей воле: сервер остановлен, хост вышел,
+    /// сеть отвалилась. Показывает экран результата с причиной — партия
+    /// кончается для игрока так же, как от любой другой причины, и уходить
+    /// он должен сам.
+    ///
+    /// <para>Возвращает <c>false</c>, если показывать нечего (мы ещё в лобби
+    /// или меню) — тогда зовущему остаётся обычный возврат в меню.</para>
+    /// </summary>
+    public bool HandleConnectionLost()
     {
-        Assets.Scripts.Network.GameConnectionManager.ReturnToMenu();
+        var result = ResultContainer.Instance;
+        if (result == null) return false;
+
+        // Партия уже кончилась, и её итог на экране. Обрыв связи после этого
+        // — ожидаемое следствие, а не новость: не затираем «Победитель: …»
+        // техническим сообщением, просто остаёмся на нём.
+        if (result.IsShowing) return true;
+
+        if (!_inGame) return false;
+
+        StopAllCoroutines();
+        _inGame = false;
+        DragAndDrop.SelectCard = false;
+        _canChooseRule = false;
+
+        result.ShowMessage("Связь с сервером потеряна. Партия завершена.");
+        Debug.LogWarning("[Client] Connection lost mid-game.");
+        return true;
     }
 
     public void EnablePlayerDrag(Player player)

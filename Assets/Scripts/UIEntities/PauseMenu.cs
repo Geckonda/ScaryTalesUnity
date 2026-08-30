@@ -1,5 +1,4 @@
 ﻿using Assets.Scripts.Network;
-using Mirror;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -117,9 +116,13 @@ namespace Assets.Scripts.UIEntities
         {
             if (_group == null || !_inGame) return;
 
-            // Выходить некуда, пока никуда не вошли.
+            // Кнопка активна всегда, пока меню открывается (а открывается оно
+            // только в партии). Прежнее условие NetworkClient.isConnected
+            // выключало её ровно тогда, когда она нужнее всего: после обрыва
+            // связи выход в меню — единственный оставшийся путь, а никакого
+            // соединения для него не требуется, это перезагрузка сцены.
             if (_leaveRoomButton != null)
-                _leaveRoomButton.interactable = NetworkClient.isConnected;
+                _leaveRoomButton.interactable = true;
 
             _visible = true;
             _group.alpha = 1f;

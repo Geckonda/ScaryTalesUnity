@@ -123,7 +123,20 @@ namespace Assets.Scripts.Network
             Defer<DecisionRequestedEvent>(HandleDecisionRequested);
             Defer<DecisionResolvedEvent>(HandleDecisionResolved);
             Defer<GameEndedEvent>(HandleGameEnded);
-            Defer<GameAbortedEvent>(HandleGameAborted);
+
+            // Прерывание партии — единственное событие в обход очереди.
+            //
+            // Очередь ждёт анимаций, а анимации к этому моменту могут не
+            // доиграть уже никогда: партии нет, сервера может не быть тоже.
+            // Отложенное сюда сообщение о причине игрок просто не увидел бы,
+            // а причина — это всё, что ему осталось узнать. Ещё не показанные
+            // события выбрасываем: доигрывать раздачу в партию, которой уже
+            // нет, незачем.
+            NetworkClient.RegisterHandler<GameAbortedEvent>(msg =>
+            {
+                _pending.Clear();
+                HandleGameAborted(msg);
+            });
         }
 
         // Event queue -------------------------------------------------------
