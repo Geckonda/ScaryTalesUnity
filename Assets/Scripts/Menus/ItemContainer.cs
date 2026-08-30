@@ -65,7 +65,7 @@ public class ItemContainer : MonoBehaviour
         }
         Debug.Log($"contentPanel has {contentPanel.childCount} children after adding items.");
     }
-    public void ClearContentPanelchildren()
+    public void ClearContentPanelChildren()
     {
         // Очищаем контейнер перед добавлением новых элементов
         foreach (Transform child in contentPanel)
@@ -78,7 +78,7 @@ public class ItemContainer : MonoBehaviour
     public void Hide()
     {
         gameObject.SetActive(false);
-        ClearContentPanelchildren();
+        ClearContentPanelChildren();
         ShowBtn.gameObject.SetActive(true);
         CloseBtn.gameObject.SetActive(true);
     }

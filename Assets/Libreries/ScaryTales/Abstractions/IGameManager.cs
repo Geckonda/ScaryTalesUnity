@@ -16,36 +16,15 @@ namespace ScaryTales.Abstractions
         /// <param name="message"></param>
         public void PrintMessage(string message);
         /// <summary>
-        /// Запустить игру
-        /// </summary>
-        public void StartGame();
-        /// <summary>
-        /// Раздача карт всем игрокам (по 5 карт)
-        /// </summary>
-        public void DrawCardsToPlayersHand();
-        /// <summary>
         /// Пытается вытянуть карту из колоды, если она не пуста.
         /// </summary>
         /// <returns>Карта (БЕЗ ВЛАДЕЛЬЦА) или null.</returns>
         public Card? TryDrawCardFromDeck();
-        public void Run();
-        /// <summary>
-        /// Ход игрока
-        /// </summary>
-        public void GameCourse();
         /// <summary>
         /// Взять 1 карту из колоды и передать игроку
         /// </summary>
         /// <param name="player"></param>
         public void DrawCard(Player player);
-        /// <summary>
-        /// Разыгрывание игроком предмета (По желанию)
-        /// </summary>
-        public void PlayItem(Player player);
-        /// <summary>
-        /// Разыгрывание игрком карты
-        /// </summary>
-        public Task PlayCard(Player player);
         /// <summary>
         /// Разыгрывание игрком карты
         /// </summary>
@@ -108,6 +87,10 @@ namespace ScaryTales.Abstractions
         /// </summary>
         public void PutItemInPlayerItemBag(Item item, Player player);
         /// <summary>
+        /// Удалить предмет конкретного типа из инвентаря игрока (с уведомлением).
+        /// </summary>
+        public void RemoveItemFromPlayerItemBag(ItemType type, Player player);
+        /// <summary>
         /// Закончить игру
         /// </summary>
         public void EndGame();
@@ -121,10 +104,8 @@ namespace ScaryTales.Abstractions
         public event Action<Card>? OnCardMovedToBeforePlayer;
         public event Action<Card>? OnCardMovedToTimeOfDaySlot;
         public event Action<Item, Player>? OnItemAddToPlayer;
+        public event Action<Item, Player>? OnItemRemovedFromPlayer;
         public event Action<Player>? OnAddPointsToPlayer;
         public event Action<string>? OnMessagePrinted;
-
-        public Player LocalPlayer { get; set; }
-        public Player LocalOpponent { get; set; }
     }
 }

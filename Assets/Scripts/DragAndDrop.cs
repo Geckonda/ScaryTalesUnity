@@ -1,15 +1,14 @@
-﻿using ScaryTales;
+﻿using Assets.Scripts.Utilities;
+using ScaryTales;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using System;
-using ScaryTales.Abstractions;
 
 public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     private Vector3 startPosition;
     private Transform parentToReturnTo;
     private Transform gameBoard;
-    private IGameManager gameManager;
     private Card card;
 
     /// <summary>
@@ -30,9 +29,8 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
     private bool CardIsNotDragable() => UnGameManager.Instance.LocalPlayer != UnGameManager.Instance.CurrentPlayer
         || card.Owner != UnGameManager.Instance.CurrentPlayer
         || !SelectCard || card.Position != ScaryTales.Enums.CardPosition.InHand;
-    public void Initialize(IGameManager manager, Card cardData, Transform board, Transform parent)
+    public void Initialize(Card cardData, Transform board, Transform parent)
     {
-        gameManager = manager;
         card = cardData;
         gameBoard = board;
         parentToReturnTo = parent;
@@ -64,17 +62,31 @@ public class DragAndDrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndD
 
         dragStarted = false; // сброс состояния
 
+        // Defensive: if gameBoard or its RectTransform was destroyed (Unity's
+        // null-overload returns true for a destroyed reference), fall through
+        // to the return-to-hand branch instead of throwing — otherwise the
+        // card stays glued to the cursor's release position.
+        var rect = (gameBoard != null) ? gameBoard.GetComponent<RectTransform>() : null;
+        bool dropOnBoard = rect != null
+            && RectTransformUtility.RectangleContainsScreenPoint(rect, eventData.position);
 
-        // Если карта перемещена на стол, разыгрываем её
-        if (RectTransformUtility.RectangleContainsScreenPoint(
-            gameBoard.GetComponent<RectTransform>(), eventData.position))
+        if (dropOnBoard)
         {
             OnCardSelected?.Invoke(card);
+            // Cards dealt during the initial deal are created before
+            // WaitForLocalCardPlay sets the selection handler, so the
+            // factory's per-instance subscription is skipped for them and
+            // their OnCardSelected event has no listeners. Fire the live
+            // static handler directly so those cards can still be played.
+            // Idempotent for cards that already had the per-instance
+            // subscription wired (the handler just sets two flags).
+            CardSelectionService.CurrentSelectionHandler?.Invoke(card);
             transform.SetParent(gameBoard);
         }
         else
         {
-            transform.SetParent(parentToReturnTo);
+            if (parentToReturnTo != null)
+                transform.SetParent(parentToReturnTo);
             transform.position = startPosition;
         }
     }

@@ -1,118 +1,109 @@
+using Assets.Scripts.Network;
+using Assets.Scripts.UIEntities;
 using Assets.Scripts.Views;
 using DG.Tweening;
 using ScaryTales;
-using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.XR;
 
-// Избавься от дубликатов
 public class BoardUI : MonoBehaviour
 {
     private CardViewService _cardViewService;
+    private ClientGameView _view;
+    private SeatLayout _seatLayout;
+    // Each player's BeforePlayer destination, looked up at runtime per
+    // CardMovedToBeforePlayer event.
+    private Dictionary<Player, RectTransform> _beforePlayerTables = new();
 
     public Transform GameBoardPanel;
-    public Transform OpponentTable;
-    public Transform LocalPlayerTable;
     public Transform TimeOfDaySlot;
     public Transform DiscardPile;
     public GameObject UIBlockerOverlay;
 
-
-    private int _animationDelay = 2000;
+    [Tooltip("Pause (ms) before a card animates to the discard pile or the time-of-day slot, so players can read it first.")]
+    [SerializeField] private int _animationDelay = 2000;
     private void Start()
     {
-        UIBlockerOverlay.SetActive(false);
-        StartCoroutine(WaitForContextAndInit());
-
+        if (UIBlockerOverlay != null) UIBlockerOverlay.SetActive(false);
     }
 
-    private IEnumerator WaitForContextAndInit()
+    /// <summary>
+    /// Wires this BoardUI to the client mirror and the seat layout.
+    /// Each seat owns its own BeforePlayerTable (replacing the old
+    /// LocalPlayerTable / OpponentTable pair).
+    /// </summary>
+    public void Initialize(ClientGameView view, SeatLayout seatLayout)
     {
-        // Ждём, пока инициализируется контекст
-        while (UnGameManager.Instance.GameManager == null)
-        {
-            yield return null;
-        }
-        var context = UnGameManager.Instance.GameManager._context;
-        context.GameManager.OnCardMovedToBoard += HandleCardMovedToBoard;
-        context.GameManager.OnCardMovedToBeforePlayer += HandleCardMovedToBeforePlayer;
-        context.GameManager.OnCardMovedToTimeOfDaySlot += HandleCardMovedToTimeOfDaySlot;
-        context.GameManager.OnCardMovedToDiscardPile += HandleCardMovedToDiscardPile;
+        _view = view;
+        _seatLayout = seatLayout;
+
+        view.OnCardMovedToBoard += HandleCardMovedToBoard;
+        view.OnCardMovedToBeforePlayer += HandleCardMovedToBeforePlayer;
+        view.OnCardMovedToTimeOfDaySlot += HandleCardMovedToTimeOfDaySlot;
+        view.OnCardMovedToDiscardPile += HandleCardMovedToDiscardPile;
 
         _cardViewService = CardViewService.Instance;
+
+        _beforePlayerTables.Clear();
+        var localSeat = _seatLayout?.LocalSeat;
+        if (localSeat?.BeforePlayerTable != null)
+            _beforePlayerTables[_view.LocalPlayer] = localSeat.BeforePlayerTable;
+        for (int i = 0; i < _view.Opponents.Count; i++)
+        {
+            var seat = _seatLayout?.GetOpponentSeat(i);
+            if (seat?.BeforePlayerTable != null)
+                _beforePlayerTables[_view.Opponents[i]] = seat.BeforePlayerTable;
+        }
     }
+
     private async void HandleCardMovedToBoard(Card card)
     {
         var unityManager = UnGameManager.Instance;
         var deck = unityManager.Deck;
-        var cardView = _cardViewService.GetCardView(card);
-        if (cardView == null)
-        {
-            cardView = _cardViewService.CreateCardView(card, deck);
-        }
-        else
-        {
-            cardView = _cardViewService.GetCardView(card);
-        }
+        var cardView = _cardViewService.GetCardView(card)
+            ?? _cardViewService.CreateCardView(card, deck);
         cardView.FaceUp();
-        var animationTask = AnumateCardTransformToPositionInLayout(cardView, GameBoardPanel);
+        var animationTask = AnimateCardTransformToPositionInLayout(cardView, GameBoardPanel);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
-        Debug.Log($"Карта {card.Name} перемещена на стол");
     }
+
     private async void HandleCardMovedToBeforePlayer(Card card)
     {
         var unityManager = UnGameManager.Instance;
         var deck = unityManager.Deck;
-        var cardView = _cardViewService.GetCardView(card);
-        if (cardView == null)
-        {
-            cardView = _cardViewService.CreateCardView(card, deck);
-        }
-        else
-        {
-            cardView = _cardViewService.GetCardView(card);
-        }
+        var cardView = _cardViewService.GetCardView(card)
+            ?? _cardViewService.CreateCardView(card, deck);
         cardView.FaceUp();
-        bool isLocalCard = unityManager.LocalPlayer == card.Owner;
-        var panel = isLocalCard ? LocalPlayerTable : OpponentTable;
-        var animationTask = AnumateCardTransformToPositionInLayout(cardView, panel);
+
+        Transform panel = null;
+        if (card.Owner != null && _beforePlayerTables.TryGetValue(card.Owner, out var tbl))
+            panel = tbl;
+        // Fallback: send to general board if we couldn't resolve a seat.
+        if (panel == null) panel = GameBoardPanel;
+
+        var animationTask = AnimateCardTransformToPositionInLayout(cardView, panel);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
-        Debug.Log($"Карта {card.Name} перемещена на стол перед игроком");
     }
 
     private async void HandleCardMovedToTimeOfDaySlot(Card card)
     {
-        Debug.Log($"Карта {card.Name} перемещена в слот времени суток");
-
-        // Получаем CardView для текущей карты
-        CardView cardView = _cardViewService.GetCardView(card);
         var unityManager = UnGameManager.Instance;
         var deck = unityManager.Deck;
-        if (cardView == null)
-        {
-            cardView = _cardViewService.CreateCardView(card, deck);
-        }
-        else
-        {
-            cardView = _cardViewService.GetCardView(card);
-        }
+        CardView cardView = _cardViewService.GetCardView(card)
+            ?? _cardViewService.CreateCardView(card, deck);
         cardView.FaceUp();
-        // Перемещаем CardView в слот времени суток
         await AnimateCardTransformToPosition(cardView, TimeOfDaySlot);
         cardView.transform.SetParent(TimeOfDaySlot);
         card.Owner = null;
         cardView.transform.localScale = Vector3.one;
     }
+
     private async void HandleCardMovedToDiscardPile(Card card)
     {
-        Debug.Log($"Карта {card.Name} перемещена в сброс");
-
         CardView cardView = _cardViewService.GetCardView(card);
         if (cardView != null)
         {
@@ -124,32 +115,29 @@ public class BoardUI : MonoBehaviour
         }
         else
         {
-            Debug.LogError($"CardView для карты {card.Name} не найден!");
+            Debug.LogError($"CardView for {card.Name} not found.");
         }
     }
+
     public async Task AnimateCardTransformToPosition(CardView card, Transform to)
     {
         await Task.Delay(_animationDelay);
-        // Анимация перемещения карты в позицию руки
-        await card.transform.DOMove(to.position, 1f) // Длительность анимации: 1 секунда
-            .SetEase(Ease.OutQuad) // Плавное замедление
-            .AsyncWaitForCompletion(); // Ожидаем завершения анимации
+        await card.transform.DOMove(to.position, 1f)
+            .SetEase(Ease.OutQuad)
+            .AsyncWaitForCompletion();
     }
 
-    public async Task AnumateCardTransformToPositionInLayout(CardView card, Transform to)
+    public async Task AnimateCardTransformToPositionInLayout(CardView card, Transform to)
     {
-        // Анимация перемещения карты в позицию руки
-        await card.transform.DOMove(to.position, 1f) // Длительность анимации: 1 секунда
-            .SetEase(Ease.OutQuad) // Плавное замедление
-            .AsyncWaitForCompletion(); // Ожидаем завершения анимации
-        // Делаем карту дочерним объектом руки
-        card.transform.SetParent(to);
-
-        // Принудительное обновление расположения GridLayout
+        await card.transform.DOMove(to.position, 1f)
+            .SetEase(Ease.OutQuad)
+            .AsyncWaitForCompletion();
+        // worldPositionStays: false вЂ” the destination panel may be rotated
+        // and scaled (seats face the table centre), and keeping world pose
+        // would bake that compensation into localRotation/localScale right
+        // before the layout group overwrites them anyway.
+        card.transform.SetParent(to, false);
         LayoutRebuilder.ForceRebuildLayoutImmediate(to.GetComponent<RectTransform>());
-
-        // Ждём, пока GridLayoutGroup обновит позиции
         await Task.Yield();
     }
 }
-

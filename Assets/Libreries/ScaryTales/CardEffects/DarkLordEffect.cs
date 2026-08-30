@@ -1,4 +1,5 @@
 ﻿using ScaryTales.Abstractions;
+using ScaryTales.Decisions;
 using ScaryTales.Enums;
 using ScaryTales.Helpers;
 using System;
@@ -30,7 +31,10 @@ namespace ScaryTales.CardEffects
                 manager.PrintMessage("Нет ни одной карты 'Место' на столе");
                 return;
             }
-            var place = await player.SelectCardAmongOthers(places);
+            var pick = await context.Router.PickCard(
+                player.Id,
+                new PickCardRequest(places.Select(c => c.Id)));
+            var place = places.First(c => c.Id == pick.CardId);
             manager.PrintMessage($"Игрок {player.Name} сбросил карту {place.Name}");
             board.RemoveCardFromBoard(place);
             manager.PutCardToDiscardPile(place);

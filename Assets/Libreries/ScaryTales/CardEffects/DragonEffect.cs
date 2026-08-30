@@ -1,4 +1,5 @@
 ﻿    using ScaryTales.Abstractions;
+    using ScaryTales.Decisions;
     using ScaryTales.Enums;
     using ScaryTales.Helpers;
     using System;
@@ -32,7 +33,10 @@
                     manager.PrintMessage("Нет ни одной карты типа 'Место' на столе");
                 else
                 {
-                    var place = await player.SelectCardAmongOthers(places);
+                    var pick = await context.Router.PickCard(
+                        player.Id,
+                        new PickCardRequest(places.Select(c => c.Id)));
+                    var place = places.First(c => c.Id == pick.CardId);
                     manager.PrintMessage($"Игрок {player.Name} сбросил карту {place.Name}");
                     board.RemoveCardFromBoard(place);
                     manager.PutCardToDiscardPile(place);
@@ -42,7 +46,10 @@
                     manager.PrintMessage("Нет ни одной карты типа 'Мужчина' на столе");
                 else
                 {
-                    var man = await player.SelectCardAmongOthers(men);
+                    var pick = await context.Router.PickCard(
+                        player.Id,
+                        new PickCardRequest(men.Select(c => c.Id)));
+                    var man = men.First(c => c.Id == pick.CardId);
                     manager.PrintMessage($"Игрок {player.Name} сбросил карту {man.Name}");
                     board.RemoveCardFromBoard(man);
                     manager.PutCardToDiscardPile(man);

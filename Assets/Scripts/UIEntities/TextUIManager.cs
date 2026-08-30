@@ -1,67 +1,66 @@
+using Assets.Scripts.Network;
+using Assets.Scripts.UIEntities;
 using ScaryTales;
-using ScaryTales.Abstractions;
-using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
 public class TextUIManager : MonoBehaviour
 {
-    private IGameContext _gameContext;
-    public TMP_Text Player1Name;
-    public TMP_Text Player2Name;
-    public TMP_Text Player1ScoreText;
-    public TMP_Text Player2ScoreText;
-    public TMP_Text NotifierText;
-    private Dictionary<Player, TMP_Text> _playerScorePanels = new();
+    private ClientGameView _view;
+    private SeatLayout _seatLayout;
 
+    public TMP_Text NotifierText;
     public TMP_Text CurrentPlayerText;
 
-    //private void Awake()
-    //{
-    //    _gameContext = UnGameManager.Instance.GameManager._context;
-    //    _playerScorePanels[_gameContext.Players[0]] = Player1ScoreText;
-    //    _playerScorePanels[_gameContext.Players[1]] = Player2ScoreText;
+    private Dictionary<Player, TMP_Text> _playerScorePanels = new();
 
-    //    Player1Name.text = _gameContext.Players[0].Name;
-    //    Player2Name.text = _gameContext.Players[1].Name;
+    // Shared so Initialize and HandleAddPointsToPlayer can't drift apart.
+    private const string ScorePrefix = "РџРћ: ";
 
-    //    _gameContext.GameManager.OnAddPointsToPlayer += HandleAddPointsToPlayer;
-    //    _gameContext.GameManager.OnMessagePrinted += HandleNotify;
-    //}
-    private void Start()
+    /// <summary>
+    /// Wires this text UI to the client mirror and the seat layout.
+    /// Each seat carries its own NameText and ScoreText; this class just
+    /// fills them in and watches OnAddPointsToPlayer to keep scores live.
+    /// </summary>
+    public void Initialize(ClientGameView view, SeatLayout seatLayout)
     {
-        StartCoroutine(WaitForContextAndInit());
-    }
+        _view = view;
+        _seatLayout = seatLayout;
 
-    private IEnumerator WaitForContextAndInit()
-    {
-        // Ждём, пока инициализируется контекст
-        while (UnGameManager.Instance.GameManager == null)
+        _playerScorePanels.Clear();
+
+        var localSeat = _seatLayout?.LocalSeat;
+        if (localSeat != null)
         {
-            yield return null;
+            if (localSeat.NameText != null)
+                localSeat.NameText.text = _view.LocalPlayer.Name;
+            if (localSeat.ScoreText != null)
+            {
+                _playerScorePanels[_view.LocalPlayer] = localSeat.ScoreText;
+                // Seed it now; otherwise the scene placeholder shows until
+                // this player first scores.
+                localSeat.ScoreText.text = ScorePrefix + _view.LocalPlayer.Score;
+            }
         }
 
-        var unManager = UnGameManager.Instance;
-        _gameContext = unManager.GameManager._context;
-
-        while (unManager.LocalPlayer == null || unManager.LocalOpponent == null)
+        for (int i = 0; i < _view.Opponents.Count; i++)
         {
-            yield return null;
+            var seat = _seatLayout?.GetOpponentSeat(i);
+            if (seat == null) continue;
+            if (seat.NameText != null)
+                seat.NameText.text = _view.Opponents[i].Name;
+            if (seat.ScoreText != null)
+            {
+                _playerScorePanels[_view.Opponents[i]] = seat.ScoreText;
+                seat.ScoreText.text = ScorePrefix + _view.Opponents[i].Score;
+            }
         }
-        _playerScorePanels[unManager.LocalPlayer] = Player1ScoreText;
-        _playerScorePanels[unManager.LocalOpponent] = Player2ScoreText;
 
-        Player1Name.text = unManager.LocalPlayer.Name;
-        Player2Name.text = unManager.LocalOpponent.Name;
-
-        _gameContext.GameManager.OnAddPointsToPlayer += HandleAddPointsToPlayer;
-        //_gameContext.GameManager.OnMessagePrinted += HandleNotify;
+        _view.OnAddPointsToPlayer += HandleAddPointsToPlayer;
 
         UpdateCurrentPlayerText();
     }
-
-
 
     private List<string> messages = new();
     private void HandleNotify(string message)
@@ -80,17 +79,15 @@ public class TextUIManager : MonoBehaviour
     {
         if (_playerScorePanels.TryGetValue(player, out TMP_Text panel))
         {
-            panel.text = "ПО: " + player.Score.ToString();
+            panel.text = ScorePrefix + player.Score;
         }
     }
 
     public void UpdateCurrentPlayerText()
     {
-        if (CurrentPlayerText != null)
+        if (CurrentPlayerText != null && _view?.CurrentPlayer != null)
         {
-            var currentPlayer = _gameContext.GameState.GetCurrentPlayer();
-            CurrentPlayerText.text = $"Сейчас ходит: {currentPlayer.Name}";
+            CurrentPlayerText.text = $"РўРµРєСѓС‰РёР№ РёРіСЂРѕРє: {_view.CurrentPlayer.Name}";
         }
     }
 }
-

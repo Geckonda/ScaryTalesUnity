@@ -32,7 +32,7 @@ namespace Assets.Libreries.ScaryTales.Rules.Effects
             var player = context.GameState.GetCurrentPlayer();
             var board = context.GameBoard;
 
-            player.RemoveItemFromItemBag(ItemType.Armor);
+            manager.RemoveItemFromPlayerItemBag(ItemType.Armor, player);
 
             var card = board.GetTopCardFromDiscardPile();
             manager.PutCardInPlayerHandFromDiscardPile(card, player);

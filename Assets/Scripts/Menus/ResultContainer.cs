@@ -20,8 +20,17 @@ namespace Assets.Scripts.Menus
         }
         public void ShowWinner(string winner)
         {
+            ShowMessage($"Победитель: {winner}");
+        }
+
+        /// <summary>
+        /// Same panel, arbitrary text. Used when the game ends without a
+        /// winner — a player left, or the server tore the room down.
+        /// </summary>
+        public void ShowMessage(string message)
+        {
             gameObject.SetActive(true);
-            WinnerText.text = $"Победитель: {winner}";
+            WinnerText.text = message;
         }
     }
 }

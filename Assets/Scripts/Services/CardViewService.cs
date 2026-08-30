@@ -9,18 +9,28 @@ public class CardViewService
     private static CardViewService _instance;
     public static CardViewService Instance => _instance ??= new CardViewService();
 
+    /// <summary>
+    /// Drops the cached instance so the next access builds a fresh one.
+    ///
+    /// This is a plain C# static, so it is NOT subject to Unity's fake-null:
+    /// it survives the scene reload that ends every game, still holding the
+    /// destroyed scene's Transforms and views. Creating a card against a
+    /// destroyed parent gives it no parent at all, which is why cards ended up
+    /// loose in the scene on a second game. Called from UnGameManager.Awake,
+    /// which is once per scene load — exactly the lifetime these want.
+    /// </summary>
+    public static void Reset() => _instance = null;
+
     private readonly CardViewFactory _cardViewFactory;
     private readonly Dictionary<Card, CardView> _cardToCardViewMap = new Dictionary<Card, CardView>();
 
     public CardViewFactory CardViewFactory => _cardViewFactory;
     private CardViewService()
     {
-        // Получаем зависимости (например, через UnGameManager)
-        var gameManager = UnGameManager.Instance.GameManager;
         var gameBoardPanel = UnGameManager.Instance.GameBoardPanel;
         var cardPrefab = Resources.Load<GameObject>("CardPrefab");
 
-        _cardViewFactory = new CardViewFactory(gameManager, gameBoardPanel, cardPrefab);
+        _cardViewFactory = new CardViewFactory(gameBoardPanel, cardPrefab);
     }
 
     public void BundleCardAndCardView(Card card, CardView view)

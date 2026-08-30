@@ -1,4 +1,5 @@
 ﻿using ScaryTales.Abstractions;
+using ScaryTales.Decisions;
 using ScaryTales.Enums;
 using System;
 using System.Collections.Generic;
@@ -23,32 +24,32 @@ namespace ScaryTales.CardEffects
             var itemManager = context.ItemManager;
             var player = context.GameState.GetCurrentPlayer();
 
-            // Собираем доступные предметы из списка типов
-            var availableItems = _itemTypes
-                .Select(itemManager.GetCloneItemByType)
-                .Where(item => item != null)
+            // Какие из требуемых типов сейчас в наличии
+            var availableTypes = _itemTypes
+                .Where(t => itemManager.CountItemByType(t) > 0)
                 .ToList();
 
-            if (availableItems.Count == 0)
+            if (availableTypes.Count == 0)
             {
                 manager.PrintMessage("Нет доступных предметов в запасе.");
                 return;
             }
 
-            var inavailableItems = _itemTypes
-                .Where(type => !availableItems.Any(item => item.Type == type))
+            var unavailableTypes = _itemTypes
+                .Where(t => !availableTypes.Contains(t))
                 .ToList();
-            if (inavailableItems.Count > 0)
-                PrintInavailableItems(inavailableItems!, manager.PrintMessage);
+            if (unavailableTypes.Count > 0)
+                PrintInavailableItems(unavailableTypes, manager.PrintMessage);
 
-            // Игрок выбирает предмет из доступных
-            var selectedItem = await player.SelectItem(availableItems!);
+            var pick = await context.Router.PickItem(
+                player.Id,
+                new PickItemRequest(availableTypes));
 
-            manager.PrintMessage($"Игрок {player.Name} выбрал предмет \"{selectedItem.Name}\"");
-            // Получаем оригинальный предмет (не клон) и добавляем в инвентарь
-            var originalItem = itemManager.GetItemByType(selectedItem.Type);
+            // Достаём оригинальный предмет (не клон) и кладём игроку
+            var originalItem = itemManager.GetItemByType(pick.ItemType);
             if (originalItem != null)
             {
+                manager.PrintMessage($"Игрок {player.Name} выбрал предмет \"{originalItem.Name}\"");
                 manager.PutItemInPlayerItemBag(originalItem, player);
             }
         }

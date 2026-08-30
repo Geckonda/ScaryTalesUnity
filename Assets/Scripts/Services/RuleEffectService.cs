@@ -16,16 +16,25 @@ namespace Assets.Scripts.Services
         private static RuleEffectService _instance;
         public static RuleEffectService Instance => _instance ??= new RuleEffectService();
 
+        /// <summary>
+        /// Drops the cached instance so the next access builds a fresh one.
+        ///
+        /// This is a plain C# static, so it is NOT subject to Unity's fake-null:
+        /// it survives the scene reload that ends every game, still holding the
+        /// destroyed scene's Transforms and views. Creating a card against a
+        /// destroyed parent gives it no parent at all, which is why cards ended up
+        /// loose in the scene on a second game. Called from UnGameManager.Awake,
+        /// which is once per scene load — exactly the lifetime these want.
+        /// </summary>
+        public static void Reset() => _instance = null;
+
         private readonly RuleEffectViewFactory _ruleEffectViewFactory;
         private readonly Dictionary<IRuleEffect, RuleEffectView> _ruleEffectToViewMap = new();
 
         private RuleEffectService()
         {
-            var gameManager = UnGameManager.Instance.GameManager;
-            var gameBoardPanel = UnGameManager.Instance.GameBoardPanel;
             var ruleEffectPrefab = Resources.Load<GameObject>("RuleEffectPrefab");
-
-            _ruleEffectViewFactory = new RuleEffectViewFactory(gameManager, gameBoardPanel, ruleEffectPrefab);
+            _ruleEffectViewFactory = new RuleEffectViewFactory(ruleEffectPrefab);
         }
 
         public void BundleItemAndView(IRuleEffect ruleEffect, RuleEffectView view)

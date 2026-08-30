@@ -1,5 +1,6 @@
 ﻿using Assets.Libreries.ScaryTales.Abstractions;
 using ScaryTales.Abstractions;
+using ScaryTales.Decisions;
 using ScaryTales.Enums;
 using System;
 using System.Collections.Generic;
@@ -22,55 +23,23 @@ namespace ScaryTales
         public event Action<Card>? OnCardMovedToBeforePlayer;
         public event Action<Card>? OnCardMovedToTimeOfDaySlot;
         public event Action<Item, Player>? OnItemAddToPlayer;
+        public event Action<Item, Player>? OnItemRemovedFromPlayer;
         public event Action<Player>? OnAddPointsToPlayer;
         public event Action<string>? OnMessagePrinted;
 
-        public Player LocalPlayer { get; set; }
-        public Player LocalOpponent { get; set; }
-
         public GameManager(IGameState gameState, IGameBoard gameBoard,
             List<Player> players, Deck deck, ItemManager items,
-            INotifier notifier)
+            INotifier notifier, IDecisionRouter router)
         {
             _context = new GameContext(
                 gameState, gameBoard,
-                    players, deck, items, this);
+                    players, deck, items, this, router);
             _notifier = notifier;
         }
         public void PrintMessage(string message)
         {
             _notifier.Notify(message);
             OnMessagePrinted?.Invoke(message);
-        }
-        public void StartGame()
-        {
-            // Установка ночи в начале игры
-            Card night = _context.Deck.TakeCardByName("Ночь")!;
-            PutCardInTimeOfDaySlot(night);
-
-            PrintMessage("Раздача карт.");
-            DrawCardsToPlayersHand();
-
-            var currentPlayer = _context.GameState.GetCurrentPlayer();
-            PrintMessage($"{currentPlayer.Name} начинает ход первым.");
-
-
-            PrintMessage("Игра началась!");
-            Run();
-        }
-
-        public void DrawCardsToPlayersHand()
-        {
-            var players = _context.Players;
-            var deck = _context.Deck;
-            foreach (var player in players)
-            {
-                for (int i = 0; i < 5; i++)
-                {
-                    var card = deck.DrawCard();
-                    PutCardInPlayerHand(card!, player);
-                }
-            }
         }
         /// <summary>
         /// Пытается вытянуть карту из колоды, если она не пуста.
@@ -93,35 +62,6 @@ namespace ScaryTales
             else
                 return card;
         }
-        public void Run()
-
-        {
-            while (!_context.GameState.IsGameOver)
-            {
-                GameCourse();
-            }
-        }
-        public void GameCourse()
-        {
-            var gameState = _context.GameState;
-            var player = _context.GameState.GetCurrentPlayer();
-
-            PrintMessage($"Время суток {gameState.GetTimeOfday()}.");
-            PrintMessage($"{player.Name} начинает ход.");
-
-
-            // 1. Взять 1 карту
-            DrawCard(player);
-            // 2. Взять 1 предмет
-            PlayItem(player);
-            // 3. Разыграть карту
-            PlayCard(player);
-
-            // Активация всех поссивных эффектов в конце хода игрока
-            ActivateAllPlayerPermanentCardEffects(player);
-
-            gameState.NextTurn();
-        }
         /// <summary>
         /// Взять 1 карту из колоды и передать игроку
         /// </summary>
@@ -133,31 +73,6 @@ namespace ScaryTales
             {
                 PutCardInPlayerHand(cardFromDeck, player);
             }
-        }
-        /// <summary>
-        /// Разыгрывание игроком предмета (По желанию)
-        /// </summary>
-        public void PlayItem(Player player)
-        {
-            PrintMessage("Выбор предмета Не работает!");
-        }
-        /// <summary>
-        /// Разыгрывание игрком карты [МЕТОД НЕ АКТУАЛЬНЫЙ!]
-        /// </summary>
-        public async Task PlayCard(Player player)
-        {
-            if (player.Hand.Count == 0)
-            {
-                PrintMessage($"У игрока {player.Name} не осталось карт.");
-                EndGame();
-            }
-
-            Card card = await player.SelectCardInHand();
-            player.RemoveCardFromHand(card);
-            PrintMessage($"Игрок {player.Name} разыгрывает карту {card.Name}.");
-            AddPointsToPlayer(player, card.Points);
-            await ActivateInstantCardEffect(card);
-            MoveCardToItsPosition(card);
         }
 
         public async Task PlayCard(Card card)
@@ -301,6 +216,16 @@ namespace ScaryTales
         {
             player.AddItemToItemBag(item);
             OnItemAddToPlayer?.Invoke(item, player);
+        }
+        public void RemoveItemFromPlayerItemBag(ItemType type, Player player)
+        {
+            // Snapshot the item being removed so subscribers can identify
+            // which one disappeared (player.RemoveItemFromItemBag(type) drops
+            // it without returning a reference).
+            var item = player.ShowItemsFromItemBag().FirstOrDefault(x => x.Type == type);
+            if (item == null) return;
+            player.RemoveItemFromItemBag(item);
+            OnItemRemovedFromPlayer?.Invoke(item, player);
         }
         public void EndGame()
         {

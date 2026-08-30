@@ -34,7 +34,7 @@ namespace Assets.Libreries.ScaryTales.Rules.Effects
             var itemManager = context.ItemManager;
             var deck = context.Deck;
 
-            player.RemoveItemFromItemBag(ItemType.MagicStick);
+            manager.RemoveItemFromPlayerItemBag(ItemType.MagicStick, player);
 
             manager.DrawCard(player);
 
@@ -43,7 +43,7 @@ namespace Assets.Libreries.ScaryTales.Rules.Effects
             if (coin == null)
                 manager.PrintMessage($"Не осталось золотых монет.");
             else
-                player.AddItemToItemBag(coin);
+                manager.PutItemInPlayerItemBag(coin, player);
 
             manager.AddPointsToPlayer(player, 1);
             return Task.FromResult(true);

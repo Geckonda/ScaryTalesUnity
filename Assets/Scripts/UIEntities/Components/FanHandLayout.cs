@@ -55,8 +55,16 @@ namespace Assets.Scripts.UIEntities.Components
                     (fanUpwards ? 1 : -1) * Mathf.Cos(radians) * radius
                 );
 
+                // SetChildAlongAxis places the *unscaled* rect, and the card
+                // pivots at its bottom edge — so a scaled-down card keeps its
+                // bottom and shrinks upward, drifting out of the panel.
+                // Compensating here makes verticalOffset == 0 mean "веер по
+                // центру панели" at any scale.
+                float h = child.rect.height;
+                float centred = rectTransform.rect.height / 2f - h + h * scale / 2f;
+
                 SetChildAlongAxis(child, 0, rectTransform.rect.width / 2 + pos.x - child.rect.width / 2);
-                SetChildAlongAxis(child, 1, rectTransform.rect.height / 2 + pos.y + verticalOffset);
+                SetChildAlongAxis(child, 1, centred + pos.y + verticalOffset);
 
                 child.localRotation = Quaternion.Euler(0, 0, rotationZ);
                 child.localScale = Vector3.one * scale;

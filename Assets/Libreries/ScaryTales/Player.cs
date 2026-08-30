@@ -1,11 +1,7 @@
-﻿using Assets.Libreries.ScaryTales.Abstractions;
-using ScaryTales.Abstractions;
 using ScaryTales.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ScaryTales
 {
@@ -14,12 +10,6 @@ namespace ScaryTales
         public int Id { get; set; }
         public string Name { get; private set; }
         public int Score { get; private set; }
-        /// <summary>
-        /// Выбирает карту из предоставленного списка
-        /// </summary>
-        private IPlayerInput _playerInput;
-
-        public IPlayerInput PlayerInput => _playerInput;
         /// <summary>
         /// Колода в руке игрока
         /// </summary>
@@ -41,19 +31,6 @@ namespace ScaryTales
         /// </summary>
         public int ItemsBagCount => _itemsBag.Count;
 
-        public Player(string name, IPlayerInput playerInput)
-        {
-            Name = name;
-            _hand = new List<Card>();
-            _itemsBag = new List<Item>();
-            Score = 0;
-            _playerInput = playerInput;
-        }
-        public Player(int id, string name, IPlayerInput playerInput)
-            :this(id, name)
-        {
-            _playerInput = playerInput;
-        }
         public Player(int id, string name)
         {
             Id = id;
@@ -69,7 +46,7 @@ namespace ScaryTales
         /// <param name="points">Очки для начисления</param>
         public void AddPoints(int points)
         {
-            if (points < 0) 
+            if (points < 0)
                 throw new ArgumentException("Число должно быть положительным");
             Score += points;
         }
@@ -89,18 +66,6 @@ namespace ScaryTales
         /// <param name="card"></param>
         public void RemoveCardFromHand(Card card) => _hand.Remove(card);
 
-        /// <summary>
-        /// Игрок выбирает карту со своей руки
-        /// </summary>
-        /// <returns>Карта на розыгрыш</returns>
-        public async Task<Card> SelectCardInHand()
-            => await _playerInput.SelectCard(_hand);
-        /// <summary>
-        /// Выбирает карту среди других карт
-        /// </summary>
-        /// <param name="cards">Карты, среди которых стоит выбрать</param>
-        public async Task<Card> SelectCardAmongOthers(List<Card> cards)
-            => await _playerInput.SelectCard(cards);
         /// <summary>
         /// Добавляет игроку предмет
         /// </summary>
@@ -128,21 +93,6 @@ namespace ScaryTales
         /// </summary>
         public int ItemAmount(ItemType type)
             => _itemsBag.Count(x => x.Type == type);
-        /// <summary>
-        /// Игрок выбирает нужный ему предмет
-        /// </summary>
-        public async Task<Item> SelectItem(List<Item> items)
-            => await _playerInput.SelectItem(items);
-        /// <summary>
-        /// Игрок выбирает нужнный ему эффект правила
-        /// </summary>
-        public async Task<IRuleEffect> SelectRuleEffect(List<IRuleEffect> ruleEffects)
-            => await _playerInput.SelectRuleEffect(ruleEffects);
-        /// <summary>
-        /// Игрок выбирает предмет из своего инвенторя
-        /// </summary>
-        public async Task<Item> SelectItemFromItemBag()
-            => await _playerInput.SelectItem(_itemsBag);
 
         public List<Item> ShowItemsFromItemBag() => new List<Item>(_itemsBag);
 
