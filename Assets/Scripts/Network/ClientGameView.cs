@@ -106,24 +106,67 @@ namespace Assets.Scripts.Network
             // start arriving.
             BuildCardCatalog();
 
-            NetworkClient.RegisterHandler<GameStartedEvent>(HandleGameStarted);
-            NetworkClient.RegisterHandler<CardDrawnEvent>(HandleCardDrawn);
-            NetworkClient.RegisterHandler<CardAddedToHandFromDiscardEvent>(HandleCardFromDiscardToHand);
-            NetworkClient.RegisterHandler<CardPlayedEvent>(HandleCardPlayed);
-            NetworkClient.RegisterHandler<CardMovedToBoardEvent>(HandleCardMovedToBoard);
-            NetworkClient.RegisterHandler<CardMovedToBeforePlayerEvent>(HandleCardMovedToBeforePlayer);
-            NetworkClient.RegisterHandler<CardMovedToTimeOfDaySlotEvent>(HandleCardMovedToTimeOfDay);
-            NetworkClient.RegisterHandler<CardMovedToDiscardPileEvent>(HandleCardMovedToDiscard);
-            NetworkClient.RegisterHandler<ItemAddedToPlayerEvent>(HandleItemAdded);
-            NetworkClient.RegisterHandler<ItemRemovedFromPlayerEvent>(HandleItemRemoved);
-            NetworkClient.RegisterHandler<PointsAwardedEvent>(HandlePointsAwarded);
-            NetworkClient.RegisterHandler<MessagePrintedEvent>(HandleMessagePrinted);
-            NetworkClient.RegisterHandler<TurnAdvancedEvent>(HandleTurnAdvanced);
-            NetworkClient.RegisterHandler<PhaseChangedEvent>(HandlePhaseChanged);
-            NetworkClient.RegisterHandler<DecisionRequestedEvent>(HandleDecisionRequested);
-            NetworkClient.RegisterHandler<DecisionResolvedEvent>(HandleDecisionResolved);
-            NetworkClient.RegisterHandler<GameEndedEvent>(HandleGameEnded);
-            NetworkClient.RegisterHandler<GameAbortedEvent>(HandleGameAborted);
+            Defer<GameStartedEvent>(HandleGameStarted);
+            Defer<CardDrawnEvent>(HandleCardDrawn);
+            Defer<CardAddedToHandFromDiscardEvent>(HandleCardFromDiscardToHand);
+            Defer<CardPlayedEvent>(HandleCardPlayed);
+            Defer<CardMovedToBoardEvent>(HandleCardMovedToBoard);
+            Defer<CardMovedToBeforePlayerEvent>(HandleCardMovedToBeforePlayer);
+            Defer<CardMovedToTimeOfDaySlotEvent>(HandleCardMovedToTimeOfDay);
+            Defer<CardMovedToDiscardPileEvent>(HandleCardMovedToDiscard);
+            Defer<ItemAddedToPlayerEvent>(HandleItemAdded);
+            Defer<ItemRemovedFromPlayerEvent>(HandleItemRemoved);
+            Defer<PointsAwardedEvent>(HandlePointsAwarded);
+            Defer<MessagePrintedEvent>(HandleMessagePrinted);
+            Defer<TurnAdvancedEvent>(HandleTurnAdvanced);
+            Defer<PhaseChangedEvent>(HandlePhaseChanged);
+            Defer<DecisionRequestedEvent>(HandleDecisionRequested);
+            Defer<DecisionResolvedEvent>(HandleDecisionResolved);
+            Defer<GameEndedEvent>(HandleGameEnded);
+            Defer<GameAbortedEvent>(HandleGameAborted);
+        }
+
+        // Event queue -------------------------------------------------------
+        //
+        // События с сервера НЕ применяются в момент получения. Сервер шлёт их
+        // на полной скорости, а каждое из них запускает анимацию на секунду —
+        // в итоге карты раздавались поверх ещё летящей карты дня/ночи, а
+        // запрос выбора приходил, пока стол ещё двигался.
+        //
+        // Вместо этого каждое сообщение кладётся в очередь, а качает её
+        // UnGameManager: следующее событие применяется только когда доиграли
+        // анимации предыдущего. Получается воспроизведение потока событий в
+        // темпе анимаций.
+        //
+        // Порядок сохраняется сам: Mirror доставляет по надёжному каналу
+        // строго по порядку, а очередь — FIFO.
+
+        private readonly Queue<Action> _pending = new();
+
+        public bool HasPendingEvents => _pending.Count > 0;
+
+        /// <summary>Длина очереди. Для диагностики: растёт — значит анимации не успевают.</summary>
+        public int PendingEventCount => _pending.Count;
+
+        /// <summary>
+        /// Применяет одно отложенное событие. Зовётся насосом; сам класс
+        /// ничего не применяет по своей инициативе.
+        /// </summary>
+        public void ApplyNextEvent()
+        {
+            if (_pending.Count == 0) return;
+            _pending.Dequeue()();
+        }
+
+        /// <summary>
+        /// Подписывает обработчик так, что тот попадает в очередь, а не
+        /// выполняется на месте. Единственный способ регистрации в этом
+        /// классе — прямой RegisterHandler обошёл бы очередь и вернул старое
+        /// поведение.
+        /// </summary>
+        private void Defer<T>(Action<T> handler) where T : struct, NetworkMessage
+        {
+            NetworkClient.RegisterHandler<T>(msg => _pending.Enqueue(() => handler(msg)));
         }
 
         // Helpers ----------------------------------------------------------

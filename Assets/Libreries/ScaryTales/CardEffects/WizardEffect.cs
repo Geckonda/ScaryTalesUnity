@@ -24,7 +24,13 @@ namespace ScaryTales.CardEffects
                 player.AddCardToHand(card);
                 card.Position = CardPosition.InHand;
                 card.Owner = player;
-                await AnimationManager.Instance.WaitForAllAnimations();
+                // Здесь стоял await AnimationManager.WaitForAllAnimations() —
+                // наследие тех времён, когда движок крутился на каждом клиенте
+                // и эффект мог дождаться локальной анимации. Теперь этот код
+                // исполняется на сервере, где анимаций нет вообще, так что
+                // вызов был пустым, а ядро зря тянулось к Unity-компоненту.
+                // Порядок «вытянул — разыграл» на экране обеспечивает очередь
+                // событий клиента.
                 await manager.PlayCard(card);
             }
             return;

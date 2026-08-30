@@ -2078,7 +2078,8 @@ MonoBehaviour:
   TimeOfDaySlot: {fileID: 27147263}
   DiscardPile: {fileID: 646332350}
   UIBlockerOverlay: {fileID: 60472258}
-  _animationDelay: 2000
+  _discardReadDelay: 500
+  _moveDuration: 0.5
 --- !u!1 &562380935
 GameObject:
   m_ObjectHideFlags: 0
@@ -7851,6 +7852,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8cc4d9cad8ad90348a80ece56c9fd535, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _dealDuration: 1
+  _burstDealDuration: 0.5
+  _burstThreshold: 3
 --- !u!1 &1923331201
 GameObject:
   m_ObjectHideFlags: 0
@@ -8669,6 +8673,7 @@ MonoBehaviour:
   _seatLayout: {fileID: 665121564}
   GameBoardPanel: {fileID: 730480510}
   Deck: {fileID: 879811623}
+  _eventStallWarningSeconds: 15
   _returnToMenuDelay: 5
 --- !u!1 &2107280953
 GameObject:

@@ -1,4 +1,4 @@
-using Assets.Scripts.Network;
+﻿using Assets.Scripts.Network;
 using Assets.Scripts.UIEntities;
 using DG.Tweening;
 using ScaryTales;
@@ -15,6 +15,12 @@ public class PlayerHandUI : MonoBehaviour
     private CardViewService _cardViewService;
 
     public Dictionary<Player, Transform> _playerHandPanels;
+
+    [Tooltip("Сколько летит карта в руку, секунд. Прилёт в руку не блокирует очередь событий, поэтому при раздаче карты летят внахлёст и значение НЕ умножается на их число.")]
+    [SerializeField] private float _dealDuration = 1f;
+
+    [Tooltip("Пауза между вылетами соседних карт при раздаче, секунд. Ноль — все вылетают разом; 0.15 даёт каскад, при котором карты идут одна за другой, оставаясь в полёте одновременно.")]
+    [SerializeField] private float _dealStagger = 0.15f;
 
     void Awake()
     {
@@ -67,7 +73,11 @@ public class PlayerHandUI : MonoBehaviour
             cardView.FaceDown();
 
         var animationTask = AnimateCardToHand(cardView, hand);
-        AnimationManager.Instance.Register(animationTask);
+        // blocksEventQueue: false — карты в руку ничему не предшествуют и
+        // ничему не мешают. Если бы очередь ждала каждую, раздача из пяти
+        // карт превратилась бы в пять последовательных полётов вместо одного
+        // общего вылета, каким она была раньше.
+        AnimationManager.Instance.Register(animationTask, blocksEventQueue: false, staggerSeconds: _dealStagger);
         await animationTask;
     }
 
@@ -86,13 +96,13 @@ public class PlayerHandUI : MonoBehaviour
             cardView.FaceDown();
 
         var animationTask = AnimateCardToHand(cardView, hand);
-        AnimationManager.Instance.Register(animationTask);
+        AnimationManager.Instance.Register(animationTask, blocksEventQueue: false);
         await animationTask;
     }
 
     private async Task AnimateCardToHand(CardView cardView, Transform hand)
     {
-        await cardView.transform.DOMove(hand.position, 1f)
+        await cardView.transform.DOMove(hand.position, _dealDuration)
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();
 

@@ -62,17 +62,25 @@ public class TextUIManager : MonoBehaviour
         UpdateCurrentPlayerText();
     }
 
-    private List<string> messages = new();
-    private void HandleNotify(string message)
+    /// <summary>
+    /// Объясняет, чего ждёт стол.
+    ///
+    /// <para>Пока сервер ждёт чужого решения (Дракон выбирает, что сбросить),
+    /// у остальных игра просто замирала без единого слова — пауза выглядела
+    /// как зависание. DecisionRequestedEvent несёт PlayerId именно затем,
+    /// чтобы её можно было подписать.</para>
+    ///
+    /// <para>Занимает NotifierText, который до сих пор не использовался:
+    /// у OnMessagePrinted не было ни одного подписчика.</para>
+    /// </summary>
+    public void ShowPrompt(string message)
     {
-        messages.Add(message);
-        if (messages.Count > 5)
-        {
-            messages.RemoveAt(0);
-            NotifierText.text = "";
-        }
+        if (NotifierText != null) NotifierText.text = message;
+    }
 
-        NotifierText.text = string.Join("\n", messages);
+    public void ClearPrompt()
+    {
+        if (NotifierText != null) NotifierText.text = string.Empty;
     }
 
     private void HandleAddPointsToPlayer(Player player)

@@ -106,8 +106,71 @@ public class UnGameManager : MonoBehaviour
         ClientView.OnGameStarted += HandleGameStarted;
         ClientView.OnTurnAdvanced += HandleTurnAdvanced;
         ClientView.OnDecisionRequested += HandleDecisionRequested;
+        ClientView.OnDecisionResolved += HandleDecisionResolved;
         ClientView.OnGameEnded += HandleGameEnded;
         ClientView.OnGameAborted += HandleGameAborted;
+
+        StartCoroutine(PumpClientEvents());
+    }
+
+    /// <summary>
+    /// Прокачивает очередь событий клиента: следующее событие применяется
+    /// только когда доиграли анимации предыдущего.
+    ///
+    /// <para>Это то самое «клиент буферизует события в очередь анимаций»,
+    /// которое план Фазы 3 назвал предпочтительным вариантом и которое так и
+    /// не было сделано. Без него сервер шлёт события на полной скорости:
+    /// карты раздавались поверх ещё летящей карты дня/ночи, а запрос выбора
+    /// приходил, пока стол ещё двигался.</para>
+    ///
+    /// <para>Живёт весь срок жизни объекта, включая меню: события начинают
+    /// приходить раньше, чем игра стартует (GameStartedEvent идёт через ту же
+    /// очередь), так что насос должен работать уже тогда.</para>
+    /// </summary>
+    [Tooltip("Через сколько секунд ожидания анимации писать в лог, что очередь событий встала. Только диагностика.")]
+    [SerializeField] private float _eventStallWarningSeconds = 15f;
+
+    private IEnumerator PumpClientEvents()
+    {
+        float waitingSince = -1f;
+
+        while (true)
+        {
+            var animations = AnimationManager.Instance;
+            bool blocked = animations != null && animations.IsBusy;
+
+            if (ClientView.HasPendingEvents && !blocked)
+            {
+                // Ровно одно за раз. Обработчики UI запускают свои анимации
+                // синхронно (до первого await) и тут же регистрируют их, так
+                // что уже на следующем кадре IsBusy скажет правду.
+                ClientView.ApplyNextEvent();
+                waitingSince = -1f;
+            }
+            else if (ClientView.HasPendingEvents)
+            {
+                // Анимация, которая никогда не завершится, останавливает
+                // очередь навсегда — игра просто замирает, и понять почему
+                // неоткуда. Пусть хотя бы скажет.
+                if (waitingSince < 0f)
+                {
+                    waitingSince = Time.unscaledTime;
+                }
+                else if (Time.unscaledTime - waitingSince > _eventStallWarningSeconds)
+                {
+                    Debug.LogWarning(
+                        $"[UnGameManager] Очередь событий стоит {_eventStallWarningSeconds:0} с: " +
+                        $"в ожидании {ClientView.PendingEventCount}, анимаций в полёте {animations?.ActiveCount ?? 0}.");
+                    waitingSince = Time.unscaledTime;
+                }
+            }
+            else
+            {
+                waitingSince = -1f;
+            }
+
+            yield return null;
+        }
     }
 
     /// <summary>
@@ -208,8 +271,20 @@ public class UnGameManager : MonoBehaviour
 
     private void HandleDecisionRequested(DecisionRequestedEvent evt)
     {
-        if (LocalPlayer == null || evt.PlayerId != LocalPlayer.Id)
-            return;
+        bool isMine = LocalPlayer != null && evt.PlayerId == LocalPlayer.Id;
+
+        // Сказать всем, чего ждёт стол — включая того, кто ждёт сам себя.
+        // Раньше во время чужого выбора игра просто замирала молча, и пауза
+        // выглядела как зависание.
+        if (_textUIManager != null)
+        {
+            var decider = ClientView.FindPlayer(evt.PlayerId);
+            _textUIManager.ShowPrompt(isMine
+                ? "Ваш выбор"
+                : $"Ждём: {decider?.Name ?? "игрока"}...");
+        }
+
+        if (!isMine) return;
 
         switch ((DecisionKind)evt.Kind)
         {
@@ -233,6 +308,11 @@ public class UnGameManager : MonoBehaviour
                 });
                 break;
         }
+    }
+
+    private void HandleDecisionResolved(int requestId)
+    {
+        if (_textUIManager != null) _textUIManager.ClearPrompt();
     }
 
     private IEnumerator PromptCardPick(int requestId, int[] candidateIds)

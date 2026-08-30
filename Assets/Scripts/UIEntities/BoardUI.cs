@@ -1,4 +1,4 @@
-using Assets.Scripts.Network;
+﻿using Assets.Scripts.Network;
 using Assets.Scripts.UIEntities;
 using Assets.Scripts.Views;
 using DG.Tweening;
@@ -22,8 +22,11 @@ public class BoardUI : MonoBehaviour
     public Transform DiscardPile;
     public GameObject UIBlockerOverlay;
 
-    [Tooltip("Pause (ms) before a card animates to the discard pile or the time-of-day slot, so players can read it first.")]
-    [SerializeField] private int _animationDelay = 2000;
+    [Tooltip("Пауза (мс) перед тем, как сброшенная эффектом карта улетит со стола — чтобы игроки успели увидеть, какую именно сбросили. С очередью событий пауза блокирующая, поэтому дорогая: всё остальное её ждёт.")]
+    [SerializeField] private int _discardReadDelay = 500;
+
+    [Tooltip("Сколько летит карта до места назначения, секунд.")]
+    [SerializeField] private float _moveDuration = 0.5f;
     private void Start()
     {
         if (UIBlockerOverlay != null) UIBlockerOverlay.SetActive(false);
@@ -96,7 +99,18 @@ public class BoardUI : MonoBehaviour
         CardView cardView = _cardViewService.GetCardView(card)
             ?? _cardViewService.CreateCardView(card, deck);
         cardView.FaceUp();
-        await AnimateCardTransformToPosition(cardView, TimeOfDaySlot);
+
+        // Единственный обработчик, который раньше не регистрировал свою
+        // анимацию — поэтому карту дня/ночи никто не ждал, и раздача карт
+        // начиналась поверх ещё летящей карты.
+        //
+        // Паузы здесь нет намеренно. Карта уже полежала на столе и прочитана,
+        // а в начале партии эта же пауза давала две секунды пустого экрана
+        // перед вылетом карты Ночи — ту самую «непонятную задержку».
+        var animationTask = AnimateCardTransformToPosition(cardView, TimeOfDaySlot, 0);
+        AnimationManager.Instance.Register(animationTask);
+        await animationTask;
+
         cardView.transform.SetParent(TimeOfDaySlot);
         card.Owner = null;
         cardView.transform.localScale = Vector3.one;
@@ -107,7 +121,16 @@ public class BoardUI : MonoBehaviour
         CardView cardView = _cardViewService.GetCardView(card);
         if (cardView != null)
         {
-            var animationTask = AnimateCardTransformToPosition(cardView, DiscardPile);
+            // Карта, уходящая из слота дня/ночи, провисела на виду весь
+            // прошлый ход — читать её заново незачем, и как только она ушла,
+            // на её место сразу летит новая. Пауза нужна только для карт,
+            // которые эффект сбрасывает со стола: там игрок должен успеть
+            // увидеть, какие именно.
+            bool leavingTimeOfDaySlot = TimeOfDaySlot != null
+                && cardView.transform.parent == TimeOfDaySlot;
+
+            var animationTask = AnimateCardTransformToPosition(
+                cardView, DiscardPile, leavingTimeOfDaySlot ? 0 : _discardReadDelay);
             AnimationManager.Instance.Register(animationTask);
             await animationTask;
             DiscardPileView.Instance.SetSuit();
@@ -119,17 +142,17 @@ public class BoardUI : MonoBehaviour
         }
     }
 
-    public async Task AnimateCardTransformToPosition(CardView card, Transform to)
+    public async Task AnimateCardTransformToPosition(CardView card, Transform to, int delayMs)
     {
-        await Task.Delay(_animationDelay);
-        await card.transform.DOMove(to.position, 1f)
+        if (delayMs > 0) await Task.Delay(delayMs);
+        await card.transform.DOMove(to.position, _moveDuration)
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();
     }
 
     public async Task AnimateCardTransformToPositionInLayout(CardView card, Transform to)
     {
-        await card.transform.DOMove(to.position, 1f)
+        await card.transform.DOMove(to.position, _moveDuration)
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();
         // worldPositionStays: false — the destination panel may be rotated
