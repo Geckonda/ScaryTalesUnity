@@ -7,6 +7,7 @@ using ScaryTales.Interaction_Entities.EnvUnity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -128,14 +129,14 @@ namespace Assets.Scripts.Network
         /// the new <see cref="Player.Id"/> — deliberately not the connection
         /// id, so a seat outlives the connection sitting in it (Phase 6.1).
         /// </summary>
-        public JoinResult TryAddPlayer(NetworkConnectionToClient conn, out Player player)
+        public JoinResult TryAddPlayer(NetworkConnectionToClient conn, string requestedName, out Player player)
         {
             player = null;
             var accepted = CanAccept();
             if (accepted != JoinResult.Ok) return accepted;
 
             int seatId = _nextSeatId++;
-            player = new Player(seatId, $"Player{_players.Count + 1}");
+            player = new Player(seatId, SanitizeName(requestedName));
             _players.Add(player);
             Channel.Bind(seatId, conn);
             _seatByConnection[conn.connectionId] = seatId;
@@ -145,6 +146,79 @@ namespace Assets.Scripts.Network
             BroadcastLobbyState();
             return JoinResult.Ok;
         }
+
+        /// <summary>Longest name a player may end up with, in characters.</summary>
+        private const int MaxNameLength = 16;
+
+        /// <summary>
+        /// Turns what a player asked to be called into what this room will
+        /// call them.
+        ///
+        /// <para>Sanitizing happens <b>here</b>, on the server, and nowhere
+        /// else. The name arrives over the wire and is then displayed to
+        /// *other* people, so the client that supplied it is exactly the party
+        /// that must not be trusted with it. Doing it in one place also means
+        /// every display site — seat labels, the lobby roster, "current
+        /// player", server logs — is covered without any of them knowing.</para>
+        ///
+        /// <para>The rule that matters most is stripping <c>&lt;</c> and
+        /// <c>&gt;</c>: those labels are rendered by TextMeshPro, which parses
+        /// markup. A player calling themselves <c>&lt;size=400&gt;Вася</c>
+        /// would wreck the layout on everyone else's screen, not their own.</para>
+        /// </summary>
+        private string SanitizeName(string requested)
+        {
+            var cleaned = new StringBuilder(MaxNameLength);
+            bool lastWasSpace = false;
+
+            foreach (var c in requested ?? string.Empty)
+            {
+                // Rich-text delimiters, control characters and newlines all go:
+                // the first would let one player restyle everyone's UI, the
+                // rest would break single-line labels.
+                if (c == '<' || c == '>' || char.IsControl(c)) continue;
+
+                if (char.IsWhiteSpace(c))
+                {
+                    // Collapse runs, and never start with a space.
+                    if (lastWasSpace || cleaned.Length == 0) continue;
+                    lastWasSpace = true;
+                    cleaned.Append(' ');
+                }
+                else
+                {
+                    lastWasSpace = false;
+                    cleaned.Append(c);
+                }
+                if (cleaned.Length >= MaxNameLength) break;
+            }
+
+            var name = cleaned.ToString().TrimEnd();
+            if (name.Length == 0)
+                name = $"Player{_players.Count + 1}";
+
+            return MakeUnique(name);
+        }
+
+        /// <summary>
+        /// Two people called "Саша" at one table is a worse experience than
+        /// one of them being "Саша (2)". Compared case-insensitively, because
+        /// "саша" and "Саша" are the same problem.
+        /// </summary>
+        private string MakeUnique(string name)
+        {
+            if (!IsNameTaken(name)) return name;
+            for (int suffix = 2; suffix < 100; suffix++)
+            {
+                var candidate = $"{name} ({suffix})";
+                if (!IsNameTaken(candidate)) return candidate;
+            }
+            // Unreachable at four seats; a seat id is at least unambiguous.
+            return $"{name} #{_nextSeatId}";
+        }
+
+        private bool IsNameTaken(string name) =>
+            _players.Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
 
         public bool HasConnection(int connectionId) => _seatByConnection.ContainsKey(connectionId);
 

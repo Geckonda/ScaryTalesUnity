@@ -10,21 +10,28 @@ namespace Assets.Scripts.Network.Messages
 
     /// <summary>
     /// Client → server. Make me a new room and put me in it as its owner.
-    /// The name is cosmetic; the server answers with the code that matters.
+    /// The room name is cosmetic; the server answers with the code that
+    /// matters.
+    ///
+    /// <c>PlayerName</c> is a request, not a fact: the server sanitizes it
+    /// and may hand back something else entirely — see <c>Room.SanitizeName</c>.
+    /// Empty is fine and means "call me whatever".
     /// </summary>
     public struct CreateRoomIntent : NetworkMessage
     {
         public string RoomName;
+        public string PlayerName;
     }
 
     /// <summary>
     /// Client → server. Put me in the room with this code. Case and stray
     /// spaces or dashes don't matter — the server normalizes before looking
-    /// it up.
+    /// it up. <c>PlayerName</c> behaves as in <see cref="CreateRoomIntent"/>.
     /// </summary>
     public struct JoinRoomIntent : NetworkMessage
     {
         public string Code;
+        public string PlayerName;
     }
 
     /// <summary>Client → server. Take me out of whatever room I'm in.</summary>

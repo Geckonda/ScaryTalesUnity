@@ -96,8 +96,24 @@ namespace Assets.Scripts.Network
         /// (<c>Utils.IsHeadless()</c> is graphics-device based, so an ordinary
         /// windowed build never satisfies it).
         /// </summary>
-        private bool WantsDedicatedServer() =>
-            Utils.IsHeadless() || HasCommandLineFlag(_serverFlag);
+        private bool WantsDedicatedServer()
+        {
+            // The flag is explicit intent — always honour it.
+            if (HasCommandLineFlag(_serverFlag)) return true;
+            if (!Utils.IsHeadless()) return false;
+
+            // Headless detection is compile-time in the editor: selecting the
+            // Dedicated Server build target defines UNITY_SERVER, so
+            // Utils.IsHeadless() is true in Play Mode even though there is a
+            // window and a GPU. Without this guard, switching platform to
+            // build a server turns the editor itself into one — canvases
+            // hidden, blank screen, no way to test as a client.
+            //
+            // Mirror applies the same rule to its own headlessStartMode
+            // (NetworkManager.Start), and editorAutoStart is its field for
+            // opting in. Reuse it rather than inventing a second switch.
+            return !Application.isEditor || editorAutoStart;
+        }
 
         private void ApplyPortOverride()
         {
@@ -255,7 +271,7 @@ namespace Assets.Scripts.Network
             _registry.Add(room);
 
             Debug.Log($"[Server] Room '{name}' created with code {code} ({_registry.RoomCount} live).");
-            Seat(conn, room);
+            Seat(conn, room, msg.PlayerName);
         }
 
         /// <summary>
@@ -310,7 +326,7 @@ namespace Assets.Scripts.Network
                 Refuse(conn, RoomJoinFailure.UnknownCode);
                 return;
             }
-            Seat(conn, room);
+            Seat(conn, room, msg.PlayerName);
         }
 
         private void OnLeaveRoom(NetworkConnectionToClient conn, LeaveRoomIntent msg)
@@ -322,9 +338,9 @@ namespace Assets.Scripts.Network
         /// Puts a connection in a room, or tells it why not. The room decides
         /// whether it will have them; this only translates the answer.
         /// </summary>
-        private void Seat(NetworkConnectionToClient conn, Room room)
+        private void Seat(NetworkConnectionToClient conn, Room room, string requestedName)
         {
-            var result = room.TryAddPlayer(conn, out var player);
+            var result = room.TryAddPlayer(conn, requestedName, out var player);
             if (result != Room.JoinResult.Ok)
             {
                 Refuse(conn, result == Room.JoinResult.RoomFull
