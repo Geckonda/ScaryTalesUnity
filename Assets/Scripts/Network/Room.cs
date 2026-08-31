@@ -591,6 +591,7 @@ namespace Assets.Scripts.Network
                     LocalPlayerId = p.Id,
                     CurrentRuleId = _inGameRuleId,
                     CurrentFinalRuleId = _finalRuleId,
+                    CardCatalogVersion = GameBuilder.CardCatalogVersion(),
                 });
                 if (!sent)
                     Debug.LogError($"[Room] missing connection for player {p.Id}");

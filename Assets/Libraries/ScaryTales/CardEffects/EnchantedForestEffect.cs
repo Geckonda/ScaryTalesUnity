@@ -20,22 +20,17 @@ namespace ScaryTales.CardEffects
         {
             var state = context.GameState;
             var manager = context.GameManager;
-            var deck = context.Deck;
             var current = state.GetCurrentPlayer();
             var players = context.Players;
 
-            if (deck.CardsRemaining == 0)
-            {
-                manager.PrintMessage("В колоде не осталось карт.");
-                return;
-            }
+            // Взятие — по возможности: DrawCard сам сообщает о пустой колоде.
+            //
+            // Раньше здесь стояли два досрочных выхода по `CardsRemaining == 0`,
+            // и второй из них убивал НОЧНУЮ половину эффекта. А ночью колода
+            // не нужна вовсе: игроки сбрасывают из руки. На исходе партии,
+            // когда колода как раз и пустеет, лес просто переставал работать —
+            // ровно в тот момент, когда сброс всей руки решает исход.
             manager.DrawCard(current);
-
-            if (deck.CardsRemaining == 0)
-            {
-                manager.PrintMessage("В колоде не осталось карт.");
-                return;
-            }
 
             if (!state.IsNight)
             {
@@ -47,32 +42,54 @@ namespace ScaryTales.CardEffects
 
             manager.PrintMessage("Все игроки сбрасывают 1 карту из своей руки");
 
-            // Snapshot each player's hand and request picks concurrently.
-            // Players with empty hands are skipped — nothing to discard.
-            var snapshots = new List<(Player player, List<Card> hand)>();
-            var pickTasks = new List<Task<CardPick>>();
+            // Спрашиваем всех разом, но каждый сбрасывает СРАЗУ, как ответил,
+            // не дожидаясь остальных.
+            //
+            // Раньше здесь стоял Task.WhenAll на все ответы, и только потом
+            // общий цикл сброса. За столом это выглядело мёртвой паузой:
+            // выбрал — и ничего не происходит, а кого ждут, непонятно.
+            // Теперь уход карты в сброс сам показывает, кто уже определился,
+            // а кто ещё думает.
+            //
+            // Опросы по-прежнему уходят одновременно: AskAndDiscard доходит
+            // до первого await синхронно, так что цикл успевает разослать все
+            // запросы, прежде чем начнёт ждать.
+            var discards = new List<Task>();
             foreach (var p in players)
             {
                 var hand = p.Hand.ToList();
                 if (hand.Count == 0) continue;
-                snapshots.Add((p, hand));
-                pickTasks.Add(context.Router.PickCard(
-                    p.Id,
-                    new PickCardRequest(hand.Select(c => c.Id))));
+                discards.Add(AskAndDiscard(context, p, hand));
                 manager.PrintMessage($"Игрок {p.Name} выбирает карту для сброса.");
             }
 
-            var picks = await Task.WhenAll(pickTasks);
+            await Task.WhenAll(discards);
+        }
 
-            for (int i = 0; i < snapshots.Count; i++)
-            {
-                var (player, hand) = snapshots[i];
-                var pick = picks[i];
-                var card = hand.FirstOrDefault(c => c.Id == pick.CardId);
-                if (card == null) continue;
-                player.RemoveCardFromHand(card);
-                manager.PutCardToDiscardPile(card);
-            }
+        /// <summary>
+        /// Спросить одного игрока и тут же сбросить выбранное.
+        ///
+        /// <para>Снимок руки сделан ДО ожидания ответа, а за это время рука
+        /// могла измениться: игрок вышел посреди опроса, и его карты уже
+        /// вернулись в колоду. Сбросить такую карту значило бы положить в
+        /// сброс то, что лежит в колоде, — один экземпляр в двух зонах
+        /// сразу.</para>
+        ///
+        /// <para>Проверка обязана быть здесь, а не у зовущего: эффект сам
+        /// выбрал спрашивать всех разом, ему и отвечать за то, что мир между
+        /// вопросом и ответом не стоял на месте.</para>
+        /// </summary>
+        private static async Task AskAndDiscard(IGameContext context, Player player, List<Card> hand)
+        {
+            var pick = await context.Router.PickCard(
+                player.Id,
+                new PickCardRequest(hand.Select(c => c.Id)));
+
+            var card = hand.FirstOrDefault(c => c.Id == pick.CardId);
+            if (card == null || !player.HasCard(card)) return;
+
+            player.RemoveCardFromHand(card);
+            context.GameManager.PutCardToDiscardPile(card);
         }
     }
 }

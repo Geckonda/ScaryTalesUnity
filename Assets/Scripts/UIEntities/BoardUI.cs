@@ -155,6 +155,11 @@ public class BoardUI : MonoBehaviour
         // его отсюда некуда, эти задачи ждут из async void.
         if (card == null || to == null) return;
 
+        // Гасим предыдущий полёт этой же карты — см. пояснение в
+        // PlayerHandUI.AnimateCardToHand. Два твина на одном трансформе
+        // тянут его в разные стороны.
+        card.transform.DOKill();
+
         await card.transform.DOMove(to.position, _moveDuration)
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();

@@ -38,6 +38,14 @@ namespace Assets.Scripts.Network.Messages
         public int LocalPlayerId;     // per-client: which Players[i] is "me"
         public int CurrentRuleId;     // rule template id (host's pick)
         public int CurrentFinalRuleId;
+
+        /// <summary>
+        /// Отпечаток каталога карт на сервере (<c>GameBuilder.CardCatalogVersion</c>).
+        /// Клиент сверяет со своим: id карт назначаются позиционно по списку
+        /// шаблонов, так что разные сборки понимают одни и те же номера
+        /// по-разному — и партия молча начинает показывать не те карты.
+        /// </summary>
+        public int CardCatalogVersion;
     }
 
     /// <summary>

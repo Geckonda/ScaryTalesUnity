@@ -203,6 +203,17 @@ public class UnGameManager : MonoBehaviour
     {
         _inGame = true;
 
+        // Каталоги карт разошлись — играть в это нельзя: на экране будут не
+        // те карты, что на столе у сервера. Лога мало, потому что выглядит
+        // такая партия почти нормально: карты просто «странно себя ведут».
+        if (ClientView != null && !ClientView.CardCatalogMatches && ResultContainer.Instance != null)
+        {
+            ResultContainer.Instance.ShowMessage(
+                "Версия игры не совпадает с серверной.\n" +
+                "Колода на сервере другая, поэтому карты на экране будут не те.\n" +
+                "Обновите игру или перезапустите сервер на той же сборке.");
+        }
+
         // Rebuild the server's rule choice from its ids. A null here means
         // this build doesn't know a rule the server used — a version
         // mismatch, worth shouting about rather than silently substituting.
@@ -296,6 +307,10 @@ public class UnGameManager : MonoBehaviour
         // чужого выбора игра замирала молча, и пауза выглядела как зависание.
         // Показываем это тем же жестом, что и «чей ход» — цветом ника на его
         // месте, а не отдельной строкой.
+        // Запоминаем, кого именно спросили: DecisionResolvedEvent несёт
+        // только номер запроса, а снять подсветку надо с конкретного игрока.
+        // Ждущих может быть несколько — Зачарованный лес спрашивает всех.
+        _decidingByRequest[evt.RequestId] = evt.PlayerId;
         if (_textUIManager != null)
             _textUIManager.SetDeciding(evt.PlayerId);
 
@@ -330,9 +345,15 @@ public class UnGameManager : MonoBehaviour
         }
     }
 
+    // Кого о чём спросили: номер запроса → место игрока.
+    private readonly Dictionary<int, int> _decidingByRequest = new();
+
     private void HandleDecisionResolved(int requestId)
     {
-        if (_textUIManager != null) _textUIManager.ClearDeciding();
+        if (!_decidingByRequest.TryGetValue(requestId, out int playerId)) return;
+        _decidingByRequest.Remove(requestId);
+
+        if (_textUIManager != null) _textUIManager.ClearDeciding(playerId);
     }
 
     // Отменяемый выбор карты, который ждёт ответа прямо сейчас, или 0.
@@ -613,6 +634,9 @@ public class UnGameManager : MonoBehaviour
         _inGame = false;
         DragAndDrop.SelectCard = false;
         _myTurnCardPending = false;
+        // Ждать больше некого.
+        _decidingByRequest.Clear();
+        if (_textUIManager != null) _textUIManager.ClearAllDeciding();
 
         var winner = ClientView.FindPlayer(winnerId);
         ResultContainer.Instance.ShowWinner(winner?.Name ?? "?");
@@ -636,6 +660,9 @@ public class UnGameManager : MonoBehaviour
         _inGame = false;
         DragAndDrop.SelectCard = false;
         _myTurnCardPending = false;
+        // Ждать больше некого.
+        _decidingByRequest.Clear();
+        if (_textUIManager != null) _textUIManager.ClearAllDeciding();
 
         // Null on a teardown that races the scene reload; the log line is
         // then the only record, which is fine — we're leaving anyway.
@@ -691,6 +718,9 @@ public class UnGameManager : MonoBehaviour
         _inGame = false;
         DragAndDrop.SelectCard = false;
         _myTurnCardPending = false;
+        // Ждать больше некого.
+        _decidingByRequest.Clear();
+        if (_textUIManager != null) _textUIManager.ClearAllDeciding();
 
         result.ShowMessage("Связь с сервером потеряна. Партия завершена.");
         Debug.LogWarning("[Client] Connection lost mid-game.");

@@ -6089,8 +6089,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b0834f3815eeed343917f673cb4708d2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  NotifierText: {fileID: 1148178681}
-  CurrentPlayerText: {fileID: 1835450287}
   _activeNameColor: {r: 1, g: 0.84, b: 0, a: 1}
   _idleNameColor: {r: 1, g: 1, b: 1, a: 1}
   _decidingNameColor: {r: 1, g: 0.45, b: 0.1, a: 1}

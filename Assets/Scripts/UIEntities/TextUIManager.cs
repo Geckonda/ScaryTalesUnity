@@ -48,8 +48,10 @@ public class TextUIManager : MonoBehaviour
     private readonly Dictionary<Player, TMP_Text> _playerScorePanels = new();
     private readonly Dictionary<Player, TMP_Text> _playerNameTexts = new();
 
-    // Игрок, от которого ждут решения прямо сейчас, или null.
-    private Player _deciding;
+    // Ожидаемых может быть НЕСКОЛЬКО: Зачарованный лес спрашивает всех
+    // сразу. Пока это был один игрок, подсвечивался последний спрошенный, а
+    // остальные выглядели так, будто от них ничего не ждут.
+    private readonly HashSet<Player> _deciding = new();
 
     // Shared so Initialize and HandleAddPointsToPlayer can't drift apart.
     private const string ScorePrefix = "ПО: ";
@@ -66,7 +68,7 @@ public class TextUIManager : MonoBehaviour
 
         _playerScorePanels.Clear();
         _playerNameTexts.Clear();
-        _deciding = null;
+        _deciding.Clear();
 
         var localSeat = _seatLayout?.LocalSeat;
         if (localSeat != null)
@@ -124,7 +126,7 @@ public class TextUIManager : MonoBehaviour
 
         foreach (var pair in _playerNameTexts)
         {
-            bool isDeciding = _deciding != null && pair.Key == _deciding;
+            bool isDeciding = _deciding.Contains(pair.Key);
             bool isCurrent = current != null && pair.Key == current;
 
             // Ожидание решения важнее, чем «чей ход»: обычно это один и тот
@@ -159,22 +161,34 @@ public class TextUIManager : MonoBehaviour
 
         // Ник больше не участвует в подсветке хода: очередь его не касается.
         _playerNameTexts.Remove(player);
-        if (_deciding == player) _deciding = null;
+        _deciding.Remove(player);
 
         RefreshTurnHighlight();
     }
 
-    /// <summary>Стол ждёт решения от этого игрока.</summary>
+    /// <summary>Стол ждёт решения ещё и от этого игрока.</summary>
     public void SetDeciding(int playerId)
     {
-        _deciding = _view?.FindPlayer(playerId);
+        var player = _view?.FindPlayer(playerId);
+        if (player == null) return;
+        _deciding.Add(player);
         RefreshTurnHighlight();
     }
 
-    /// <summary>Решение принято — вернуть обычную подсветку хода.</summary>
-    public void ClearDeciding()
+    /// <summary>Этот игрок ответил — снять с него ожидание.</summary>
+    public void ClearDeciding(int playerId)
     {
-        _deciding = null;
+        var player = _view?.FindPlayer(playerId);
+        if (player == null) return;
+        _deciding.Remove(player);
+        RefreshTurnHighlight();
+    }
+
+    /// <summary>Ждать больше некого: партия кончилась или прервана.</summary>
+    public void ClearAllDeciding()
+    {
+        if (_deciding.Count == 0) return;
+        _deciding.Clear();
         RefreshTurnHighlight();
     }
 

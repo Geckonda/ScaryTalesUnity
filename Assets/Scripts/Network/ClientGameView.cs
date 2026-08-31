@@ -220,8 +220,30 @@ namespace Assets.Scripts.Network
 
         // Handlers ----------------------------------------------------------
 
+        /// <summary>
+        /// Сошлись ли каталоги карт сервера и клиента. false означает, что
+        /// один и тот же номер карты на двух сторонах — разные карты.
+        /// </summary>
+        public bool CardCatalogMatches { get; private set; } = true;
+
         private void HandleGameStarted(GameStartedEvent evt)
         {
+            // Сверяем ДО всего остального: если каталоги разошлись, любой
+            // последующий FindCard вернёт не ту карту, и партия будет честно
+            // показывать чужую колоду.
+            int mine = GameBuilder.CardCatalogVersion();
+            CardCatalogMatches = evt.CardCatalogVersion == mine;
+            if (!CardCatalogMatches)
+            {
+                Debug.LogError(
+                    "[ClientGameView] Каталог карт не совпадает с серверным " +
+                    $"(сервер {evt.CardCatalogVersion}, клиент {mine}). " +
+                    "Id карт назначаются позиционно по списку шаблонов, так что " +
+                    "сборки с разным составом колоды понимают одни и те же номера " +
+                    "по-разному: на экране будут не те карты. Обновите сервер и клиент " +
+                    "до одной сборки.");
+            }
+
             Players = evt.Players
                 .Select(pi => new Player(pi.Id, pi.Name))
                 .ToList();

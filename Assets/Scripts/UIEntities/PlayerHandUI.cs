@@ -2,6 +2,7 @@
 using Assets.Scripts.UIEntities;
 using DG.Tweening;
 using ScaryTales;
+using ScaryTales.Enums;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -84,7 +85,7 @@ public class PlayerHandUI : MonoBehaviour
         else
             cardView.FaceDown();
 
-        var animationTask = AnimateCardToHand(cardView, hand);
+        var animationTask = AnimateCardToHand(cardView, hand, card, player);
         // blocksEventQueue: false — карты в руку ничему не предшествуют и
         // ничему не мешают. Если бы очередь ждала каждую, раздача из пяти
         // карт превратилась бы в пять последовательных полётов вместо одного
@@ -107,7 +108,7 @@ public class PlayerHandUI : MonoBehaviour
         else
             cardView.FaceDown();
 
-        var animationTask = AnimateCardToHand(cardView, hand);
+        var animationTask = AnimateCardToHand(cardView, hand, card, player);
         AnimationManager.Instance.Register(animationTask, blocksEventQueue: false);
         await animationTask;
     }
@@ -158,11 +159,30 @@ public class PlayerHandUI : MonoBehaviour
         Destroy(cardView.gameObject);
     }
 
-    private async Task AnimateCardToHand(CardView cardView, Transform hand)
+    private async Task AnimateCardToHand(CardView cardView, Transform hand, Card card, Player owner)
     {
+        // Гасим предыдущий полёт этой же карты, если он ещё идёт.
+        //
+        // DOTween сам старый твин не убивает: два DOMove на одном трансформе
+        // просто тянут его в разные стороны, и карта уезжает куда-то между.
+        // Так и выглядела карта Волшебника — стол успевал её забрать и
+        // разложить, а незавершённый полёт в руку ещё полсекунды волок её
+        // прочь от разложенного места.
+        cardView.transform.DOKill();
+
         await cardView.transform.DOMove(hand.position, _dealDuration)
             .SetEase(Ease.OutQuad)
             .AsyncWaitForCompletion();
+
+        // За время полёта карта могла уехать дальше — и это не редкость, а
+        // штатный ход событий: Волшебник раскрывает карту и ТУТ ЖЕ её
+        // разыгрывает, так что «в руку» и «на стол» приходят подряд. Прилёт
+        // в руку очередь не блокирует, поэтому обе анимации живут
+        // одновременно, а родителя назначает та, что финиширует последней —
+        // то есть более длинный полёт в руку. Без этой проверки карта
+        // возвращалась бы со стола обратно в руку через полсекунды.
+        if (card != null && (card.Position != CardPosition.InHand || card.Owner != owner))
+            return;
 
         // За время полёта сцену могли перезагрузить — выход в меню посреди
         // партии делает ровно это, — и тогда карты с панелью уже уничтожены.
