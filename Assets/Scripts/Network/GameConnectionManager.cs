@@ -36,10 +36,10 @@ namespace Assets.Scripts.Network
 
         [Header("Rules in play")]
         [Tooltip("Rule id from RuleCatalog used during the game. The server is the only place this is chosen; clients learn it from GameStartedEvent. A lobby picker would drive these two fields.")]
-        [SerializeField] private int _inGameRuleId = Assets.Libreries.ScaryTales.Rules.RuleCatalog.DefaultInGameRuleId;
+        [SerializeField] private int _inGameRuleId = Assets.Libraries.ScaryTales.Rules.RuleCatalog.DefaultInGameRuleId;
 
         [Tooltip("Rule id from RuleCatalog scored at the end of the game.")]
-        [SerializeField] private int _finalRuleId = Assets.Libreries.ScaryTales.Rules.RuleCatalog.DefaultFinalRuleId;
+        [SerializeField] private int _finalRuleId = Assets.Libraries.ScaryTales.Rules.RuleCatalog.DefaultFinalRuleId;
 
         [Header("Dedicated server")]
         [Tooltip("Start as a server with no player of its own when the process is headless or was launched with the server flag below.")]
@@ -96,8 +96,24 @@ namespace Assets.Scripts.Network
         /// (<c>Utils.IsHeadless()</c> is graphics-device based, so an ordinary
         /// windowed build never satisfies it).
         /// </summary>
-        private bool WantsDedicatedServer() =>
-            Utils.IsHeadless() || HasCommandLineFlag(_serverFlag);
+        private bool WantsDedicatedServer()
+        {
+            // The flag is explicit intent — always honour it.
+            if (HasCommandLineFlag(_serverFlag)) return true;
+            if (!Utils.IsHeadless()) return false;
+
+            // Headless detection is compile-time in the editor: selecting the
+            // Dedicated Server build target defines UNITY_SERVER, so
+            // Utils.IsHeadless() is true in Play Mode even though there is a
+            // window and a GPU. Without this guard, switching platform to
+            // build a server turns the editor itself into one — canvases
+            // hidden, blank screen, no way to test as a client.
+            //
+            // Mirror applies the same rule to its own headlessStartMode
+            // (NetworkManager.Start), and editorAutoStart is its field for
+            // opting in. Reuse it rather than inventing a second switch.
+            return !Application.isEditor || editorAutoStart;
+        }
 
         private void ApplyPortOverride()
         {
@@ -255,7 +271,7 @@ namespace Assets.Scripts.Network
             _registry.Add(room);
 
             Debug.Log($"[Server] Room '{name}' created with code {code} ({_registry.RoomCount} live).");
-            Seat(conn, room);
+            Seat(conn, room, msg.PlayerName);
         }
 
         /// <summary>
@@ -310,7 +326,7 @@ namespace Assets.Scripts.Network
                 Refuse(conn, RoomJoinFailure.UnknownCode);
                 return;
             }
-            Seat(conn, room);
+            Seat(conn, room, msg.PlayerName);
         }
 
         private void OnLeaveRoom(NetworkConnectionToClient conn, LeaveRoomIntent msg)
@@ -322,9 +338,9 @@ namespace Assets.Scripts.Network
         /// Puts a connection in a room, or tells it why not. The room decides
         /// whether it will have them; this only translates the answer.
         /// </summary>
-        private void Seat(NetworkConnectionToClient conn, Room room)
+        private void Seat(NetworkConnectionToClient conn, Room room, string requestedName)
         {
-            var result = room.TryAddPlayer(conn, out var player);
+            var result = room.TryAddPlayer(conn, requestedName, out var player);
             if (result != Room.JoinResult.Ok)
             {
                 Refuse(conn, result == Room.JoinResult.RoomFull
@@ -342,6 +358,7 @@ namespace Assets.Scripts.Network
                 Code = room.Code,
                 RoomName = room.Name,
                 IsOwner = player.Id == room.OwnerSeatId,
+                SeatId = player.Id,
             });
 
             Debug.Log($"[Server] {player.Name} took seat {player.Id} in room {room.Code}: {room.PlayerCount}/{_maxPlayers}");
@@ -467,10 +484,23 @@ namespace Assets.Scripts.Network
         public override void OnClientDisconnect()
         {
             base.OnClientDisconnect();
-            // Disconnect mid-game (server quit, network failure, kicked):
-            // reset to the menu state. Per Phase-3 non-goals there's no
-            // reconnect flow — players just bounce back to the menu and
-            // start over.
+
+            // Уходим по собственному решению (кнопка «Выйти», меню по Esc):
+            // ReturnToMenu уже работает, и это его же отключение вернулось
+            // сюда по кругу.
+            if (_returningToMenu) return;
+
+            // Связь оборвалась не по нашей воле: сервер остановлен, хост
+            // вышел, сеть отвалилась. Молча перезагрузить сцену — значит
+            // выбросить игрока в главное меню без единого слова о том, что
+            // случилось. Партия для него кончилась, а конец партии игрок
+            // должен увидеть и закрыть сам, как любой другой.
+            if (UnGameManager.Instance != null
+                && UnGameManager.Instance.HandleConnectionLost())
+                return;
+
+            // Показывать нечего — мы в лобби или в меню (не удалось
+            // подключиться, сервер отказал). Тогда прежнее поведение.
             ReturnToMenu();
         }
     }

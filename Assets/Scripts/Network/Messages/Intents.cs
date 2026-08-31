@@ -30,6 +30,13 @@ namespace Assets.Scripts.Network.Messages
     {
         public int RequestId;
         public int CardId;
+
+        /// <summary>
+        /// false означает «передумал». Сервер принимает такой ответ, только
+        /// если сам пометил запрос как отменяемый — иначе клиент мог бы
+        /// пропускать любые обязательные решения.
+        /// </summary>
+        public bool HasPick;
     }
 
     /// <summary>

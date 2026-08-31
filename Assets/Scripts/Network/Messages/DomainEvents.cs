@@ -38,6 +38,14 @@ namespace Assets.Scripts.Network.Messages
         public int LocalPlayerId;     // per-client: which Players[i] is "me"
         public int CurrentRuleId;     // rule template id (host's pick)
         public int CurrentFinalRuleId;
+
+        /// <summary>
+        /// Отпечаток каталога карт на сервере (<c>GameBuilder.CardCatalogVersion</c>).
+        /// Клиент сверяет со своим: id карт назначаются позиционно по списку
+        /// шаблонов, так что разные сборки понимают одни и те же номера
+        /// по-разному — и партия молча начинает показывать не те карты.
+        /// </summary>
+        public int CardCatalogVersion;
     }
 
     /// <summary>
@@ -163,6 +171,14 @@ namespace Assets.Scripts.Network.Messages
         public int Kind;             // DecisionKind enum cast to int
         public int[] CandidateIds;   // card ids, item types, or rule effect ids
         public string Prompt;        // optional, used by Confirm
+
+        /// <summary>
+        /// Можно ли отказаться от выбора. Решает сервер, клиент только
+        /// показывает: у эффекта разыгранной карты выбор обязателен, а вот
+        /// правило A1-2 спрашивает до того, как что-либо потратить, и там
+        /// отказ безобиден.
+        /// </summary>
+        public bool CanCancel;
     }
 
     /// <summary>
@@ -195,7 +211,9 @@ namespace Assets.Scripts.Network.Messages
     public struct GameEndedEvent : NetworkMessage
     {
         public int WinnerId;
-        public int[] FinalScores; // parallel to GameStartedEvent.Players
+        // Итоговые очки здесь когда-то ехали параллельным массивом к
+        // GameStartedEvent.Players и не читались ни одним клиентом: счёт и так
+        // живёт на местах и обновляется PointsAwardedEvent. Убрано 2026-08-31.
     }
 
     /// <summary>
@@ -211,5 +229,65 @@ namespace Assets.Scripts.Network.Messages
     {
         public int LeftPlayerId; // whose departure ended it, or 0 if not player-caused
         public string Reason;    // display text, already localized by the server
+    }
+
+    /// <summary>
+    /// Игрок вышел, но партия продолжается без него — за столом осталось
+    /// достаточно народу.
+    ///
+    /// <para>Отличается от <see cref="GameAbortedEvent"/> ровно тем, что это
+    /// не конец: клиент убирает игрока из своего зеркала и порядка ходов и
+    /// играет дальше. Комната завершается только тогда, когда остаться
+    /// вдвоём уже нельзя.</para>
+    /// </summary>
+    public struct PlayerLeftEvent : NetworkMessage
+    {
+        public int PlayerId;
+        public string Reason; // display text, already localized by the server
+    }
+
+    /// <summary>
+    /// Карта вернулась из руки в колоду. Сегодня единственная причина —
+    /// уход игрока: его рука не должна пропасть из игры, потому что партия
+    /// кончается ровно тогда, когда иссякла колода.
+    ///
+    /// <para>Своё событие, а не <see cref="CardMovedToDiscardPileEvent"/>,
+    /// потому что сброс — это игровая зона, из которой карты возвращаются
+    /// эффектами: соврав про неё, мы бы развели зеркало клиента с сервером.</para>
+    /// </summary>
+    public struct CardReturnedToDeckEvent : NetworkMessage
+    {
+        public int CardId;
+    }
+
+    /// <summary>
+    /// Чем кончилась попытка применить правило. Уходит только тому, кто
+    /// пытался.
+    ///
+    /// <para><c>Applied == false</c> означает, что правило не сработало:
+    /// игрок отказался от выбора цели, условия не сошлись, интент опоздал.
+    /// Клиент по этому признаку возвращает игроку право на правило — картой
+    /// он ещё не ходил, значит терять право не за что.</para>
+    ///
+    /// <para>Отвечает именно сервер, потому что отказ — лишь одна из причин
+    /// неудачи, и только он знает про все остальные.</para>
+    /// </summary>
+    /// <summary>
+    /// В колоде осталось столько-то карт.
+    ///
+    /// <para>Клиент не может посчитать это сам: не всё, что покидает колоду,
+    /// сопровождается событием — карта Ночи уходит в слот времени суток
+    /// напрямую, а Волшебник раскрывает карту, минуя руку. Поэтому число
+    /// шлёт тот, кто им владеет.</para>
+    /// </summary>
+    public struct DeckCountChangedEvent : NetworkMessage
+    {
+        public int Remaining;
+    }
+
+    public struct RuleEffectResolvedEvent : NetworkMessage
+    {
+        public int RuleEffectId;
+        public bool Applied;
     }
 }

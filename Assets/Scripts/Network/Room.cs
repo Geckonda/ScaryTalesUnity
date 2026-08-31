@@ -1,12 +1,14 @@
-using Assets.Libreries.ScaryTales.Rules;
+using Assets.Libraries.ScaryTales.Rules;
 using Assets.Scripts;
 using Assets.Scripts.Network.Messages;
 using Mirror;
 using ScaryTales;
+using ScaryTales.Enums;
 using ScaryTales.Interaction_Entities.EnvUnity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -48,6 +50,11 @@ namespace Assets.Scripts.Network
         // "no player" sentinel on the wire (GameAbortedEvent.LeftPlayerId,
         // ServerEventBroadcaster's owner fallbacks).
         private int _nextSeatId = 1;
+        // Выбранное место за столом: seat id → номер стула. Отдельно от
+        // самого места, потому что это разные вещи: seat id — личность
+        // игрока, стул — позиция в очереди ходов. Кто не выбрал, здесь и не
+        // числится.
+        private readonly Dictionary<int, int> _chairBySeat = new();
         private bool _gameStarted;
 
         /// <summary>This room's seats, and its only route to their clients.</summary>
@@ -66,6 +73,10 @@ namespace Assets.Scripts.Network
         // GameAbortedEvent instead of a GameEndedEvent.
         private bool _gameOver;
         private bool _aborted;
+        // Ход прерван уходом того, чей он был. Игровому циклу это говорит не
+        // звать NextTurn: RemovePlayer уже поставил следующего игрока на тот
+        // же индекс, и второй сдвиг перескочил бы через него.
+        private bool _currentTurnAbandoned;
 
         // ---- Identity ----
         /// <summary>Short code players type to join. Assigned by the registry.</summary>
@@ -128,14 +139,14 @@ namespace Assets.Scripts.Network
         /// the new <see cref="Player.Id"/> — deliberately not the connection
         /// id, so a seat outlives the connection sitting in it (Phase 6.1).
         /// </summary>
-        public JoinResult TryAddPlayer(NetworkConnectionToClient conn, out Player player)
+        public JoinResult TryAddPlayer(NetworkConnectionToClient conn, string requestedName, out Player player)
         {
             player = null;
             var accepted = CanAccept();
             if (accepted != JoinResult.Ok) return accepted;
 
             int seatId = _nextSeatId++;
-            player = new Player(seatId, $"Player{_players.Count + 1}");
+            player = new Player(seatId, SanitizeName(requestedName));
             _players.Add(player);
             Channel.Bind(seatId, conn);
             _seatByConnection[conn.connectionId] = seatId;
@@ -145,6 +156,79 @@ namespace Assets.Scripts.Network
             BroadcastLobbyState();
             return JoinResult.Ok;
         }
+
+        /// <summary>Longest name a player may end up with, in characters.</summary>
+        private const int MaxNameLength = 16;
+
+        /// <summary>
+        /// Turns what a player asked to be called into what this room will
+        /// call them.
+        ///
+        /// <para>Sanitizing happens <b>here</b>, on the server, and nowhere
+        /// else. The name arrives over the wire and is then displayed to
+        /// *other* people, so the client that supplied it is exactly the party
+        /// that must not be trusted with it. Doing it in one place also means
+        /// every display site — seat labels, the lobby roster, "current
+        /// player", server logs — is covered without any of them knowing.</para>
+        ///
+        /// <para>The rule that matters most is stripping <c>&lt;</c> and
+        /// <c>&gt;</c>: those labels are rendered by TextMeshPro, which parses
+        /// markup. A player calling themselves <c>&lt;size=400&gt;Вася</c>
+        /// would wreck the layout on everyone else's screen, not their own.</para>
+        /// </summary>
+        private string SanitizeName(string requested)
+        {
+            var cleaned = new StringBuilder(MaxNameLength);
+            bool lastWasSpace = false;
+
+            foreach (var c in requested ?? string.Empty)
+            {
+                // Rich-text delimiters, control characters and newlines all go:
+                // the first would let one player restyle everyone's UI, the
+                // rest would break single-line labels.
+                if (c == '<' || c == '>' || char.IsControl(c)) continue;
+
+                if (char.IsWhiteSpace(c))
+                {
+                    // Collapse runs, and never start with a space.
+                    if (lastWasSpace || cleaned.Length == 0) continue;
+                    lastWasSpace = true;
+                    cleaned.Append(' ');
+                }
+                else
+                {
+                    lastWasSpace = false;
+                    cleaned.Append(c);
+                }
+                if (cleaned.Length >= MaxNameLength) break;
+            }
+
+            var name = cleaned.ToString().TrimEnd();
+            if (name.Length == 0)
+                name = $"Player{_players.Count + 1}";
+
+            return MakeUnique(name);
+        }
+
+        /// <summary>
+        /// Two people called "Саша" at one table is a worse experience than
+        /// one of them being "Саша (2)". Compared case-insensitively, because
+        /// "саша" and "Саша" are the same problem.
+        /// </summary>
+        private string MakeUnique(string name)
+        {
+            if (!IsNameTaken(name)) return name;
+            for (int suffix = 2; suffix < 100; suffix++)
+            {
+                var candidate = $"{name} ({suffix})";
+                if (!IsNameTaken(candidate)) return candidate;
+            }
+            // Unreachable at four seats; a seat id is at least unambiguous.
+            return $"{name} #{_nextSeatId}";
+        }
+
+        private bool IsNameTaken(string name) =>
+            _players.Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
 
         public bool HasConnection(int connectionId) => _seatByConnection.ContainsKey(connectionId);
 
@@ -167,10 +251,11 @@ namespace Assets.Scripts.Network
         /// after the seat has been unbound from its connection but while the
         /// seat itself still exists.
         ///
-        /// <para><b>Current policy (Phase 6.1): a mid-game departure ends the
-        /// room.</b> The alternative — carrying on a player short — needs the
-        /// engine to drop somebody from the turn order mid-game, which is a
-        /// change to Assets/Libreries and a re-audit of all 18 effects.</para>
+        /// <para><b>Политика с 2026-08-31: партия продолжается без ушедшего,
+        /// пока за столом остаётся хотя бы двое.</b> Раньше любой уход
+        /// завершал комнату — на двоих иначе и нельзя, но при трёх-четырёх
+        /// игроках это наказывало всех за одного. Комната завершается только
+        /// тогда, когда играть станет не с кем.</para>
         ///
         /// <para>This is also the seam for reconnect. The seat is deliberately
         /// left in <c>_players</c> rather than trimmed, so the id in
@@ -190,18 +275,154 @@ namespace Assets.Scripts.Network
             if (!_gameStarted)
             {
                 _players.RemoveAll(p => p.Id == seatId);
+                // Ушёл из лобби — стул освободился.
+                _chairBySeat.Remove(seatId);
                 Debug.Log($"[Room {Code}] {name} left the lobby: {_players.Count}/{_maxPlayers}");
                 BroadcastLobbyState();
                 return;
             }
 
-            Debug.LogWarning($"[Room] {name} (seat {seatId}) left mid-game — ending the room.");
+            // За столом останется достаточно народу — играем дальше без него.
+            // Считаем по списку движка, а не по ростеру: ростер держит места
+            // ушедших (задел под переподключение), движок — только тех, чей
+            // ход ещё случится.
+            int remaining = _session?.Context.Players.Count(p => p.Id != seatId) ?? 0;
+            if (remaining >= 2)
+            {
+                Debug.LogWarning($"[Room] {name} (seat {seatId}) left mid-game — continuing with {remaining}.");
+                DropPlayerFromGame(seatId, name);
+                return;
+            }
+
+            Debug.LogWarning($"[Room] {name} (seat {seatId}) left mid-game, {remaining} left — ending the room.");
             AbortGame(seatId, $"{name} покинул игру. Партия завершена.");
+        }
+
+        /// <summary>
+        /// Убирает игрока из идущей партии, не завершая её.
+        ///
+        /// <para>Порядок шагов существенный. Сначала закрываем его зависшие
+        /// решения — иначе чужой эффект, ждущий его ответа, повиснет навсегда.
+        /// Потом возвращаем карты, пока игрок ещё в списке и его карты можно
+        /// найти. Только затем убираем из очереди ходов. И в самом конце,
+        /// если это был его ход, снимаем ожидание карты — оно разбудит
+        /// игровой цикл, и к этому моменту всё уже должно быть прибрано.</para>
+        /// </summary>
+        private void DropPlayerFromGame(int seatId, string name)
+        {
+            var ctx = _session.Context;
+            var player = ctx.Players.FirstOrDefault(p => p.Id == seatId);
+            if (player == null) return;
+
+            bool wasCurrent = ctx.GameState.GetCurrentPlayer() == player;
+            string reason = $"{name} покинул игру.";
+
+            // Сначала закрыть саму возможность спросить его о чём-то ещё:
+            // его карта может доигрывать эффект прямо сейчас и задать
+            // следующий вопрос уже после этой строки.
+            _router?.MarkPlayerDeparted(seatId);
+
+            if (wasCurrent)
+            {
+                // Его ход всё равно раскручиваем — отвечать за него незачем.
+                _router?.CancelForPlayer(seatId, reason);
+            }
+            else
+            {
+                // Идёт чужой ход, и эффект ждёт ответа именно от ушедшего.
+                // Отменить его значило бы бросить исключение в середину
+                // чужого хода: карта сыграна, очки начислены, стол остался бы
+                // недоделанным. Поэтому отвечаем за него по умолчанию.
+                _router?.AutoResolveForPlayer(seatId, reason);
+            }
+
+            ReturnPlayerCardsToGame(player);
+
+            ctx.GameState.RemovePlayer(player);
+            _currentTurnAbandoned = wasCurrent;
+
+            Channel.SendToRoom(new PlayerLeftEvent { PlayerId = seatId, Reason = reason });
+
+            if (wasCurrent)
+            {
+                // Разбудит игровой цикл: он поймает отмену, поймёт, что ход
+                // не состоялся, и начнёт следующий — очередь уже сдвинута.
+                _waitingForPlay?.TrySetCanceled();
+            }
+        }
+
+        /// <summary>
+        /// Разбирает стол ушедшего игрока.
+        ///
+        /// <para><b>Рука — обратно в колоду.</b> Партия кончается ровно тогда,
+        /// когда колода иссякла, так что выбросить пять карт из игры значило
+        /// бы укоротить её остальным. Колода после возврата тасуется: состав
+        /// его руки видели все за столом.</para>
+        ///
+        /// <para><b>Карты перед ним — в сброс.</b> Они уже сыграны, и вернуть
+        /// их в колоду значило бы дать разыграть того же Огра дважды.</para>
+        ///
+        /// <para><b>А карты на общем столе остаются лежать.</b> Владелец у
+        /// них — просто запись о том, кто их выложил; сама карта после
+        /// разыгровки общая, и по ней работают чужие эффекты: Дракон
+        /// сбрасывает Места, Принцесса и Огр забирают Мужчин, Купец считает
+        /// Купцов. Смести их вместе с личными баффами значило бы молча
+        /// уменьшить общий стол, на который рассчитывали остальные. Вреда от
+        /// того, что они останутся, нет: их эффекты либо мгновенные и уже
+        /// отработали, либо привязаны к ходу владельца, который не наступит.</para>
+        /// </summary>
+        private void ReturnPlayerCardsToGame(Player player)
+        {
+            var ctx = _session.Context;
+            var gm = _session.GameManager;
+
+            var hand = player.Hand.ToList();
+            foreach (var card in hand)
+            {
+                player.RemoveCardFromHand(card);
+                card.Owner = null;
+                card.Position = CardPosition.InDeck;
+                Channel.SendToRoom(new CardReturnedToDeckEvent { CardId = card.Id });
+            }
+            int returned = ctx.Deck.ReturnCardsAndShuffle(hand);
+            if (returned > 0) gm.NotifyDeckChanged();
+
+            // Только личные баффы: фильтр по позиции, а не по владельцу.
+            // GetCardsOnBoard(player) ловит и то, что он выложил на общий
+            // стол, — а это уже не его карты (см. комментарий выше).
+            var personal = ctx.GameBoard.GetCardsOnBoard(player)
+                .Where(c => c.Position == CardPosition.BeforePlayer)
+                .ToList();
+
+            foreach (var card in personal)
+            {
+                ctx.GameBoard.RemoveCardFromBoard(card);
+                // Через GameManager, а не через доску напрямую: он разошлёт
+                // событие, и клиенты уберут карту сами.
+                gm.PutCardToDiscardPile(card);
+            }
+
+            Debug.Log($"[Room] {player.Name}: {returned} card(s) back to the deck, " +
+                      $"{personal.Count} personal card(s) to the discard pile; " +
+                      $"his cards on the common table stay.");
         }
 
         public void BroadcastLobbyState()
         {
             if (!NetworkServer.active) return;
+
+            var chairSeats = new int[_maxPlayers];
+            var chairNames = new string[_maxPlayers];
+            for (int i = 0; i < _maxPlayers; i++) chairNames[i] = string.Empty;
+
+            foreach (var pair in _chairBySeat)
+            {
+                int chair = pair.Value;
+                if (chair < 0 || chair >= _maxPlayers) continue;
+                chairSeats[chair] = pair.Key;
+                chairNames[chair] = _players.FirstOrDefault(p => p.Id == pair.Key)?.Name ?? string.Empty;
+            }
+
             Channel.SendToRoom(new LobbyStateUpdate
             {
                 PlayerCount = _players.Count,
@@ -209,7 +430,74 @@ namespace Assets.Scripts.Network
                 MaxPlayers = _maxPlayers,
                 PlayerNames = _players.Select(p => p.Name).ToArray(),
                 CanStart = CanStart,
+                ChairSeats = chairSeats,
+                ChairNames = chairNames,
             });
+        }
+
+        /// <summary>
+        /// Занять место за столом. Свободное — занимает, своё же — оставляет
+        /// как есть, чужое — отказ.
+        /// </summary>
+        public void HandleClaimChair(NetworkConnectionToClient conn, ClaimChairIntent msg)
+        {
+            if (_gameStarted)
+            {
+                Debug.LogWarning($"[Room {Code}] ClaimChairIntent after the game started; ignored.");
+                return;
+            }
+            if (msg.Chair < 0 || msg.Chair >= _maxPlayers)
+            {
+                Debug.LogWarning($"[Room {Code}] ClaimChairIntent for chair {msg.Chair} out of range.");
+                return;
+            }
+            if (!_seatByConnection.TryGetValue(conn.connectionId, out int seatId))
+            {
+                Debug.LogWarning($"[Room {Code}] ClaimChairIntent from a connection with no seat.");
+                return;
+            }
+
+            // Занято другим — молча отказываем: гонку за один стул выигрывает
+            // тот, чей интент пришёл первым, и объяснять это игроку нечем,
+            // кроме того же обновления лобби, которое и так придёт.
+            foreach (var pair in _chairBySeat)
+            {
+                if (pair.Value == msg.Chair && pair.Key != seatId)
+                {
+                    Debug.Log($"[Room {Code}] Chair {msg.Chair} already taken by seat {pair.Key}.");
+                    return;
+                }
+            }
+
+            _chairBySeat[seatId] = msg.Chair;
+            Debug.Log($"[Room {Code}] Seat {seatId} took chair {msg.Chair}.");
+            BroadcastLobbyState();
+        }
+
+        /// <summary>
+        /// Ставит игроков в том порядке, в котором они расселись, — и это
+        /// единственное, что нужно движку: очерёдность ходов там и есть
+        /// порядок списка (<c>GameState.CurrentPlayerIndex</c> бегает по
+        /// нему), а <c>Player.Id</c> при этом не меняется ни у кого.
+        ///
+        /// <para>Кто не выбрал места, тех дописываем в конец в порядке
+        /// прихода — так один молчун не держит комнату. Именно поэтому
+        /// сортировка стабильная (<c>OrderBy</c>, а не <c>List.Sort</c>):
+        /// у всех невыбравших ключ одинаковый, и нестабильная сортировка
+        /// перемешала бы их между собой без всякой причины.</para>
+        /// </summary>
+        private void ApplyChosenTurnOrder()
+        {
+            if (_chairBySeat.Count == 0) return;
+
+            var ordered = _players
+                .OrderBy(p => _chairBySeat.TryGetValue(p.Id, out int chair) ? chair : int.MaxValue)
+                .ToList();
+
+            _players.Clear();
+            _players.AddRange(ordered);
+
+            Debug.Log($"[Room {Code}] Turn order: {string.Join(", ", _players.Select(p => p.Name))}.");
         }
 
         // ---- Composition root for this room's game ----
@@ -237,6 +525,10 @@ namespace Assets.Scripts.Network
                 Debug.LogWarning($"[Room] StartGame ignored: started={_gameStarted}, players={_players.Count}/min={_minPlayers}.");
                 return;
             }
+            // Порядок ходов фиксируется здесь, последним действием лобби и до
+            // того, как список увидит движок.
+            ApplyChosenTurnOrder();
+
             _gameStarted = true;
             Debug.Log($"[Room] Starting game with {_players.Count} players.");
 
@@ -300,6 +592,7 @@ namespace Assets.Scripts.Network
                     LocalPlayerId = p.Id,
                     CurrentRuleId = _inGameRuleId,
                     CurrentFinalRuleId = _finalRuleId,
+                    CardCatalogVersion = GameBuilder.CardCatalogVersion(),
                 });
                 if (!sent)
                     Debug.LogError($"[Room] missing connection for player {p.Id}");
@@ -322,6 +615,10 @@ namespace Assets.Scripts.Network
                 var night = ctx.Deck.TakeCardByName("Ночь");
                 if (night != null)
                     gm.PutCardInTimeOfDaySlot(night);
+                // Карта Ночи ушла из колоды мимо TryDrawCardFromDeck —
+                // сообщаем размер сами, иначе клиент так и будет считать
+                // колоду на одну карту толще, чем она есть.
+                gm.NotifyDeckChanged();
 
                 foreach (var player in ctx.Players)
                 {
@@ -358,19 +655,42 @@ namespace Assets.Scripts.Network
                         break;
                     }
 
-                    _waitingForPlay = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    int chosenCardId = await _waitingForPlay.Task;
-                    var card = current.Hand.FirstOrDefault(c => c.Id == chosenCardId);
-                    if (card == null)
+                    try
                     {
-                        Debug.LogWarning($"[Room] PlayCardIntent for unknown card {chosenCardId}; loop continues.");
+                        _waitingForPlay = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+                        int chosenCardId = await _waitingForPlay.Task;
+                        var card = current.Hand.FirstOrDefault(c => c.Id == chosenCardId);
+                        if (card == null)
+                        {
+                            Debug.LogWarning($"[Room] PlayCardIntent for unknown card {chosenCardId}; loop continues.");
+                            continue;
+                        }
+                        await gm.PlayCard(card);
+                        ThrowIfGameOver();
+
+                        await gm.ActivateAllPlayerPermanentCardEffects(current);
+                        ThrowIfGameOver();
+                    }
+                    catch (OperationCanceledException) when (!_gameOver)
+                    {
+                        // Ход не состоялся: игрок ушёл посреди него, и его
+                        // ожидание карты (или решение) сняли. Фильтр !_gameOver
+                        // и разводит два случая, выглядящих одинаково: при
+                        // настоящем прерывании партии _gameOver уже поднят, и
+                        // отмена летит дальше, наружу, где цикл и кончается.
+                        Debug.Log($"[Room] turn of {current.Name} abandoned; continuing.");
+                        _currentTurnAbandoned = false;
                         continue;
                     }
-                    await gm.PlayCard(card);
-                    ThrowIfGameOver();
 
-                    await gm.ActivateAllPlayerPermanentCardEffects(current);
-                    ThrowIfGameOver();
+                    // Уход игрока уже сдвинул очередь за нас (см.
+                    // GameState.RemovePlayer) — второй сдвиг перескочил бы
+                    // через того, кто встал на его место.
+                    if (_currentTurnAbandoned)
+                    {
+                        _currentTurnAbandoned = false;
+                        continue;
+                    }
 
                     ctx.GameState.NextTurn();
                 }
@@ -379,11 +699,9 @@ namespace Assets.Scripts.Network
                 _gameOver = true;
 
                 int winnerId = ctx.Players.OrderByDescending(p => p.Score).First().Id;
-                var scores = ctx.Players.Select(p => p.Score).ToArray();
                 Channel.SendToRoom(new GameEndedEvent
                 {
                     WinnerId = winnerId,
-                    FinalScores = scores,
                 });
                 Teardown();
             }
@@ -498,26 +816,73 @@ namespace Assets.Scripts.Network
             if (!Channel.IsSeatedAt(current.Id, conn))
                 return;
 
+            // Правило применяется только ДО того, как разыграна карта хода.
+            // Клиент это и так соблюдает (кнопка гаснет), но правило игры не
+            // должно держаться на честности клиента: единственный признак
+            // «карта ещё не сыграна» на сервере — что цикл всё ещё ждёт её.
+            if (_waitingForPlay == null || _waitingForPlay.Task.IsCompleted)
+            {
+                Debug.LogWarning("[Room] UseRuleEffectIntent after the card was played; ignored.");
+                ReportRuleOutcome(current.Id, msg.RuleEffectId, applied: false);
+                return;
+            }
+
             var effect = _session.CurrentRuleInGame.Effects.FirstOrDefault(e => e.Id == msg.RuleEffectId);
-            if (effect == null) return;
+            if (effect == null)
+            {
+                ReportRuleOutcome(current.Id, msg.RuleEffectId, applied: false);
+                return;
+            }
             if (!effect.IsEffectAvailable(_session.Context))
             {
                 Debug.LogWarning($"[Room] UseRuleEffectIntent for unavailable effect {msg.RuleEffectId}.");
+                ReportRuleOutcome(current.Id, msg.RuleEffectId, applied: false);
                 return;
             }
+
+            bool applied = false;
             try
             {
-                await effect.ApplyEffect(_session.Context);
+                applied = await effect.ApplyEffect(_session.Context);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException e)
             {
-                // The room was aborted while this effect was waiting on a
-                // decision. Expected, and already reported to the clients.
+                // Три нормальных исхода с одинаковым концом: игрок передумал
+                // и отказался от выбора (DecisionDeclinedException), игрок
+                // вышел, пока стол ждал его ответа, или комнату прервали.
+                // Во всех случаях правило просто не состоялось, и откатывать
+                // нечего: единственное правило с вопросом (A1-2) спрашивает
+                // ДО того, как забрать меч, а остальные вопросов не задают.
+                Debug.Log($"[Room] Rule effect {msg.RuleEffectId} did not complete: {e.Message}");
             }
             catch (Exception e)
             {
                 Debug.LogError($"[Room] UseRuleEffectIntent application failed: {e}");
             }
+
+            ReportRuleOutcome(current.Id, msg.RuleEffectId, applied);
+        }
+
+        /// <summary>
+        /// Говорит игроку, состоялось ли его правило.
+        ///
+        /// <para>Ответ уходит из КАЖДОЙ ветки — включая отказы по проверкам.
+        /// Клиент по этому событию возвращает игроку право на правило, если
+        /// оно не сработало, и молчание здесь означало бы для него «поезд
+        /// ушёл»: ровно та жалоба, ради которой событие и появилось.</para>
+        ///
+        /// <para>Только этому месту, а не всей комнате: остальным чужая
+        /// неудавшаяся попытка ни о чём не говорит.</para>
+        /// </summary>
+        private void ReportRuleOutcome(int seatId, int ruleEffectId, bool applied)
+        {
+            if (_gameOver || !NetworkServer.active) return;
+
+            Channel.SendToSeat(seatId, new RuleEffectResolvedEvent
+            {
+                RuleEffectId = ruleEffectId,
+                Applied = applied,
+            });
         }
     }
 }

@@ -34,6 +34,23 @@ namespace Assets.Scripts.UIEntities
         [Tooltip("Extra GameObjects to deactivate when the game actually starts (e.g. your MenuCanvas with Create Room / Join Room buttons).")]
         [SerializeField] private GameObject[] _hideOnGameStart;
 
+        [Header("Места за столом (необязательно)")]
+        [Tooltip("Кнопки-стулья по порядку ходов: первый элемент — тот, кто ходит первым. Подпись берётся из TMP_Text внутри кнопки. Оставьте массив пустым — выбор мест просто не появится, и очерёдность останется по порядку входа, как раньше.")]
+        [SerializeField] private Button[] _chairButtons;
+
+        [Tooltip("Что писать на свободном стуле.")]
+        [SerializeField] private string _freeChairLabel = "Свободно";
+
+        [Tooltip("Цвет подписи на своём стуле.")]
+        [SerializeField] private Color _myChairColor = new Color(1f, 0.84f, 0f); // золотой
+
+        [Tooltip("Цвет подписи на чужом или свободном стуле.")]
+        [SerializeField] private Color _otherChairColor = Color.white;
+
+        // Своё место в комнате — по нему узнаём себя в списке стульев.
+        // Сравнивать по имени нельзя: имена могут совпасть.
+        private int _mySeatId;
+
         // Everything below arrives from the server; none of it is inferred.
         private bool _inRoom;
         private bool _isOwner;
@@ -50,8 +67,80 @@ namespace Assets.Scripts.UIEntities
         {
             if (_startButton != null)
                 _startButton.onClick.AddListener(OnStartClicked);
+            WireChairButtons();
             RegisterHandlers();
             Refresh();
+        }
+
+        /// <summary>
+        /// Подписывает кнопки-стулья. Номер стула — это индекс в массиве,
+        /// он же позиция в очереди ходов.
+        /// </summary>
+        private void WireChairButtons()
+        {
+            if (_chairButtons == null || _chairButtons.Length == 0)
+            {
+                // Не ошибка: без привязанных кнопок фича просто не
+                // появляется, а очерёдность остаётся по порядку входа. Но
+                // сказать об этом надо — молчаливо выключенная функция
+                // сегодня уже трижды стоила расследования.
+                Debug.Log("[LobbyManager] Кнопки-стулья не привязаны — выбор мест выключен, очерёдность будет по порядку входа.");
+                return;
+            }
+
+            for (int i = 0; i < _chairButtons.Length; i++)
+            {
+                var button = _chairButtons[i];
+                if (button == null) continue;
+                int chair = i; // копия для замыкания
+                button.onClick.AddListener(() => OnChairClicked(chair));
+            }
+        }
+
+        private void OnChairClicked(int chair)
+        {
+            if (!_inRoom || _gameStarted) return;
+            NetworkClient.Send(new ClaimChairIntent { Chair = chair });
+        }
+
+        /// <summary>
+        /// Рисует ряд стульев по данным сервера: кто где сидит, свой стул
+        /// выделен цветом, занятые чужими — недоступны.
+        /// </summary>
+        private void RefreshChairs()
+        {
+            if (_chairButtons == null || _chairButtons.Length == 0) return;
+
+            var seats = _hasLobbyState ? _lobbyState.ChairSeats : null;
+            var names = _hasLobbyState ? _lobbyState.ChairNames : null;
+            int maxPlayers = _hasLobbyState ? _lobbyState.MaxPlayers : 0;
+
+            for (int i = 0; i < _chairButtons.Length; i++)
+            {
+                var button = _chairButtons[i];
+                if (button == null) continue;
+
+                // Лишние кнопки прячем: в комнате на двоих четыре стула не
+                // нужны, а нарисованные-но-мёртвые сбивают с толку.
+                bool exists = i < maxPlayers;
+                button.gameObject.SetActive(exists);
+                if (!exists) continue;
+
+                int takenBy = (seats != null && i < seats.Length) ? seats[i] : 0;
+                string takenName = (names != null && i < names.Length) ? names[i] : string.Empty;
+                bool mine = takenBy != 0 && takenBy == _mySeatId;
+
+                // Занятый чужим стул нажимать бессмысленно — сервер откажет.
+                button.interactable = takenBy == 0 || mine;
+
+                var label = button.GetComponentInChildren<TMP_Text>();
+                if (label == null) continue;
+
+                label.text = takenBy == 0
+                    ? $"{i + 1}. {_freeChairLabel}"
+                    : $"{i + 1}. {takenName}";
+                label.color = mine ? _myChairColor : _otherChairColor;
+            }
         }
 
         private void OnDestroy()
@@ -115,6 +204,7 @@ namespace Assets.Scripts.UIEntities
             _isOwner = evt.IsOwner;
             _code = evt.Code;
             _roomName = evt.RoomName;
+            _mySeatId = evt.SeatId;
             Refresh();
         }
 
@@ -135,6 +225,8 @@ namespace Assets.Scripts.UIEntities
             if (_lobbyPanel != null)
                 _lobbyPanel.SetActive(_inRoom);
             if (!_inRoom) return;
+
+            RefreshChairs();
 
             // _statusText and _waitingText occupy the same place in the
             // panel, so exactly one of them may ever be active. The owner

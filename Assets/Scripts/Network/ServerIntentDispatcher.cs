@@ -57,6 +57,7 @@ namespace Assets.Scripts.Network
             NetworkServer.RegisterHandler<ResolveRuleEffectPickIntent>(OnResolveRuleEffectPick);
             NetworkServer.RegisterHandler<ResolveConfirmIntent>(OnResolveConfirm);
             NetworkServer.RegisterHandler<StartGameIntent>(OnStartGame);
+            NetworkServer.RegisterHandler<ClaimChairIntent>(OnClaimChair);
         }
 
         // ---- Dispatch ----
@@ -78,6 +79,11 @@ namespace Assets.Scripts.Network
         private void OnStartGame(NetworkConnectionToClient conn, StartGameIntent msg)
         {
             if (TryResolveRoom(conn, out var room)) room.HandleStartGame(conn);
+        }
+
+        private void OnClaimChair(NetworkConnectionToClient conn, ClaimChairIntent msg)
+        {
+            if (TryResolveRoom(conn, out var room)) room.HandleClaimChair(conn, msg);
         }
 
         private void OnPlayCard(NetworkConnectionToClient conn, PlayCardIntent msg)

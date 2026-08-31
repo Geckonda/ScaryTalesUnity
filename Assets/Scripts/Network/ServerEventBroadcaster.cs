@@ -35,6 +35,12 @@ namespace Assets.Scripts.Network
             gm.OnItemRemovedFromPlayer += HandleItemRemoved;
             gm.OnAddPointsToPlayer += HandlePointsAwarded;
             gm.OnMessagePrinted += HandleMessagePrinted;
+            gm.OnDeckCountChanged += HandleDeckCountChanged;
+        }
+
+        private void HandleDeckCountChanged(int remaining)
+        {
+            _channel.SendToRoom(new DeckCountChangedEvent { Remaining = remaining });
         }
 
         private void HandleCardAddedToHand(Card card, Player player)

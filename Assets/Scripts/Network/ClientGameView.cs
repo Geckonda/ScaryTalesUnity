@@ -92,6 +92,18 @@ namespace Assets.Scripts.Network
         // player who left (or null if the abort wasn't player-caused).
         public event Action<string, Player> OnGameAborted;
 
+        /// <summary>Игрок вышел, но партия продолжается: (текст, кто ушёл).</summary>
+        public event Action<string, Player> OnPlayerLeft;
+
+        /// <summary>Карта ушла из руки обратно в колоду.</summary>
+        public event Action<Card, Player> OnCardReturnedToDeck;
+
+        /// <summary>Чем кончилась моя попытка применить правило: сработало ли.</summary>
+        public event Action<bool> OnRuleEffectResolved;
+
+        /// <summary>Сколько карт осталось в колоде.</summary>
+        public event Action<int> OnDeckCountChanged;
+
         // Decision flow events. UI listens to know when to show pick prompts
         // and when to dismiss them.
         public event Action<DecisionRequestedEvent> OnDecisionRequested;
@@ -106,24 +118,84 @@ namespace Assets.Scripts.Network
             // start arriving.
             BuildCardCatalog();
 
-            NetworkClient.RegisterHandler<GameStartedEvent>(HandleGameStarted);
-            NetworkClient.RegisterHandler<CardDrawnEvent>(HandleCardDrawn);
-            NetworkClient.RegisterHandler<CardAddedToHandFromDiscardEvent>(HandleCardFromDiscardToHand);
-            NetworkClient.RegisterHandler<CardPlayedEvent>(HandleCardPlayed);
-            NetworkClient.RegisterHandler<CardMovedToBoardEvent>(HandleCardMovedToBoard);
-            NetworkClient.RegisterHandler<CardMovedToBeforePlayerEvent>(HandleCardMovedToBeforePlayer);
-            NetworkClient.RegisterHandler<CardMovedToTimeOfDaySlotEvent>(HandleCardMovedToTimeOfDay);
-            NetworkClient.RegisterHandler<CardMovedToDiscardPileEvent>(HandleCardMovedToDiscard);
-            NetworkClient.RegisterHandler<ItemAddedToPlayerEvent>(HandleItemAdded);
-            NetworkClient.RegisterHandler<ItemRemovedFromPlayerEvent>(HandleItemRemoved);
-            NetworkClient.RegisterHandler<PointsAwardedEvent>(HandlePointsAwarded);
-            NetworkClient.RegisterHandler<MessagePrintedEvent>(HandleMessagePrinted);
-            NetworkClient.RegisterHandler<TurnAdvancedEvent>(HandleTurnAdvanced);
-            NetworkClient.RegisterHandler<PhaseChangedEvent>(HandlePhaseChanged);
-            NetworkClient.RegisterHandler<DecisionRequestedEvent>(HandleDecisionRequested);
-            NetworkClient.RegisterHandler<DecisionResolvedEvent>(HandleDecisionResolved);
-            NetworkClient.RegisterHandler<GameEndedEvent>(HandleGameEnded);
-            NetworkClient.RegisterHandler<GameAbortedEvent>(HandleGameAborted);
+            Defer<GameStartedEvent>(HandleGameStarted);
+            Defer<CardDrawnEvent>(HandleCardDrawn);
+            Defer<CardAddedToHandFromDiscardEvent>(HandleCardFromDiscardToHand);
+            Defer<CardPlayedEvent>(HandleCardPlayed);
+            Defer<CardMovedToBoardEvent>(HandleCardMovedToBoard);
+            Defer<CardMovedToBeforePlayerEvent>(HandleCardMovedToBeforePlayer);
+            Defer<CardMovedToTimeOfDaySlotEvent>(HandleCardMovedToTimeOfDay);
+            Defer<CardMovedToDiscardPileEvent>(HandleCardMovedToDiscard);
+            Defer<ItemAddedToPlayerEvent>(HandleItemAdded);
+            Defer<ItemRemovedFromPlayerEvent>(HandleItemRemoved);
+            Defer<PointsAwardedEvent>(HandlePointsAwarded);
+            Defer<MessagePrintedEvent>(HandleMessagePrinted);
+            Defer<TurnAdvancedEvent>(HandleTurnAdvanced);
+            Defer<PhaseChangedEvent>(HandlePhaseChanged);
+            Defer<DecisionRequestedEvent>(HandleDecisionRequested);
+            Defer<DecisionResolvedEvent>(HandleDecisionResolved);
+            Defer<GameEndedEvent>(HandleGameEnded);
+            Defer<PlayerLeftEvent>(HandlePlayerLeft);
+            Defer<CardReturnedToDeckEvent>(HandleCardReturnedToDeck);
+            Defer<RuleEffectResolvedEvent>(HandleRuleEffectResolved);
+            Defer<DeckCountChangedEvent>(HandleDeckCountChanged);
+
+            // Прерывание партии — единственное событие в обход очереди.
+            //
+            // Очередь ждёт анимаций, а анимации к этому моменту могут не
+            // доиграть уже никогда: партии нет, сервера может не быть тоже.
+            // Отложенное сюда сообщение о причине игрок просто не увидел бы,
+            // а причина — это всё, что ему осталось узнать. Ещё не показанные
+            // события выбрасываем: доигрывать раздачу в партию, которой уже
+            // нет, незачем.
+            NetworkClient.RegisterHandler<GameAbortedEvent>(msg =>
+            {
+                _pending.Clear();
+                HandleGameAborted(msg);
+            });
+        }
+
+        // Event queue -------------------------------------------------------
+        //
+        // События с сервера НЕ применяются в момент получения. Сервер шлёт их
+        // на полной скорости, а каждое из них запускает анимацию на секунду —
+        // в итоге карты раздавались поверх ещё летящей карты дня/ночи, а
+        // запрос выбора приходил, пока стол ещё двигался.
+        //
+        // Вместо этого каждое сообщение кладётся в очередь, а качает её
+        // UnGameManager: следующее событие применяется только когда доиграли
+        // анимации предыдущего. Получается воспроизведение потока событий в
+        // темпе анимаций.
+        //
+        // Порядок сохраняется сам: Mirror доставляет по надёжному каналу
+        // строго по порядку, а очередь — FIFO.
+
+        private readonly Queue<Action> _pending = new();
+
+        public bool HasPendingEvents => _pending.Count > 0;
+
+        /// <summary>Длина очереди. Для диагностики: растёт — значит анимации не успевают.</summary>
+        public int PendingEventCount => _pending.Count;
+
+        /// <summary>
+        /// Применяет одно отложенное событие. Зовётся насосом; сам класс
+        /// ничего не применяет по своей инициативе.
+        /// </summary>
+        public void ApplyNextEvent()
+        {
+            if (_pending.Count == 0) return;
+            _pending.Dequeue()();
+        }
+
+        /// <summary>
+        /// Подписывает обработчик так, что тот попадает в очередь, а не
+        /// выполняется на месте. Единственный способ регистрации в этом
+        /// классе — прямой RegisterHandler обошёл бы очередь и вернул старое
+        /// поведение.
+        /// </summary>
+        private void Defer<T>(Action<T> handler) where T : struct, NetworkMessage
+        {
+            NetworkClient.RegisterHandler<T>(msg => _pending.Enqueue(() => handler(msg)));
         }
 
         // Helpers ----------------------------------------------------------
@@ -152,8 +224,30 @@ namespace Assets.Scripts.Network
 
         // Handlers ----------------------------------------------------------
 
+        /// <summary>
+        /// Сошлись ли каталоги карт сервера и клиента. false означает, что
+        /// один и тот же номер карты на двух сторонах — разные карты.
+        /// </summary>
+        public bool CardCatalogMatches { get; private set; } = true;
+
         private void HandleGameStarted(GameStartedEvent evt)
         {
+            // Сверяем ДО всего остального: если каталоги разошлись, любой
+            // последующий FindCard вернёт не ту карту, и партия будет честно
+            // показывать чужую колоду.
+            int mine = GameBuilder.CardCatalogVersion();
+            CardCatalogMatches = evt.CardCatalogVersion == mine;
+            if (!CardCatalogMatches)
+            {
+                Debug.LogError(
+                    "[ClientGameView] Каталог карт не совпадает с серверным " +
+                    $"(сервер {evt.CardCatalogVersion}, клиент {mine}). " +
+                    "Id карт назначаются позиционно по списку шаблонов, так что " +
+                    "сборки с разным составом колоды понимают одни и те же номера " +
+                    "по-разному: на экране будут не те карты. Обновите сервер и клиент " +
+                    "до одной сборки.");
+            }
+
             Players = evt.Players
                 .Select(pi => new Player(pi.Id, pi.Name))
                 .ToList();
@@ -161,12 +255,39 @@ namespace Assets.Scripts.Network
             Opponents = Players.Where(p => p.Id != evt.LocalPlayerId).ToList();
             CurrentPlayerId = evt.StartPlayerId;
             DeckOrder = evt.DeckOrder?.ToList() ?? new List<int>();
+            // Стартовый размер, пока сервер не прислал первый пересчёт.
+            DeckRemaining = DeckOrder.Count;
             CurrentRuleId = evt.CurrentRuleId;
             CurrentFinalRuleId = evt.CurrentFinalRuleId;
             IsNight = false;
             TurnCount = 0;
 
             OnGameStarted?.Invoke();
+        }
+
+        /// <summary>
+        /// Убирает карту с доски перед тем, как положить её куда-то ещё.
+        ///
+        /// <para><b>Зачем цикл, а не одно удаление.</b> Сервер и клиент
+        /// узнают о переездах карты по-разному. Разыгрывая карту, сервер
+        /// сперва кладёт её на общий стол, а потом молча снимает и кладёт на
+        /// её настоящее место (перед игроком, в слот дня/ночи, в сброс) —
+        /// снятие событием не сопровождается. Клиент же получал оба события
+        /// и на каждое делал <c>AddCardOnBoard</c>, так что в его снимке
+        /// доски заводилось ДВА вхождения одной карты. А
+        /// <c>RemoveCardFromBoard</c> — это <c>List.Remove</c>, то есть одно
+        /// вхождение: карта уходила в сброс, а её двойник оставался на доске
+        /// навсегда.</para>
+        ///
+        /// <para>Так подсветка правила A1-2 и уверяла, что на столе есть
+        /// злодей, когда последнего уже убили. Цикл заодно вычищает
+        /// дубликаты, накопленные до этой правки.</para>
+        /// </summary>
+        private void DetachFromBoard(Card card)
+        {
+            var onBoard = Board.GetCardsOnBoard();
+            while (onBoard.Contains(card))
+                Board.RemoveCardFromBoard(card);
         }
 
         private void HandleCardDrawn(CardDrawnEvent evt)
@@ -180,6 +301,11 @@ namespace Assets.Scripts.Network
                 DeckOrder.RemoveAt(0);
             else
                 DeckOrder.Remove(evt.CardId); // resilient to out-of-order events
+
+            // Карта могла приехать в руку не из колоды, а СО СТОЛА: так
+            // работают кражи (Огр, Принцесса) — в ядре это
+            // RemoveCardFromBoard без события плюс обычное «положить в руку».
+            DetachFromBoard(card);
 
             player.AddCardToHand(card);
             card.Position = CardPosition.InHand;
@@ -220,6 +346,7 @@ namespace Assets.Scripts.Network
         {
             var card = FindCard(evt.CardId);
             if (card == null) return;
+            DetachFromBoard(card);
             Board.AddCardOnBoard(card);
             card.Position = CardPosition.OnGameBoard;
             OnCardMovedToBoard?.Invoke(card);
@@ -230,6 +357,7 @@ namespace Assets.Scripts.Network
             var card = FindCard(evt.CardId);
             var owner = FindPlayer(evt.OwnerId);
             if (card == null) return;
+            DetachFromBoard(card);
             Board.AddCardOnBoard(card); // legacy behavior: BeforePlayer cards live on the board
             card.Position = CardPosition.BeforePlayer;
             if (owner != null) card.Owner = owner;
@@ -246,6 +374,8 @@ namespace Assets.Scripts.Network
                 Board.AddCardToDiscardPile(current);
                 current.Position = CardPosition.Discarded;
             }
+            // Карта дня/ночи тоже успевает побывать на общем столе по дороге.
+            DetachFromBoard(card);
             Board.SetTimeOfDaySlot(card);
             card.Position = CardPosition.TimeOfDay;
             OnCardMovedToTimeOfDaySlot?.Invoke(card);
@@ -257,7 +387,7 @@ namespace Assets.Scripts.Network
             if (card == null) return;
             // Could be coming from board or hand or anywhere; clean up
             // wherever it was tracked.
-            Board.RemoveCardFromBoard(card);
+            DetachFromBoard(card);
             foreach (var p in Players) p.RemoveCardFromHand(card);
             Board.AddCardToDiscardPile(card);
             card.Position = CardPosition.Discarded;
@@ -345,6 +475,59 @@ namespace Assets.Scripts.Network
         private void HandleGameEnded(GameEndedEvent evt)
         {
             OnGameEnded?.Invoke(evt.WinnerId);
+        }
+
+        /// <summary>
+        /// Игрок вышел, партия продолжается. Убираем его из зеркала, но
+        /// НЕ трогаем <see cref="Opponents"/> как источник мест: место в
+        /// раскладке остаётся пустым до конца партии. Пересобирать раскладку
+        /// на ходу значило бы переселять карты, которые уже лежат на столе, —
+        /// цена, не стоящая аккуратной картинки.
+        /// </summary>
+        private void HandlePlayerLeft(PlayerLeftEvent evt)
+        {
+            var player = FindPlayer(evt.PlayerId);
+            if (player == null) return;
+
+            Players.Remove(player);
+            if (player == LocalPlayer) LocalPlayer = null;
+
+            OnPlayerLeft?.Invoke(evt.Reason, player);
+        }
+
+        /// <summary>
+        /// Карта ушла из руки обратно в колоду — так разбирается рука
+        /// вышедшего игрока.
+        /// </summary>
+        private void HandleCardReturnedToDeck(CardReturnedToDeckEvent evt)
+        {
+            var card = FindCard(evt.CardId);
+            if (card == null) return;
+
+            var owner = card.Owner;
+            owner?.RemoveCardFromHand(card);
+            card.Owner = null;
+            card.Position = CardPosition.InDeck;
+            if (!DeckOrder.Contains(card.Id)) DeckOrder.Add(card.Id);
+
+            OnCardReturnedToDeck?.Invoke(card, owner);
+        }
+
+        /// <summary>
+        /// Сколько карт осталось в колоде по данным сервера. До первого
+        /// события — размер стартовой колоды из GameStartedEvent.
+        /// </summary>
+        public int DeckRemaining { get; private set; }
+
+        private void HandleDeckCountChanged(DeckCountChangedEvent evt)
+        {
+            DeckRemaining = evt.Remaining;
+            OnDeckCountChanged?.Invoke(DeckRemaining);
+        }
+
+        private void HandleRuleEffectResolved(RuleEffectResolvedEvent evt)
+        {
+            OnRuleEffectResolved?.Invoke(evt.Applied);
         }
 
         private void HandleGameAborted(GameAbortedEvent evt)

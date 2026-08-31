@@ -1,4 +1,4 @@
-﻿using Assets.Libreries.ScaryTales.Abstractions;
+using Assets.Libraries.ScaryTales.Abstractions;
 using Assets.Scripts.Factories;
 using Assets.Scripts.Views;
 using ScaryTales;

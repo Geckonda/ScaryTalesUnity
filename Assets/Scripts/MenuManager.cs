@@ -17,6 +17,14 @@ public class MenuManager : MonoBehaviour
     [Tooltip("Room name when creating, room code when joining.")]
     [SerializeField] private TMP_InputField roomNameInput;
 
+    [Tooltip("Optional. What this player wants to be called. Leave unwired and everyone stays Player1..4, so the game works before this exists in the scene.")]
+    [SerializeField] private TMP_InputField nicknameInput;
+
+    // Typing your name every launch would be tedious; the last one used is
+    // remembered on this machine and offered back. Per-device convenience
+    // only — the server never sees it until a room is created or joined.
+    private const string NicknamePrefsKey = "ScaryTales.Nickname";
+
     [Tooltip("Fallback only — the live NetworkManager is found via NetworkManager.singleton. See the Net property.")]
     [SerializeField] private NetworkManager networkManager;
 
@@ -66,6 +74,26 @@ public class MenuManager : MonoBehaviour
         Assets.Scripts.Network.RoomClient.Bind();
         Assets.Scripts.Network.RoomClient.Joined += OnRoomJoined;
         Assets.Scripts.Network.RoomClient.JoinFailed += OnRoomJoinFailed;
+
+        if (nicknameInput != null)
+            nicknameInput.text = PlayerPrefs.GetString(NicknamePrefsKey, string.Empty);
+    }
+
+    /// <summary>
+    /// The nickname to ask for, remembered for next launch.
+    ///
+    /// Sent as typed — trimming and every other rule live on the server,
+    /// because the name is shown to *other* players and the client supplying
+    /// it is exactly the party that cannot be trusted with it. Empty is a
+    /// valid answer and means "give me a default".
+    /// </summary>
+    private string CurrentNickname()
+    {
+        if (nicknameInput == null) return string.Empty;
+        var nickname = nicknameInput.text ?? string.Empty;
+        PlayerPrefs.SetString(NicknamePrefsKey, nickname);
+        PlayerPrefs.Save();
+        return nickname;
     }
 
     private void OnDestroy()
@@ -84,7 +112,8 @@ public class MenuManager : MonoBehaviour
         var name = roomNameInput != null ? roomNameInput.text : string.Empty;
         // An empty name is fine — the server falls back to the code. What
         // matters is that the player gets a room.
-        Connect(() => NetworkClient.Send(new CreateRoomIntent { RoomName = name }),
+        var nickname = CurrentNickname();
+        Connect(() => NetworkClient.Send(new CreateRoomIntent { RoomName = name, PlayerName = nickname }),
                 hostLocallyOnCreate);
     }
 
@@ -108,7 +137,8 @@ public class MenuManager : MonoBehaviour
         // over the wire as-is — including any mistake, which comes back as
         // "unknown code" rather than being silently rewritten into some other
         // room's code.
-        Connect(() => NetworkClient.Send(new JoinRoomIntent { Code = code }), asHost: false);
+        var nickname = CurrentNickname();
+        Connect(() => NetworkClient.Send(new JoinRoomIntent { Code = code, PlayerName = nickname }), asHost: false);
     }
 
     /// <summary>
