@@ -3,6 +3,7 @@ using Assets.Scripts;
 using Assets.Scripts.Network.Messages;
 using Mirror;
 using ScaryTales;
+using ScaryTales.Enums;
 using ScaryTales.Interaction_Entities.EnvUnity;
 using System;
 using System.Collections.Generic;
@@ -67,6 +68,10 @@ namespace Assets.Scripts.Network
         // GameAbortedEvent instead of a GameEndedEvent.
         private bool _gameOver;
         private bool _aborted;
+        // Ход прерван уходом того, чей он был. Игровому циклу это говорит не
+        // звать NextTurn: RemovePlayer уже поставил следующего игрока на тот
+        // же индекс, и второй сдвиг перескочил бы через него.
+        private bool _currentTurnAbandoned;
 
         // ---- Identity ----
         /// <summary>Short code players type to join. Assigned by the registry.</summary>
@@ -241,10 +246,11 @@ namespace Assets.Scripts.Network
         /// after the seat has been unbound from its connection but while the
         /// seat itself still exists.
         ///
-        /// <para><b>Current policy (Phase 6.1): a mid-game departure ends the
-        /// room.</b> The alternative — carrying on a player short — needs the
-        /// engine to drop somebody from the turn order mid-game, which is a
-        /// change to Assets/Libreries and a re-audit of all 18 effects.</para>
+        /// <para><b>Политика с 2026-08-31: партия продолжается без ушедшего,
+        /// пока за столом остаётся хотя бы двое.</b> Раньше любой уход
+        /// завершал комнату — на двоих иначе и нельзя, но при трёх-четырёх
+        /// игроках это наказывало всех за одного. Комната завершается только
+        /// тогда, когда играть станет не с кем.</para>
         ///
         /// <para>This is also the seam for reconnect. The seat is deliberately
         /// left in <c>_players</c> rather than trimmed, so the id in
@@ -269,8 +275,128 @@ namespace Assets.Scripts.Network
                 return;
             }
 
-            Debug.LogWarning($"[Room] {name} (seat {seatId}) left mid-game — ending the room.");
+            // За столом останется достаточно народу — играем дальше без него.
+            // Считаем по списку движка, а не по ростеру: ростер держит места
+            // ушедших (задел под переподключение), движок — только тех, чей
+            // ход ещё случится.
+            int remaining = _session?.Context.Players.Count(p => p.Id != seatId) ?? 0;
+            if (remaining >= 2)
+            {
+                Debug.LogWarning($"[Room] {name} (seat {seatId}) left mid-game — continuing with {remaining}.");
+                DropPlayerFromGame(seatId, name);
+                return;
+            }
+
+            Debug.LogWarning($"[Room] {name} (seat {seatId}) left mid-game, {remaining} left — ending the room.");
             AbortGame(seatId, $"{name} покинул игру. Партия завершена.");
+        }
+
+        /// <summary>
+        /// Убирает игрока из идущей партии, не завершая её.
+        ///
+        /// <para>Порядок шагов существенный. Сначала закрываем его зависшие
+        /// решения — иначе чужой эффект, ждущий его ответа, повиснет навсегда.
+        /// Потом возвращаем карты, пока игрок ещё в списке и его карты можно
+        /// найти. Только затем убираем из очереди ходов. И в самом конце,
+        /// если это был его ход, снимаем ожидание карты — оно разбудит
+        /// игровой цикл, и к этому моменту всё уже должно быть прибрано.</para>
+        /// </summary>
+        private void DropPlayerFromGame(int seatId, string name)
+        {
+            var ctx = _session.Context;
+            var player = ctx.Players.FirstOrDefault(p => p.Id == seatId);
+            if (player == null) return;
+
+            bool wasCurrent = ctx.GameState.GetCurrentPlayer() == player;
+            string reason = $"{name} покинул игру.";
+
+            // Сначала закрыть саму возможность спросить его о чём-то ещё:
+            // его карта может доигрывать эффект прямо сейчас и задать
+            // следующий вопрос уже после этой строки.
+            _router?.MarkPlayerDeparted(seatId);
+
+            if (wasCurrent)
+            {
+                // Его ход всё равно раскручиваем — отвечать за него незачем.
+                _router?.CancelForPlayer(seatId, reason);
+            }
+            else
+            {
+                // Идёт чужой ход, и эффект ждёт ответа именно от ушедшего.
+                // Отменить его значило бы бросить исключение в середину
+                // чужого хода: карта сыграна, очки начислены, стол остался бы
+                // недоделанным. Поэтому отвечаем за него по умолчанию.
+                _router?.AutoResolveForPlayer(seatId, reason);
+            }
+
+            ReturnPlayerCardsToGame(player);
+
+            ctx.GameState.RemovePlayer(player);
+            _currentTurnAbandoned = wasCurrent;
+
+            Channel.SendToRoom(new PlayerLeftEvent { PlayerId = seatId, Reason = reason });
+
+            if (wasCurrent)
+            {
+                // Разбудит игровой цикл: он поймает отмену, поймёт, что ход
+                // не состоялся, и начнёт следующий — очередь уже сдвинута.
+                _waitingForPlay?.TrySetCanceled();
+            }
+        }
+
+        /// <summary>
+        /// Разбирает стол ушедшего игрока.
+        ///
+        /// <para><b>Рука — обратно в колоду.</b> Партия кончается ровно тогда,
+        /// когда колода иссякла, так что выбросить пять карт из игры значило
+        /// бы укоротить её остальным. Колода после возврата тасуется: состав
+        /// его руки видели все за столом.</para>
+        ///
+        /// <para><b>Карты перед ним — в сброс.</b> Они уже сыграны, и вернуть
+        /// их в колоду значило бы дать разыграть того же Огра дважды.</para>
+        ///
+        /// <para><b>А карты на общем столе остаются лежать.</b> Владелец у
+        /// них — просто запись о том, кто их выложил; сама карта после
+        /// разыгровки общая, и по ней работают чужие эффекты: Дракон
+        /// сбрасывает Места, Принцесса и Огр забирают Мужчин, Купец считает
+        /// Купцов. Смести их вместе с личными баффами значило бы молча
+        /// уменьшить общий стол, на который рассчитывали остальные. Вреда от
+        /// того, что они останутся, нет: их эффекты либо мгновенные и уже
+        /// отработали, либо привязаны к ходу владельца, который не наступит.</para>
+        /// </summary>
+        private void ReturnPlayerCardsToGame(Player player)
+        {
+            var ctx = _session.Context;
+            var gm = _session.GameManager;
+
+            var hand = player.Hand.ToList();
+            foreach (var card in hand)
+            {
+                player.RemoveCardFromHand(card);
+                card.Owner = null;
+                card.Position = CardPosition.InDeck;
+                Channel.SendToRoom(new CardReturnedToDeckEvent { CardId = card.Id });
+            }
+            int returned = ctx.Deck.ReturnCardsAndShuffle(hand);
+
+            // Только личные баффы: фильтр по позиции, а не по владельцу.
+            // GetCardsOnBoard(player) ловит и то, что он выложил на общий
+            // стол, — а это уже не его карты (см. комментарий выше).
+            var personal = ctx.GameBoard.GetCardsOnBoard(player)
+                .Where(c => c.Position == CardPosition.BeforePlayer)
+                .ToList();
+
+            foreach (var card in personal)
+            {
+                ctx.GameBoard.RemoveCardFromBoard(card);
+                // Через GameManager, а не через доску напрямую: он разошлёт
+                // событие, и клиенты уберут карту сами.
+                gm.PutCardToDiscardPile(card);
+            }
+
+            Debug.Log($"[Room] {player.Name}: {returned} card(s) back to the deck, " +
+                      $"{personal.Count} personal card(s) to the discard pile; " +
+                      $"his cards on the common table stay.");
         }
 
         public void BroadcastLobbyState()
@@ -432,19 +558,42 @@ namespace Assets.Scripts.Network
                         break;
                     }
 
-                    _waitingForPlay = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    int chosenCardId = await _waitingForPlay.Task;
-                    var card = current.Hand.FirstOrDefault(c => c.Id == chosenCardId);
-                    if (card == null)
+                    try
                     {
-                        Debug.LogWarning($"[Room] PlayCardIntent for unknown card {chosenCardId}; loop continues.");
+                        _waitingForPlay = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+                        int chosenCardId = await _waitingForPlay.Task;
+                        var card = current.Hand.FirstOrDefault(c => c.Id == chosenCardId);
+                        if (card == null)
+                        {
+                            Debug.LogWarning($"[Room] PlayCardIntent for unknown card {chosenCardId}; loop continues.");
+                            continue;
+                        }
+                        await gm.PlayCard(card);
+                        ThrowIfGameOver();
+
+                        await gm.ActivateAllPlayerPermanentCardEffects(current);
+                        ThrowIfGameOver();
+                    }
+                    catch (OperationCanceledException) when (!_gameOver)
+                    {
+                        // Ход не состоялся: игрок ушёл посреди него, и его
+                        // ожидание карты (или решение) сняли. Фильтр !_gameOver
+                        // и разводит два случая, выглядящих одинаково: при
+                        // настоящем прерывании партии _gameOver уже поднят, и
+                        // отмена летит дальше, наружу, где цикл и кончается.
+                        Debug.Log($"[Room] turn of {current.Name} abandoned; continuing.");
+                        _currentTurnAbandoned = false;
                         continue;
                     }
-                    await gm.PlayCard(card);
-                    ThrowIfGameOver();
 
-                    await gm.ActivateAllPlayerPermanentCardEffects(current);
-                    ThrowIfGameOver();
+                    // Уход игрока уже сдвинул очередь за нас (см.
+                    // GameState.RemovePlayer) — второй сдвиг перескочил бы
+                    // через того, кто встал на его место.
+                    if (_currentTurnAbandoned)
+                    {
+                        _currentTurnAbandoned = false;
+                        continue;
+                    }
 
                     ctx.GameState.NextTurn();
                 }

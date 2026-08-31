@@ -68,11 +68,19 @@ namespace Assets.Scripts.Network
             // Faults the underlying TaskCompletionSource<T> without this
             // class having to know T. Closed over at Park time.
             public Action<Exception> Fail;
+            // Отвечает за игрока безобидным выбором по умолчанию. Тоже
+            // замкнуто на Park, потому что тип ответа знает только Ask<T>.
+            // Возвращает false, если подставить нечего (например, выбрать
+            // карту не из чего) — тогда решение отменяется, как раньше.
+            public Func<bool> AutoResolve;
             // Hands back the TaskCompletionSource<T> for a typed claim.
             public object Tcs;
         }
 
         private readonly Dictionary<int, PendingDecision> _parked = new();
+        // Места, которых больше нет за столом. Спрашивать их бесполезно, а
+        // молча запарковать вопрос — значит подвесить комнату навсегда.
+        private readonly HashSet<int> _departed = new();
         private readonly RoomChannel _channel;
         private int _nextRequestId = 1;
         private bool _disposed;
@@ -87,28 +95,38 @@ namespace Assets.Scripts.Network
             // OnResolve* methods below on whichever room the sender is in.
         }
 
+        // Второй аргумент Ask — ответ за игрока, который уже не ответит.
+        // Выбран так, чтобы ничего не делать там, где это возможно: правило
+        // не применяется, подтверждение отклоняется. Там, где эффект обязан
+        // получить выбор, берётся первый кандидат — единственный вариант,
+        // не требующий от ядра знать про отключения.
+
         public Task<CardPick> PickCard(int playerId, PickCardRequest request)
         {
-            return Ask<CardPick>(playerId, DecisionKind.PickCard,
-                request.CandidateCardIds.ToArray(), string.Empty);
+            return Ask(playerId, DecisionKind.PickCard,
+                request.CandidateCardIds.ToArray(), string.Empty,
+                ids => new CardPick(ids[0]));
         }
 
         public Task<ItemPick> PickItem(int playerId, PickItemRequest request)
         {
-            return Ask<ItemPick>(playerId, DecisionKind.PickItem,
-                request.CandidateItemTypes.Select(t => (int)t).ToArray(), string.Empty);
+            return Ask(playerId, DecisionKind.PickItem,
+                request.CandidateItemTypes.Select(t => (int)t).ToArray(), string.Empty,
+                ids => new ItemPick((ItemType)ids[0]));
         }
 
         public Task<RuleEffectPick> PickRuleEffect(int playerId, PickRuleEffectRequest request)
         {
-            return Ask<RuleEffectPick>(playerId, DecisionKind.PickRuleEffect,
-                request.CandidateRuleEffectIds.ToArray(), string.Empty);
+            return Ask(playerId, DecisionKind.PickRuleEffect,
+                request.CandidateRuleEffectIds.ToArray(), string.Empty,
+                _ => new RuleEffectPick(null));
         }
 
         public Task<ConfirmPick> Confirm(int playerId, ConfirmRequest request)
         {
-            return Ask<ConfirmPick>(playerId, DecisionKind.Confirm,
-                Array.Empty<int>(), request.Prompt ?? string.Empty);
+            return Ask(playerId, DecisionKind.Confirm,
+                Array.Empty<int>(), request.Prompt ?? string.Empty,
+                _ => new ConfirmPick(false));
         }
 
         /// <summary>
@@ -117,8 +135,25 @@ namespace Assets.Scripts.Network
         /// resolution type and the candidate-id namespace, so they share
         /// this body.
         /// </summary>
-        private Task<T> Ask<T>(int playerId, DecisionKind kind, int[] candidateIds, string prompt)
+        private Task<T> Ask<T>(int playerId, DecisionKind kind, int[] candidateIds,
+                               string prompt, Func<int[], T> auto)
         {
+            // Игрока уже нет за столом — ответа не будет никогда.
+            //
+            // Случай не надуманный и был бы вечным зависанием: игрок выходит,
+            // пока его собственная карта разыгрывается, эффект доходит до
+            // следующего вопроса уже после ухода и паркуется навсегда.
+            // CancelForPlayer в момент ухода такой вопрос не застаёт — его
+            // ещё не задали. Бросаем сразу: эффект раскрутится, а серверный
+            // цикл разберёт это как несостоявшийся ход.
+            if (_departed.Contains(playerId))
+            {
+                Debug.Log($"[NetworkDecisionRouter] {kind} for departed player {playerId} — failing immediately.");
+                var abandoned = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+                abandoned.TrySetException(new DecisionAbandonedException(playerId, "игрок вышел"));
+                return abandoned.Task;
+            }
+
             var id = _nextRequestId++;
             var request = new DecisionRequestedEvent
             {
@@ -134,12 +169,23 @@ namespace Assets.Scripts.Network
             // thread, but it's a defensive choice that decouples the
             // resumption from the handler stack).
             var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            // Выбор карты и предмета обязан на что-то указывать; правило и
+            // подтверждение обходятся без кандидатов.
+            bool needsCandidate = kind == DecisionKind.PickCard || kind == DecisionKind.PickItem;
+
             _parked[id] = new PendingDecision
             {
                 PlayerId = playerId,
                 Request = request,
                 Tcs = tcs,
                 Fail = e => tcs.TrySetException(e),
+                AutoResolve = () =>
+                {
+                    if (needsCandidate && (candidateIds == null || candidateIds.Length == 0))
+                        return false;
+                    return tcs.TrySetResult(auto(candidateIds));
+                },
             };
 
             _channel.SendToRoom(request);
@@ -170,6 +216,61 @@ namespace Assets.Scripts.Network
         public int CancelAll(string reason)
         {
             return CancelRequests(_parked.Keys.ToList(), reason);
+        }
+
+        /// <summary>
+        /// Отвечает за игрока выбором по умолчанию вместо того, чтобы
+        /// отменять его решения.
+        ///
+        /// <para>Нужно, когда игрок ушёл, а партия продолжается без него.
+        /// Отмена здесь не годится: она выбрасывает исключение внутрь чужого
+        /// эффекта, а тот принадлежит ходу другого игрока — его карта уже
+        /// сыграна и очки начислены, так что раскрутить его наполовину
+        /// значит оставить стол в середине операции. Подставленный ответ
+        /// доводит эффект до конца.</para>
+        ///
+        /// <para>Решение, для которого ответа не подобрать, отменяется —
+        /// прежним путём.</para>
+        /// </summary>
+        /// <summary>
+        /// Запомнить, что игрока больше нет за столом. С этого момента любой
+        /// вопрос к нему проваливается сразу, не паркуясь, — см. Ask.
+        /// </summary>
+        public void MarkPlayerDeparted(int playerId) => _departed.Add(playerId);
+
+        /// <returns>Сколько решений закрыто подстановкой.</returns>
+        public int AutoResolveForPlayer(int playerId, string reason)
+        {
+            var owed = _parked
+                .Where(kv => kv.Value.PlayerId == playerId)
+                .Select(kv => kv.Key)
+                .ToList();
+
+            int resolved = 0;
+            var unanswerable = new List<int>();
+
+            foreach (var requestId in owed)
+            {
+                if (!_parked.TryGetValue(requestId, out var pending)) continue;
+
+                if (pending.AutoResolve == null || !pending.AutoResolve())
+                {
+                    unanswerable.Add(requestId);
+                    continue;
+                }
+
+                _parked.Remove(requestId);
+                resolved++;
+                Debug.Log($"[NetworkDecisionRouter] Request {requestId} " +
+                          $"({(DecisionKind)pending.Request.Kind}) answered on behalf of " +
+                          $"player {playerId}: {reason}");
+                BroadcastResolved(requestId);
+            }
+
+            if (unanswerable.Count > 0)
+                CancelRequests(unanswerable, reason);
+
+            return resolved;
         }
 
         private int CancelRequests(List<int> requestIds, string reason)

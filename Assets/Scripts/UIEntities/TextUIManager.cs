@@ -35,6 +35,9 @@ public class TextUIManager : MonoBehaviour
     [Tooltip("Цвет ника игрока, от которого стол ждёт решения (Дракон выбирает, что сбросить). Обычно это тот же, чей ход, но не всегда: Зачарованный лес ночью заставляет сбрасывать всех.")]
     [SerializeField] private Color _decidingNameColor = new Color(1f, 0.45f, 0.1f); // янтарный
 
+    [Tooltip("Цвет ника игрока, вышедшего посреди партии. Место остаётся на экране, но гаснет.")]
+    [SerializeField] private Color _leftNameColor = new Color(0.5f, 0.5f, 0.5f); // серый
+
     [Header("Обводка (необязательно)")]
     [Tooltip("Обводить подсвеченный ник. Качество зависит от отступов в атласе шрифта: если он собран с малым padding, обводка обрежется. Включайте и смотрите — цвета хватает и без неё.")]
     [SerializeField] private bool _useOutline = false;
@@ -133,6 +136,32 @@ public class TextUIManager : MonoBehaviour
             pair.Value.color = color;
             ApplyOutline(pair.Value, _useOutline && (isDeciding || isCurrent));
         }
+    }
+
+    /// <summary>
+    /// Игрок вышел, партия идёт дальше. Его место остаётся на экране —
+    /// пересобирать раскладку посреди партии значило бы переселять уже
+    /// лежащие карты, — но подписывается так, чтобы его не ждали.
+    ///
+    /// <para>Очки не стираем: он их заработал, и в итоговом счёте они
+    /// участвуют.</para>
+    /// </summary>
+    public void MarkPlayerLeft(Player player)
+    {
+        if (player == null) return;
+
+        if (_playerNameTexts.TryGetValue(player, out var nameText) && nameText != null)
+        {
+            nameText.text = $"{player.Name} (вышел)";
+            nameText.color = _leftNameColor;
+            ApplyOutline(nameText, false);
+        }
+
+        // Ник больше не участвует в подсветке хода: очередь его не касается.
+        _playerNameTexts.Remove(player);
+        if (_deciding == player) _deciding = null;
+
+        RefreshTurnHighlight();
     }
 
     /// <summary>Стол ждёт решения от этого игрока.</summary>

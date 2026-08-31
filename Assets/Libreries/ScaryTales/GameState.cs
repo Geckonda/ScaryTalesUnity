@@ -38,6 +38,39 @@ namespace ScaryTales
             CurrentPlayerIndex = (CurrentPlayerIndex + 1) % Players.Count;
         }
 
+        /// <summary>
+        /// Убирает игрока из партии посреди неё (он отключился) и чинит
+        /// очередь ходов.
+        ///
+        /// <para>Очередь — это индекс в списке, поэтому удаление сдвигает её
+        /// саму. Разбор случаев на списке [A,B,C], где ходит B (индекс 1):
+        /// ушёл A — B уезжает на индекс 0, и индекс надо уменьшить, иначе ход
+        /// перескочит на C; ушёл C — слева ничего не сдвинулось, индекс тот
+        /// же; ушёл сам B — на его индекс встал C, то есть ход естественным
+        /// образом переходит к следующему, и трогать индекс не надо, только
+        /// не дать ему уехать за край списка.</para>
+        ///
+        /// <para>Счётчик ходов не трогаем: ход ушедшего игрока не состоялся,
+        /// но и не начинался заново.</para>
+        /// </summary>
+        public bool RemovePlayer(Player player)
+        {
+            int index = Players.IndexOf(player);
+            if (index < 0) return false;
+
+            Players.RemoveAt(index);
+
+            if (Players.Count == 0)
+            {
+                CurrentPlayerIndex = 0;
+                return true;
+            }
+
+            if (index < CurrentPlayerIndex) CurrentPlayerIndex--;
+            CurrentPlayerIndex %= Players.Count;
+            return true;
+        }
+
         public void ToggleNightPhase()
         {
             IsNight = !IsNight;

@@ -5562,6 +5562,7 @@ MonoBehaviour:
   _activeNameColor: {r: 1, g: 0.84, b: 0, a: 1}
   _idleNameColor: {r: 1, g: 1, b: 1, a: 1}
   _decidingNameColor: {r: 1, g: 0.45, b: 0.1, a: 1}
+  _leftNameColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   _useOutline: 0
   _outlineWidth: 0.2
   _outlineColor: {r: 0.4, g: 0.28, b: 0, a: 1}

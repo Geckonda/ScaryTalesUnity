@@ -89,6 +89,32 @@ namespace ScaryTales
 
 
         /// <summary>
+        /// Возвращает карты в колоду и перетасовывает её.
+        ///
+        /// <para>Нужно, когда игрок уходит посреди партии: его рука не должна
+        /// пропадать из игры, потому что партия кончается ровно тогда, когда
+        /// колода иссякла (см. серверный цикл хода). Тасуем, чтобы вернувшиеся
+        /// карты не легли предсказуемой стопкой сверху — их состав видели все
+        /// за столом.</para>
+        /// </summary>
+        /// <returns>Сколько карт вернулось.</returns>
+        public int ReturnCardsAndShuffle(IEnumerable<Card> cards)
+        {
+            if (cards == null) return 0;
+
+            int added = 0;
+            foreach (var card in cards)
+            {
+                if (card == null) continue;
+                _cards.Add(card);
+                added++;
+            }
+
+            if (added > 0) Shuffle();
+            return added;
+        }
+
+        /// <summary>
         /// Получение текущего состояния колоды (количество карт)
         /// </summary>
         public int CardsRemaining => _cards.Count;

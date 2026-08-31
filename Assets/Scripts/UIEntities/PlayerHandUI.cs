@@ -44,6 +44,7 @@ public class PlayerHandUI : MonoBehaviour
 
         _view.OnCardAddedToHand += HandleCardAddedToHand;
         _view.OnCardAddedToHandFromDiscardPile += HandleCardAddedToHandFromDiscardPile;
+        _view.OnCardReturnedToDeck += HandleCardReturnedToDeck;
 
         _playerHandPanels = new Dictionary<Player, Transform>();
         var localSeat = _seatLayout?.LocalSeat;
@@ -109,6 +110,52 @@ public class PlayerHandUI : MonoBehaviour
         var animationTask = AnimateCardToHand(cardView, hand);
         AnimationManager.Instance.Register(animationTask, blocksEventQueue: false);
         await animationTask;
+    }
+
+    /// <summary>
+    /// Карта уходит из руки обратно в колоду — так разбирается рука игрока,
+    /// вышедшего посреди партии. Летит в колоду и уничтожается: там она
+    /// снова становится безличной рубашкой, и следующее взятие построит ей
+    /// новое представление.
+    /// </summary>
+    private async void HandleCardReturnedToDeck(Card card, Player owner)
+    {
+        var unityManager = UnGameManager.Instance;
+        if (unityManager == null) return;
+
+        var cardView = _cardViewService.GetCardView(card);
+        if (cardView == null) return;
+
+        var deck = unityManager.Deck;
+        if (deck == null)
+        {
+            _cardViewService.ForgetCardView(card);
+            Destroy(cardView.gameObject);
+            return;
+        }
+
+        cardView.FaceDown();
+
+        var animationTask = AnimateCardToDeck(cardView, deck, card);
+        // Не блокирует очередь: карты уходят в колоду разом, и ждать их
+        // незачем — следующее событие ни на одну из них не наезжает.
+        AnimationManager.Instance.Register(animationTask, blocksEventQueue: false, staggerSeconds: _dealStagger);
+        await animationTask;
+    }
+
+    private async Task AnimateCardToDeck(CardView cardView, Transform deck, Card card)
+    {
+        await cardView.transform.DOMove(deck.position, _dealDuration)
+            .SetEase(Ease.InQuad)
+            .AsyncWaitForCompletion();
+
+        if (cardView == null) return;
+
+        // Забыть представление обязательно: карта вернулась в колоду и её
+        // возьмут снова, а уничтоженный объект в словаре сервиса пережил бы
+        // сам себя — см. CardViewService.GetCardView.
+        _cardViewService.ForgetCardView(card);
+        Destroy(cardView.gameObject);
     }
 
     private async Task AnimateCardToHand(CardView cardView, Transform hand)

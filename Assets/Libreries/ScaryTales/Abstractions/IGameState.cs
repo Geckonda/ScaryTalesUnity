@@ -43,6 +43,12 @@ namespace ScaryTales.Abstractions
         void NextTurn();
 
         /// <summary>
+        /// Убрать игрока из партии посреди неё — он отключился.
+        /// </summary>
+        /// <returns>true, если игрок был в партии и удалён.</returns>
+        bool RemovePlayer(Player player);
+
+        /// <summary>
         /// Завершить игру.
         /// </summary>
         void EndGame();

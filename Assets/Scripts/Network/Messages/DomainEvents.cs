@@ -212,4 +212,33 @@ namespace Assets.Scripts.Network.Messages
         public int LeftPlayerId; // whose departure ended it, or 0 if not player-caused
         public string Reason;    // display text, already localized by the server
     }
+
+    /// <summary>
+    /// Игрок вышел, но партия продолжается без него — за столом осталось
+    /// достаточно народу.
+    ///
+    /// <para>Отличается от <see cref="GameAbortedEvent"/> ровно тем, что это
+    /// не конец: клиент убирает игрока из своего зеркала и порядка ходов и
+    /// играет дальше. Комната завершается только тогда, когда остаться
+    /// вдвоём уже нельзя.</para>
+    /// </summary>
+    public struct PlayerLeftEvent : NetworkMessage
+    {
+        public int PlayerId;
+        public string Reason; // display text, already localized by the server
+    }
+
+    /// <summary>
+    /// Карта вернулась из руки в колоду. Сегодня единственная причина —
+    /// уход игрока: его рука не должна пропасть из игры, потому что партия
+    /// кончается ровно тогда, когда иссякла колода.
+    ///
+    /// <para>Своё событие, а не <see cref="CardMovedToDiscardPileEvent"/>,
+    /// потому что сброс — это игровая зона, из которой карты возвращаются
+    /// эффектами: соврав про неё, мы бы развели зеркало клиента с сервером.</para>
+    /// </summary>
+    public struct CardReturnedToDeckEvent : NetworkMessage
+    {
+        public int CardId;
+    }
 }

@@ -41,11 +41,36 @@ public class CardViewService
         _cardToCardViewMap.Add(card, view);
     }
 
+    /// <summary>
+    /// Представление карты, если оно живо.
+    ///
+    /// <para><b>Проверка на уничтоженный объект здесь не перестраховка.</b>
+    /// Запись в словаре переживает уничтоженный GameObject, а уничтоженный
+    /// объект Unity — не C#-null, поэтому привычное
+    /// <c>GetCardView(card) ?? CreateCardView(...)</c> его НЕ отсеет:
+    /// оператор <c>??</c> сравнивает ссылку и не знает про перегрузку
+    /// <c>==</c>. Пока карты уходили только в сброс, это не всплывало —
+    /// оттуда они возвращались через CreateCardView. С возвратом руки
+    /// вышедшего игрока в колоду карта стала приходить обратно обычным
+    /// взятием, и мёртвая запись выстрелила бы MissingReferenceException.</para>
+    /// </summary>
     public CardView GetCardView(Card card)
     {
         _cardToCardViewMap.TryGetValue(card, out CardView cardView);
+        if (cardView == null)
+        {
+            // Именно перегрузка Unity: сюда попадает и уничтоженный объект.
+            _cardToCardViewMap.Remove(card);
+            return null;
+        }
         return cardView;
     }
+
+    /// <summary>
+    /// Забыть представление карты — его объект уничтожают. Явный вызов
+    /// не обязателен (GetCardView подчистит сам), но держит словарь чистым.
+    /// </summary>
+    public void ForgetCardView(Card card) => _cardToCardViewMap.Remove(card);
 
     public CardView CreateCardView(Card card, Transform parent)
     {

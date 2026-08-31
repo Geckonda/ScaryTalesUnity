@@ -92,6 +92,12 @@ namespace Assets.Scripts.Network
         // player who left (or null if the abort wasn't player-caused).
         public event Action<string, Player> OnGameAborted;
 
+        /// <summary>Игрок вышел, но партия продолжается: (текст, кто ушёл).</summary>
+        public event Action<string, Player> OnPlayerLeft;
+
+        /// <summary>Карта ушла из руки обратно в колоду.</summary>
+        public event Action<Card, Player> OnCardReturnedToDeck;
+
         // Decision flow events. UI listens to know when to show pick prompts
         // and when to dismiss them.
         public event Action<DecisionRequestedEvent> OnDecisionRequested;
@@ -123,6 +129,8 @@ namespace Assets.Scripts.Network
             Defer<DecisionRequestedEvent>(HandleDecisionRequested);
             Defer<DecisionResolvedEvent>(HandleDecisionResolved);
             Defer<GameEndedEvent>(HandleGameEnded);
+            Defer<PlayerLeftEvent>(HandlePlayerLeft);
+            Defer<CardReturnedToDeckEvent>(HandleCardReturnedToDeck);
 
             // Прерывание партии — единственное событие в обход очереди.
             //
@@ -401,6 +409,42 @@ namespace Assets.Scripts.Network
         private void HandleGameEnded(GameEndedEvent evt)
         {
             OnGameEnded?.Invoke(evt.WinnerId);
+        }
+
+        /// <summary>
+        /// Игрок вышел, партия продолжается. Убираем его из зеркала, но
+        /// НЕ трогаем <see cref="Opponents"/> как источник мест: место в
+        /// раскладке остаётся пустым до конца партии. Пересобирать раскладку
+        /// на ходу значило бы переселять карты, которые уже лежат на столе, —
+        /// цена, не стоящая аккуратной картинки.
+        /// </summary>
+        private void HandlePlayerLeft(PlayerLeftEvent evt)
+        {
+            var player = FindPlayer(evt.PlayerId);
+            if (player == null) return;
+
+            Players.Remove(player);
+            if (player == LocalPlayer) LocalPlayer = null;
+
+            OnPlayerLeft?.Invoke(evt.Reason, player);
+        }
+
+        /// <summary>
+        /// Карта ушла из руки обратно в колоду — так разбирается рука
+        /// вышедшего игрока.
+        /// </summary>
+        private void HandleCardReturnedToDeck(CardReturnedToDeckEvent evt)
+        {
+            var card = FindCard(evt.CardId);
+            if (card == null) return;
+
+            var owner = card.Owner;
+            owner?.RemoveCardFromHand(card);
+            card.Owner = null;
+            card.Position = CardPosition.InDeck;
+            if (!DeckOrder.Contains(card.Id)) DeckOrder.Add(card.Id);
+
+            OnCardReturnedToDeck?.Invoke(card, owner);
         }
 
         private void HandleGameAborted(GameAbortedEvent evt)

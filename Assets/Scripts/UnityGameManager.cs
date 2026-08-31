@@ -109,6 +109,7 @@ public class UnGameManager : MonoBehaviour
         ClientView.OnDecisionResolved += HandleDecisionResolved;
         ClientView.OnGameEnded += HandleGameEnded;
         ClientView.OnGameAborted += HandleGameAborted;
+        ClientView.OnPlayerLeft += HandlePlayerLeft;
 
         StartCoroutine(PumpClientEvents());
     }
@@ -511,6 +512,22 @@ public class UnGameManager : MonoBehaviour
 
         // Как и при обычном конце партии, в меню не уходим сами: игрок
         // должен успеть прочитать, почему всё оборвалось.
+    }
+
+    /// <summary>
+    /// Игрок вышел, но партия продолжается — за столом осталось достаточно
+    /// народу. В отличие от <see cref="HandleGameAborted"/> здесь ничего не
+    /// останавливается: гасим место ушедшего и играем дальше.
+    /// </summary>
+    private void HandlePlayerLeft(string reason, Player player)
+    {
+        // Говорим об этом местом, а не строкой текста: по решению из пункта 3
+        // отдельная строка-уведомление убрана, а место ушедшего гаснет и
+        // подписывается «(вышел)» — это видно всю оставшуюся партию, тогда как
+        // всплывающий текст успел бы смениться следующим же ходом.
+        _textUIManager?.MarkPlayerLeft(player);
+
+        Debug.Log($"[Client] {player?.Name ?? "?"} left; game continues: {reason}");
     }
 
     /// <summary>
