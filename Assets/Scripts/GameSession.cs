@@ -1,4 +1,4 @@
-﻿using Assets.Libreries.ScaryTales;
+using Assets.Libraries.ScaryTales;
 using ScaryTales;
 using ScaryTales.Abstractions;
 using System.Collections.Generic;

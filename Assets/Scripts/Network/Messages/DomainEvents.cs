@@ -203,7 +203,9 @@ namespace Assets.Scripts.Network.Messages
     public struct GameEndedEvent : NetworkMessage
     {
         public int WinnerId;
-        public int[] FinalScores; // parallel to GameStartedEvent.Players
+        // Итоговые очки здесь когда-то ехали параллельным массивом к
+        // GameStartedEvent.Players и не читались ни одним клиентом: счёт и так
+        // живёт на местах и обновляется PointsAwardedEvent. Убрано 2026-08-31.
     }
 
     /// <summary>

@@ -112,7 +112,7 @@
 
 > Есть восемнадцатая карта — **«Зачарованный лес»** (Место, 2 ПО, 2 шт.): «возьмите 1 карту; днём
 > все берут по карте, ночью все сбрасывают по карте». Она написана и работает, но пока
-> [закомментирована в колоде](Assets/Libreries/ScaryTales/GameBuilder.cs#L42).
+> [закомментирована в колоде](Assets/Libraries/ScaryTales/GameBuilder.cs#L42).
 
 ---
 
@@ -189,7 +189,7 @@ flowchart LR
   subgraph Server["Выделенный сервер — один процесс"]
     D["ServerIntentDispatcher"] --> R1["Room · LOCALHOST"]
     D --> R2["Room · VUXM"]
-    R1 --> E["GameManager + эффекты карт<br/>Assets/Libreries — чистый C#"]
+    R1 --> E["GameManager + эффекты карт<br/>Assets/Libraries — чистый C#"]
     E --> B["ServerEventBroadcaster"]
   end
   UI -- "PlayCardIntent · Resolve*Intent" --> D
@@ -203,7 +203,7 @@ flowchart LR
 
 | Файл | За что отвечает |
 | :--- | :--- |
-| [Assets/Libreries/ScaryTales/](Assets/Libreries/ScaryTales/) | Ядро игры: карты, эффекты, колода, предметы, правила. Чистый C# — ни Unity, ни Mirror |
+| [Assets/Libraries/ScaryTales/](Assets/Libraries/ScaryTales/) | Ядро игры: карты, эффекты, колода, предметы, правила. Чистый C# — ни Unity, ни Mirror |
 | [Room.cs](Assets/Scripts/Network/Room.cs) | Одна комната целиком: лобби, места, движок, цикл хода |
 | [RoomRegistry.cs](Assets/Scripts/Network/RoomRegistry.cs) | Код комнаты → комната, соединение → комната |
 | [RoomChannel.cs](Assets/Scripts/Network/RoomChannel.cs) | Места комнаты и единственный её выход наружу |

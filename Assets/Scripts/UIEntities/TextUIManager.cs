@@ -19,11 +19,11 @@ public class TextUIManager : MonoBehaviour
     private ClientGameView _view;
     private SeatLayout _seatLayout;
 
-    [Tooltip("Не используется. Панель была отладочной; ход и ожидание показываются подсветкой ника.")]
-    public TMP_Text NotifierText;
-
-    [Tooltip("Не используется. Оставлено, чтобы не рвать привязку в сцене.")]
-    public TMP_Text CurrentPlayerText;
+    // Здесь были поля NotifierText и CurrentPlayerText. Оба лежали в
+    // выключенной панели MessagePanel и не читались никаким кодом: чей ход и
+    // от кого ждут решения показывается цветом ника прямо на месте игрока.
+    // Убраны 2026-08-31; строки под них в сцене отпадут при следующем
+    // сохранении.
 
     [Header("Подсветка хода")]
     [Tooltip("Цвет ника игрока, чей сейчас ход.")]

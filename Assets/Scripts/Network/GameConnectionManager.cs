@@ -36,10 +36,10 @@ namespace Assets.Scripts.Network
 
         [Header("Rules in play")]
         [Tooltip("Rule id from RuleCatalog used during the game. The server is the only place this is chosen; clients learn it from GameStartedEvent. A lobby picker would drive these two fields.")]
-        [SerializeField] private int _inGameRuleId = Assets.Libreries.ScaryTales.Rules.RuleCatalog.DefaultInGameRuleId;
+        [SerializeField] private int _inGameRuleId = Assets.Libraries.ScaryTales.Rules.RuleCatalog.DefaultInGameRuleId;
 
         [Tooltip("Rule id from RuleCatalog scored at the end of the game.")]
-        [SerializeField] private int _finalRuleId = Assets.Libreries.ScaryTales.Rules.RuleCatalog.DefaultFinalRuleId;
+        [SerializeField] private int _finalRuleId = Assets.Libraries.ScaryTales.Rules.RuleCatalog.DefaultFinalRuleId;
 
         [Header("Dedicated server")]
         [Tooltip("Start as a server with no player of its own when the process is headless or was launched with the server flag below.")]

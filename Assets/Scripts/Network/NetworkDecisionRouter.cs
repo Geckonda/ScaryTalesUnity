@@ -17,7 +17,7 @@ namespace Assets.Scripts.Network
     /// Derives from OperationCanceledException so callers can catch it with
     /// the ordinary cancellation idiom, but carries a reason and its own
     /// type so an abandoned decision is distinguishable from any other
-    /// cancellation. Nothing in Assets/Libreries catches anything, so this
+    /// cancellation. Nothing in Assets/Libraries catches anything, so this
     /// propagates cleanly out of an effect and up to the server turn loop.
     /// </summary>
     public class DecisionAbandonedException : OperationCanceledException

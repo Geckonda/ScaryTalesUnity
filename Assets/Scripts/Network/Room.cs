@@ -1,4 +1,4 @@
-using Assets.Libreries.ScaryTales.Rules;
+using Assets.Libraries.ScaryTales.Rules;
 using Assets.Scripts;
 using Assets.Scripts.Network.Messages;
 using Mirror;
@@ -693,11 +693,9 @@ namespace Assets.Scripts.Network
                 _gameOver = true;
 
                 int winnerId = ctx.Players.OrderByDescending(p => p.Score).First().Id;
-                var scores = ctx.Players.Select(p => p.Score).ToArray();
                 Channel.SendToRoom(new GameEndedEvent
                 {
                     WinnerId = winnerId,
-                    FinalScores = scores,
                 });
                 Teardown();
             }

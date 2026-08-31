@@ -58,7 +58,7 @@ Migration is **incremental**. Every phase lands in a working state — if we sto
 
 - **Phase 0:** ✅ Done. Baseline tagged `pre-refactor-baseline`, [docs/CARDS.md](docs/CARDS.md) lists every card + observable effect + the A1/B2 rule effects.
 - **Phase 1:** ✅ Functionally done. Every card effect and the rule-selection flow goes through `IDecisionRouter`. Dead code chain removed (`GameManager.PlayCard(Player)`, `Player.SelectCardInHand`, etc.). Verified in editor.
-  - Carry-over: `IPlayerInput` is no longer *used* by core code, but the interface, `Player._playerInput`, and the adapter still live in `Assets/Libreries/`. They get deleted naturally in Phase 3 when `NetworkDecisionRouter` replaces `PlayerInputAdapterRouter`. Not blocking.
+  - Carry-over: `IPlayerInput` is no longer *used* by core code, but the interface, `Player._playerInput`, and the adapter still live in `Assets/Libraries/`. They get deleted naturally in Phase 3 when `NetworkDecisionRouter` replaces `PlayerInputAdapterRouter`. Not blocking.
 - **Phase 2.1:** ✅ Done. [GameSession.cs](Assets/Scripts/GameSession.cs) owns game state; `UnGameManager` is a host MonoBehaviour with forwarding properties for legacy callers. `GameNetworkController.TargetSetPlayer` calls `StartNewSession(...)` instead of poking four fields.
 - **Phase 2.2:** ✅ UI components migrated. `BoardUI`, `PlayerHandUI`, `TextUIManager` no longer poll `UnGameManager.Instance` for readiness — they receive the session via `Initialize(GameSession)` from the composition root. Awaiting in-editor verification.
   - Carry-over (Phase 5): the lazy view-service singletons ([CardViewService.cs:19](Assets/Scripts/Services/CardViewService.cs#L19), [ItemVIewService.cs:17](Assets/Scripts/Services/ItemVIewService.cs#L17), [RuleEffectService.cs:24](Assets/Scripts/Services/RuleEffectService.cs#L24)) capture a null `gameManager` at first access during `Awake`. Latent issue, not introduced by this refactor.
@@ -66,7 +66,7 @@ Migration is **incremental**. Every phase lands in a working state — if we sto
 - **Phase 3.1 (router):** ✅ [Assets/Scripts/Network/NetworkDecisionRouter.cs](Assets/Scripts/Network/NetworkDecisionRouter.cs) — server-only `IDecisionRouter` using the parked-TCS pattern. Each `PickX` parks a `TaskCompletionSource<T>` keyed by `RequestId`, broadcasts `DecisionRequestedEvent`, and awaits. The matching `Resolve*Intent` handler completes the TCS (validating the resolving connection matches the deciding player) and broadcasts `DecisionResolvedEvent`. Class is complete and ready to use; not wired into the game yet.
 - **Phase 3.2 (client view + injection point):** ✅ Three pieces:
   - [Assets/Scripts/Network/ClientGameView.cs](Assets/Scripts/Network/ClientGameView.cs) — client-side mirror. Builds the full Card catalog at construction (same templates the server uses, same IDs), registers `NetworkClient` handlers for every `DomainEvent`, mutates a denormalized snapshot, and re-fires C# events with the *same names* the existing UI already subscribes to (`OnCardMovedToBoard`, `OnCardAddedToHand`, `OnAddPointsToPlayer`, etc.). Once UI swaps subscription source from `Session.Context.GameManager` to `ClientGameView`, the per-client engine can be deleted.
-  - [GameBuilder.cs](Assets/Libreries/ScaryTales/GameBuilder.cs#L73) `Build(IDecisionRouter externalRouter = null)` — optional router parameter. Default behavior unchanged (still constructs `PlayerInputAdapterRouter`); the server-side `InitializeGame` will pass a `NetworkDecisionRouter` here.
+  - [GameBuilder.cs](Assets/Libraries/ScaryTales/GameBuilder.cs#L73) `Build(IDecisionRouter externalRouter = null)` — optional router parameter. Default behavior unchanged (still constructs `PlayerInputAdapterRouter`); the server-side `InitializeGame` will pass a `NetworkDecisionRouter` here.
   - `GameBuilder.MakeCardTemplates()` and `MakeItemTemplates()` exposed as `public static` so `ClientGameView` can build an identical Card catalog without instantiating a builder.
   - `GameStartedEvent.LocalPlayerId` field added — server sends this event per-client (not via `SendToAll`) so each recipient gets the same shared payload but with their own seat id, eliminating the need for a separate "you are player X" handshake.
 - **Phase 3.3 (cutover):** ✅ Server-authoritative engine landed. End-state:
@@ -78,17 +78,17 @@ Migration is **incremental**. Every phase lands in a working state — if we sto
 - **Phase 5.1 (IPlayerInput dead-chain cleanup):** ✅ Deleted: `IPlayerInput.cs`, `UnityPlayerInput.cs`, `PlayerInputAdapterRouter.cs`, `MockController.cs`, `INetworkController.cs`, `ConverterDTO.cs`, the commented-out `ConsolePlayerInput.cs`. Refactored: `Player.cs` (no `_playerInput`, single `(int id, string name)` constructor only), `GameBuilder.cs` (single `(notifier, board, p1, p2)` constructor; `Build(IDecisionRouter router)` now requires the router), `GameSession.cs` (no more `is PlayerInputAdapterRouter` branch), `NetworkPlayerInput.cs` (now an empty `NetworkBehaviour` shell — Mirror still spawns it as the per-connection player object), `GameConnectionManager.cs` (uses `Player(id, name)` directly), `GameNetworkController.cs` (orphan `PlayerDTO`/`NetworkPlayerRegistry` removed). Verified in editor.
 - **Phase 5.2 (dead code + typos):** ✅ Deleted: `UnityGameBoard.cs`, `GameVisualManager.cs`, `PrincessEffect.cs`, `OgreEffect.cs`. Renamed: `ItemVIewService.cs` → `ItemViewService.cs`. Fixed typos: `AnumateCardTransformToPositionInLayout` → `AnimateCardTransformToPositionInLayout`, `ClearContentPanelchildren` → `ClearContentPanelChildren` (in `RuleContainer` and `ItemContainer`).
 - **Phase 5.3 (factory cleanup):** ✅ Removed dead `IGameManager` param from [CardViewFactory.cs](Assets/Scripts/Factories/CardViewFactory.cs), [ItemViewFactory.cs](Assets/Scripts/Factories/ItemViewFactory.cs), [RuleEffectViewFactory.cs](Assets/Scripts/Factories/RuleEffectViewFactory.cs) and from [DragAndDrop.Initialize](Assets/Scripts/DragAndDrop.cs) — was stored but never read. Side effect: the previously-noted "view services capture a null `gameManager` at first access during `Awake`" latent bug is now obsolete (the services no longer capture `gameManager` at all).
-- **Phase 5 remaining (deferred):** `Libreries`→`Libraries` folder rename (high-blast-radius; touches namespace/imports across the whole core library), `GameRulesConfig` ScriptableObject to replace hardcoded `new A1()`/`new B2()`, animation delays as serialized fields.
+- **Phase 5 remaining (deferred):** `Libraries`→`Libraries` folder rename (high-blast-radius; touches namespace/imports across the whole core library), `GameRulesConfig` ScriptableObject to replace hardcoded `new A1()`/`new B2()`, animation delays as serialized fields.
 - **Phase 4.1 (N-player data model + lobby threshold):** ✅ Server, session, and client mirror are now player-count agnostic.
   - [GameConnectionManager.cs](Assets/Scripts/Network/GameConnectionManager.cs): `_targetPlayerCount` SerializeField (default 2). Auto-start fires when the roster fills; extra connections beyond the target are rejected.
-  - [GameBuilder.cs](Assets/Libreries/ScaryTales/GameBuilder.cs): single constructor takes `IEnumerable<Player>`. No more 2-player hardcoding.
+  - [GameBuilder.cs](Assets/Libraries/ScaryTales/GameBuilder.cs): single constructor takes `IEnumerable<Player>`. No more 2-player hardcoding.
   - [GameSession.cs](Assets/Scripts/GameSession.cs): no more `LocalPlayer`/`LocalOpponent`. The canonical session is per-game, not per-seat. Exposes `Players` for callers that need the roster.
   - [ClientGameView.cs](Assets/Scripts/Network/ClientGameView.cs): `LocalOpponent` (singular) replaced by `Opponents` (`IReadOnlyList<Player>` of everyone except `LocalPlayer`, in seat order).
   - [PlayerHandUI.cs](Assets/Scripts/UIEntities/PlayerHandUI.cs) and [TextUIManager.cs](Assets/Scripts/UIEntities/TextUIManager.cs): `PlayerHandPanel3/4` and `Player3Name/Player3ScoreText` / `Player4Name/Player4ScoreText` SerializeFields added; iterate `_view.Opponents` and bind into whichever inspector slots are wired. Existing 2-player scenes continue to work without re-wiring.
   - [UnGameManager.cs](Assets/Scripts/UnityGameManager.cs) `LocalOpponent` forwarder now returns `ClientView.Opponents.FirstOrDefault()`.
   - [GameNetworkController.cs](Assets/Scripts/Network/GameNetworkController.cs): `InitializeGame` builds the session player-list-agnostic; the turn loop and `_playerConnections` validation already iterated `ctx.Players`.
 - **Phase 4.2 (effects + IGameManager cleanup):** ✅
-  - [EnchantedForestEffect.cs](Assets/Libreries/ScaryTales/CardEffects/EnchantedForestEffect.cs) rewritten to iterate `context.Players`. Active player still gets the "draw 1" plus, on Day, an extra one as part of "all players draw" — preserves the legacy 2-player behavior bit-for-bit. On Night, all players' card-discard picks fire concurrently via `Task.WhenAll(context.Router.PickCard(...))`, scaling to N. Players with empty hands are skipped instead of throwing.
+  - [EnchantedForestEffect.cs](Assets/Libraries/ScaryTales/CardEffects/EnchantedForestEffect.cs) rewritten to iterate `context.Players`. Active player still gets the "draw 1" plus, on Day, an extra one as part of "all players draw" — preserves the legacy 2-player behavior bit-for-bit. On Night, all players' card-discard picks fire concurrently via `Task.WhenAll(context.Router.PickCard(...))`, scaling to N. Players with empty hands are skipped instead of throwing.
   - `IGameManager.LocalPlayer`/`LocalOpponent` and the matching `GameManager` properties **deleted** — no consumers left after the EnchantedForest fix. Confirmed by grep.
   - `EnchantedForestCard` is still commented out in `GameBuilder.MakeCardTemplates()`. The effect compiles and is correct for any N; uncomment in `MakeCardTemplates` to add the card back to the deck.
 - **Phase 4.3 (seat layout):** ✅ Done, code and scene. **Rewritten 2026-08-21** — the original circular model was replaced; see below.
@@ -202,11 +202,11 @@ Migration is **incremental**. Every phase lands in a working state — if we sto
   - **The two-room test — finally runnable, and still outstanding.** It is the exit criterion 6.2 and 6.3 have been waiting on since they were written. Recipe: build normally; run `ScaryTales.exe -server`; set `MenuManager.hostLocallyOnCreate = false` and `serverAddress = localhost`; then run four clients (editor, ParrelSync clones, extra copies of the build). Two create rooms, two join — the first room gets `LOCALHOST` from the fixed-code setting, the second gets a random code its creator reads off the lobby screen. **What to watch for:** neither room seeing the other's cards, turns, decisions or scores (that is 6.2), and both rooms still receiving their players' intents rather than one going silent (that is 6.3 — the failure mode it exists to prevent is invisible with a single room).
   - **Fixed in first testing (`LobbyManager`):** the room code and roster rendered on top of themselves. Two causes, both mine — the `_statusText.gameObject.SetActive(...)` line was lost in the rewrite (the two texts share a spot in the panel and had always been mutually exclusive), and the same header+roster string was being written into both texts. Now exactly one is active and only that one is written to.
 - **Phase 6.1 (disconnect handling):** ✅ Code-complete, **pending in-editor verification** (see the test matrix below). Compiles clean via `dotnet build Assembly-CSharp.csproj`; Mirror's weaver has *not* been run yet, because the editor was open — it processes `[Server]` and generates the serializer for the new `GameAbortedEvent`, so the editor's own recompile is the real gate.
-  - **Policy decided: a mid-game departure ends the room.** The alternative (carry on a player short) needs the engine to drop somebody from the turn order mid-game — a change to `Assets/Libreries` plus a re-audit of all 18 effects. Not worth it to unwedge a room. Recorded in [GameConnectionManager.OnSeatVacated](Assets/Scripts/Network/GameConnectionManager.cs), which is the single place the policy lives.
+  - **Policy decided: a mid-game departure ends the room.** The alternative (carry on a player short) needs the engine to drop somebody from the turn order mid-game — a change to `Assets/Libraries` plus a re-audit of all 18 effects. Not worth it to unwedge a room. Recorded in [GameConnectionManager.OnSeatVacated](Assets/Scripts/Network/GameConnectionManager.cs), which is the single place the policy lives.
   - **Seat id is no longer the connection id.** `Player.Id` used to be `conn.connectionId`; it is now a monotonic seat id (starting at 1 — **0 is the "no player" wire sentinel** and must stay free). `_connectionMap` (seat → connection) is the one mutable binding, with `_seatByConnection` as the reverse index for `OnServerDisconnect`. This was confined to `GameConnectionManager` — nothing else conflated the two, confirmed by grep for `connectionId` under `Assets/Scripts/`. **This is the prerequisite the parking lot names for reconnect:** a returning player gets a new connection id, and rebinding `_connectionMap[seatId]` is how they reclaim their seat.
   - **Parked decisions are cancellable.** [NetworkDecisionRouter.cs](Assets/Scripts/Network/NetworkDecisionRouter.cs) now parks a `PendingDecision` (player + the verbatim `DecisionRequestedEvent` + a type-erased `Fail` closure) instead of two parallel dictionaries. `CancelForPlayer` / `CancelAll` fault each TCS with a new `DecisionAbandonedException : OperationCanceledException`, which unwinds the suspended effect. The request is kept verbatim on purpose — **re-sending it to a returning connection is exactly what reconnect needs**, and storing it costs nothing. `Dispose()` also unregisters the four `Resolve*Intent` handlers, since Mirror keeps one handler per type process-wide (the 6.3 problem, in miniature).
   - **The four `PickX` methods collapsed into one `Ask<T>` helper** — they differed only in resolution type and candidate-id namespace.
-  - **Nothing in `Assets/Libreries` catches anything** (verified by grep), so a cancellation propagates cleanly from inside an effect all the way to the server turn loop. That is what makes fault-the-TCS viable without touching the core.
+  - **Nothing in `Assets/Libraries` catches anything** (verified by grep), so a cancellation propagates cleanly from inside an effect all the way to the server turn loop. That is what makes fault-the-TCS viable without touching the core.
   - **The turn loop cancels even when it isn't awaiting.** Non-obvious and the one real bug found while writing this: cancelling parked TCSs only helps if the loop is *suspended*. An abort landing while it was running (dealing the opening hands, or between statements) had nothing to cancel — the loop would sail on, park on a fresh `_waitingForPlay`, and wedge exactly as before. `ThrowIfGameOver()` after every await point closes it, funnelling every abort onto the single `OperationCanceledException` path.
   - `_gameOver` (both endings) is separate from `_aborted` (early ending only). `_gameOver` makes every teardown path idempotent, and stops a later `OnStopServer` from overwriting the winner screen with a teardown notice.
   - **`GameNetworkController.Instance` deleted** — the dead static the plan flagged in 6.4. Its `Awake` did `Destroy(gameObject)` on a second instance, which would have been an active landmine the moment a second room existed.
@@ -240,7 +240,7 @@ Migration is **incremental**. Every phase lands in a working state — if we sto
 
 ### What gets built
 
-- `Assets/Libreries/ScaryTales/Decisions/` — new namespace:
+- `Assets/Libraries/ScaryTales/Decisions/` — new namespace:
   - `DecisionRequest` (abstract or sealed hierarchy): `PickCardFromBoard`, `PickCardFromHand`, `PickItem`, `PickRuleEffect`, `PickPlayer`, `Confirm`. Each carries the candidate IDs.
   - `DecisionResolution` (sealed per request): `CardPick(int cardId)`, `ItemPick(int itemType)`, `PlayerPick(int playerId)`, etc.
   - `IDecisionRouter`: `Task<DecisionResolution> Decide(int playerId, DecisionRequest request, CancellationToken ct)`.
@@ -268,7 +268,7 @@ Migration is **incremental**. Every phase lands in a working state — if we sto
 ### Exit criteria
 
 - All 18 effects rewritten and verified against Phase 0 checklist.
-- `IPlayerInput` removed from core. Grep `IPlayerInput` returns zero results in `Assets/Libreries/`.
+- `IPlayerInput` removed from core. Grep `IPlayerInput` returns zero results in `Assets/Libraries/`.
 - 2-player happy path works end-to-end.
 
 ### Risks
@@ -413,8 +413,8 @@ Migration is **incremental**. Every phase lands in a working state — if we sto
 - [x] Delete dead code: `UnityGameBoard.cs`, `GameVisualManager.cs`, `INetworkController.cs`, `MockController.cs`. All four verified gone.
 - [x] Fix typos: `AnumateCardTransformToPositionInLayout` → `AnimateCardTransformToPositionInLayout`, `ClearContentPanelchildren` → `ClearContentPanelChildren`. Both verified absent from `Scripts/`.
 - [x] **`ItemVIewService.cs` rename recorded in git.** The file had been renamed on disk but git still tracked the old spelling — Windows is case-insensitive, so the rename never reached the index and `git status` looked clean. Fixed with a two-step `git mv --force` through a temporary name (both `.cs` and `.cs.meta`, so the Unity guid survives). Watch for this trap on any future case-only rename.
-- [ ] `Libreries` → `Libraries` (folder rename). Still deferred — high blast radius across namespaces and imports. Same case-sensitivity trap as above; use the two-step `git mv`.
-- [x] **Rules no longer hardcoded in two places.** New [RuleCatalog.cs](Assets/Libreries/ScaryTales/Rules/RuleCatalog.cs) in the core library maps stable ids to `Rule` instances and sets `Rule.Id`, which had been declared but never assigned. The server picks via `GameNetworkController._inGameRuleId` / `_finalRuleId` (serialized ints, defaulting from the catalog) and sends them in `GameStartedEvent.CurrentRuleId` / `CurrentFinalRuleId` — **fields that already existed but were being sent as literal `0` and never read.** `ClientGameView` stores them; `UnGameManager.HandleGameStarted` rebuilds the rules from the catalog instead of doing its own `new A1()` / `new B2()` in `Awake`, and logs an error if the server names a rule this build doesn't know.
+- [ ] `Libraries` → `Libraries` (folder rename). Still deferred — high blast radius across namespaces and imports. Same case-sensitivity trap as above; use the two-step `git mv`.
+- [x] **Rules no longer hardcoded in two places.** New [RuleCatalog.cs](Assets/Libraries/ScaryTales/Rules/RuleCatalog.cs) in the core library maps stable ids to `Rule` instances and sets `Rule.Id`, which had been declared but never assigned. The server picks via `GameNetworkController._inGameRuleId` / `_finalRuleId` (serialized ints, defaulting from the catalog) and sends them in `GameStartedEvent.CurrentRuleId` / `CurrentFinalRuleId` — **fields that already existed but were being sent as literal `0` and never read.** `ClientGameView` stores them; `UnGameManager.HandleGameStarted` rebuilds the rules from the catalog instead of doing its own `new A1()` / `new B2()` in `Awake`, and logs an error if the server names a rule this build doesn't know.
   - Catalog ids are wire format: **append only, never renumber.**
   - `_currentRuleInGame` is now null before the first game starts, so rule readers go through `UnGameManager.RuleEffects()`, which returns an empty list instead of throwing. Matters because the rules button exists on the menu screen.
   - Deliberately **not** a `ScriptableObject`. The debt was the duplication and the dead wire fields, and a catalog fixes both; an asset type for choosing between two rules that have exactly one valid pairing would be plumbing for a feature that doesn't exist. When the lobby picker lands, it drives those two serialized ints — no asset needed.
@@ -437,7 +437,7 @@ Migration is **incremental**. Every phase lands in a working state — if we sto
 
 The expensive property — several `GameSession`s coexisting in one process — is already true:
 
-- The whole `Assets/Libreries/ScaryTales` core has exactly **two** `static` members: `GameBuilder.MakeCardTemplates()` and `MakeItemTemplates()`. Both are pure factories with no state.
+- The whole `Assets/Libraries/ScaryTales` core has exactly **two** `static` members: `GameBuilder.MakeCardTemplates()` and `MakeItemTemplates()`. Both are pure factories with no state.
 - `Assets/Scripts/Network` has exactly **one** mutable static — `GameNetworkController.Instance` — and **nothing reads it**. It is dead; delete it.
 - `GameSession`, `GameManager`, `GameBoard`, `NetworkDecisionRouter` all receive their state through constructors. `InitializeGame(players, connectionMap)` already takes its roster and connections as parameters rather than reading globals.
 - `Player.Id` is `conn.connectionId`, which is unique server-wide, so player ids never collide across rooms. Card ids *do* repeat across rooms, and that is fine once events are room-scoped — a client only ever sees its own room.
@@ -634,7 +634,7 @@ Nothing here blocks playing. Grouped by what kind of decision it is.
 
 ### Phase 5 leftovers
 
-- [ ] **`Libreries` → `Libraries`** — the last structural debt. High blast radius across namespaces and imports, and the same case-only-rename trap that bit `ItemVIewService`: use a two-step `git mv` through a temporary name, for `.cs` and `.cs.meta` both.
+- [ ] **`Libraries` → `Libraries`** — the last structural debt. High blast radius across namespaces and imports, and the same case-only-rename trap that bit `ItemVIewService`: use a two-step `git mv` through a temporary name, for `.cs` and `.cs.meta` both.
 - [x] **`README.md`** — done, and wider than this line asked: the repo README is now the project's front page (Russian, since the game is). Rules, the full 17-card table with types/points/counts, the item supply, both scenario rules, a mermaid architecture diagram, build and self-host sections, and a Releases link. Two inaccuracies surfaced while writing it and are recorded there as "not yet": the end-of-game rule (B2) is shown to players but never scored — `CurrentFinalRule` reaches the client and no path calls `ApplyEffect` on it — and `PauseMenu`'s warning text still says a departure ends the game for everyone, which the 2026-08-31 policy change made false.
 - [x] Sweep for `не работает` markers — grep now returns zero.
 - The behaviour-parity checklist further up this file is an **unfilled duplicate**; the real one is [docs/CARDS.md](docs/CARDS.md) and it is complete (18 cards + both rules).
@@ -642,7 +642,7 @@ Nothing here blocks playing. Grouped by what kind of decision it is.
 ### Product decisions, never in scope for the refactor
 
 - ~~**Players cannot choose a name.**~~ **Done** (`92fca49`): `CreateRoomIntent`/`JoinRoomIntent` carry `PlayerName`, the server sanitizes it and falls back to `Player1..4`.
-- **`EnchantedForestCard` is still commented out** of the deck ([GameBuilder.cs:42](Assets/Libreries/ScaryTales/GameBuilder.cs#L42)). The effect was rewritten in Phase 4.2 and is correct for any player count — uncommenting is the whole task.
+- **`EnchantedForestCard` is still commented out** of the deck ([GameBuilder.cs:42](Assets/Libraries/ScaryTales/GameBuilder.cs#L42)). The effect was rewritten in Phase 4.2 and is correct for any player count — uncommenting is the whole task.
 - **No persistence.** Rooms live in memory, so any server restart (update, reboot, crash) ends every game in progress. Handled cleanly — players are returned to the menu — but there is no resume.
 - **Reconnect** — still deferred, but both prerequisites exist (see the parking lot).
 - **Tiebreak** on equal scores is undefined; `OrderByDescending(p => p.Score).First()` just picks one.
@@ -654,9 +654,9 @@ Nothing here blocks playing. Grouped by what kind of decision it is.
 Единый список того, что замечено по дороге и намеренно НЕ чинилось, чтобы не мешать текущей задаче. Разгребать одним заходом в конце. Ничего отсюда не ломает игру сегодня.
 
 **Мёртвый код и поля**
-- [ ] `GameEndedEvent.FinalScores` сервер заполняет, но **ни один клиент его не читает** — проверено грепом по всему `Assets/Scripts`.
+- [x] ~~`GameEndedEvent.FinalScores`.~~ Поле и его заполнение удалены 2026-08-31: счёт живёт на местах и обновляется `PointsAwardedEvent`.
 - [ ] `DecisionKind.PickRuleEffect` вместе с `PickRuleEffectRequest`, `NetworkDecisionRouter.PickRuleEffect` и клиентской `PromptRuleEffectPick` — **ни один эффект в игре его не запрашивает**. Механизм оставлен как часть словаря решений; если и через год никто не воспользуется — выкинуть.
-- [ ] `TextUIManager.NotifierText` и `CurrentPlayerText` — поля живы только ради привязок в сцене, кода за ними нет (решение из пункта 3: ход показывается цветом ника).
+- [x] ~~`TextUIManager.NotifierText` и `CurrentPlayerText`.~~ Поля удалены 2026-08-31; строки под них в сцене отпадут при следующем сохранении.
 - [ ] `RuleContainer.SkipBtn` — кнопки «Пропустить» больше нет в логике, объект выключается в `Awake`. Убрать из сцены и удалить поле.
 - [ ] `UnGameManager.ShowGameRules(bool openedByPlayer)` — параметр больше не используется, остался ради привязки кнопки в сцене.
 - [ ] `MenuScene` — сцена без стола; сборка, стартующая с неё, войдёт в комнату и покажет пустоту. В Build Settings отключена. Удалить или дать смысл.
@@ -664,7 +664,7 @@ Nothing here blocks playing. Grouped by what kind of decision it is.
 
 **Ловушки, которые сегодня не стреляют**
 - [x] ~~`ClientGameView.HandleCardDrawn` кладёт карту в руку, но не убирает её из зеркала `Board`.~~ Исправлено 2026-08-31 вместе с дубликатами на доске — см. 5.2.
-- [ ] `Rule.Effects` — свойство, создающее **новый список новых экземпляров на каждом обращении** ([A1.cs:20](Assets/Libreries/ScaryTales/Rules/Templates/A/A1.cs#L20)). Работает лишь потому, что эффекты не хранят состояние, а по проводу ходит `Id`.
+- [x] ~~`Rule.Effects` создавало новый список новых экземпляров на каждом обращении.~~ Теперь собирается один раз на экземпляр правила (2026-08-31).
 - [ ] `NetworkManager` — не корневой объект, поэтому его `DontDestroyOnLoad` работает не так, как задумано Mirror.
 - [ ] `AnimationManager` и `CursorManager` зовут `DontDestroyOnLoad` на **дочерних** объектах — это ничего не делает (Unity пишет предупреждение). Подтвердить, что так и задумано.
 - [x] ~~`REfA12` тратит меч до того, как спросить, какого монстра убить.~~ Порядок перевёрнут в 5.1: сначала вопрос, потом плата.
@@ -674,9 +674,9 @@ Nothing here blocks playing. Grouped by what kind of decision it is.
 - [ ] `UnGameManager._eventStallWarningSeconds` и сторож очереди — оставить, он про зависания; но пересмотреть, если за полгода ни разу не сработает.
 
 **Структурный долг**
-- [ ] `Libreries` → `Libraries`. Двухшаговый `git mv` через временное имя, для `.cs` и `.cs.meta`.
-- [ ] `README.md` пустой — там одна строка заголовка. Абзац про архитектуру и ссылка на [deploy/](deploy/).
-- [ ] `deploy/Dockerfile` — неприменённый фикс с домашней директорией сервисного пользователя.
+- [ ] `Libraries` → `Libraries`. **Меньше, чем боялся план:** из 69 файлов ядра только 13 объявляют namespace от папки (`Assets.Libraries.*`), остальные живут в `ScaryTales` и переименования не заметят; ссылаются на такие namespace 29 файлов. И двухшаговый `git mv` не нужен — это не переименование по регистру, слова разные. Единственное препятствие: **папку держит запущенная Unity** (`git mv` отвечает Permission denied), так что делать при закрытом редакторе.
+- [x] ~~`README.md` пустой.~~ Владелец написал свой — с правилами, таблицей карт, скриншотами и разделом про устройство приложения. Задача закрыта, трогать не надо.
+- [ ] `deploy/Dockerfile` — фикс с домашней директорией **уже в файле**, правки не требует: ждёт следующего обновления сервера.
 - [x] ~~`Assembly-CSharp.csproj` правился вручную.~~ В коммиты не попал, Unity перегенерировала сама.
 
 ---
@@ -736,7 +736,7 @@ Nothing here blocks playing. Grouped by what kind of decision it is.
 
 **Ревизия эффектов, которой боялся план, оказалась почти пустой.** Грепом проверено: ни один эффект не держит список игроков, и **все 17 запросов решений адресованы `GetCurrentPlayer()`** — единственное исключение, `EnchantedForestEffect`, спрашивает всех сразу, но эта карта закомментирована в колоде. Порядок ходов — это `List<Player>` и индекс в нём, а `GameBuilder` отдаёт **один и тот же** экземпляр списка и в `GameState`, и в `GameContext`, так что удалять надо в одном месте.
 
-**Ядро (`Assets/Libreries`), две небольшие правки:**
+**Ядро (`Assets/Libraries`), две небольшие правки:**
 - `GameState.RemovePlayer(player)` — убирает из списка и чинит очередь. Разбор случаев записан в самом методе: очередь — это индекс, поэтому удаление слева от текущего сдвигает её саму, а уход самого текущего игрока естественным образом передаёт ход следующему (он встаёт на тот же индекс).
 - `Deck.ReturnCardsAndShuffle(cards)` — колоды раньше нельзя было пополнить. Тасуем: состав руки ушедшего видели все за столом.
 
@@ -801,7 +801,7 @@ Nothing here blocks playing. Grouped by what kind of decision it is.
 
 **Работа в сцене (необязательная):** у `RuleContainer` появился слот `_hintText` — строка, объясняющая, почему правило сейчас применить нельзя. Без неё клик по эффекту просто молча ничего не делает, что и есть половина «недружелюбности». Тексты обеих подсказок редактируются в инспекторе. Кнопка «Пропустить» в сцене остаётся, но выключается в `Awake`: поле сохранено, чтобы не рвать привязку.
 
-**Не тронуто, но рядом:** `Rule.Effects` — свойство, которое **на каждом обращении создаёт новый список новых экземпляров** ([A1.cs:20](Assets/Libreries/ScaryTales/Rules/Templates/A/A1.cs#L20)), поэтому применённый сервером эффект никогда не тот же объект, что нажал клиент. Сегодня работает только потому, что эффекты не хранят состояние, и по проводу ходит `Id`, а не ссылка.
+**Не тронуто, но рядом:** `Rule.Effects` — свойство, которое **на каждом обращении создаёт новый список новых экземпляров** ([A1.cs:20](Assets/Libraries/ScaryTales/Rules/Templates/A/A1.cs#L20)), поэтому применённый сервером эффект никогда не тот же объект, что нажал клиент. Сегодня работает только потому, что эффекты не хранят состояние, и по проводу ходит `Id`, а не ссылка.
 
 ### 5.1. Отмена выбранного правила — ✅ сделано 2026-08-31
 
@@ -855,7 +855,7 @@ Nothing here blocks playing. Grouped by what kind of decision it is.
 - `AnimationManager` переписан. Было две настоящие ошибки: удаление задачи висело на `ContinueWith`, который **выполняется на потоке пула и менял `List` из чужого потока**, пока главный его читал; а `WaitForAllAnimations` снимала копию списка и потому не ждала анимации, зарегистрированные после вызова. Теперь чистка в `Update` на главном потоке, упавшие задачи логируются (иначе исключение терялось навсегда — анимации запускаются из `async void`), и появился `IsBusy`.
 - **`BoardUI.HandleCardMovedToTimeOfDaySlot` не регистрировал свою анимацию** — единственный обработчик, который этого не делал. Прямая причина жалобы №6: карту дня/ночи буквально никто не ждал.
 - Индикатор ожидания: `TextUIManager.ShowPrompt` занял `NotifierText`, который до сих пор простаивал (у `OnMessagePrinted` не было ни одного подписчика). Во время чужого решения стол теперь говорит «Ждём: Имя…», во время своего — «Ваш выбор». `DecisionRequestedEvent` нёс `PlayerId` именно для этого с самой Фазы 3.
-- Из `WizardEffect` удалён `await AnimationManager.Instance.WaitForAllAnimations()` — наследие тех времён, когда движок крутился на клиенте. Этот код исполняется на сервере, где анимаций нет, так что вызов был пустым, а ядро зря тянулось к Unity-компоненту. **Побочный итог: в `Assets/Libreries` не осталось ни одной ссылки на Unity вне адаптерной папки `EnvUnity`.**
+- Из `WizardEffect` удалён `await AnimationManager.Instance.WaitForAllAnimations()` — наследие тех времён, когда движок крутился на клиенте. Этот код исполняется на сервере, где анимаций нет, так что вызов был пустым, а ядро зря тянулось к Unity-компоненту. **Побочный итог: в `Assets/Libraries` не осталось ни одной ссылки на Unity вне адаптерной папки `EnvUnity`.**
 
 **Не все анимации блокируют очередь.** Первая версия заставляла очередь ждать каждую — и раздача из пяти карт превратилась в пять последовательных полётов вместо одного общего вылета, каким она была раньше. Попытка спасти это ускорением при длинной очереди (burst) оказалась хуже болезни: скорость показа начинала зависеть от загрузки сети, и игрок читал это просто как рывки.
 

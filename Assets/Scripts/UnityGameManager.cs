@@ -1,6 +1,6 @@
-﻿using Assets.Libreries.ScaryTales;
-using Assets.Libreries.ScaryTales.Abstractions;
-using Assets.Libreries.ScaryTales.Rules;
+using Assets.Libraries.ScaryTales;
+using Assets.Libraries.ScaryTales.Abstractions;
+using Assets.Libraries.ScaryTales.Rules;
 using Assets.Scripts;
 using Assets.Scripts.Menus;
 using Assets.Scripts.Network;
@@ -313,9 +313,14 @@ public class UnGameManager : MonoBehaviour
                 StartCoroutine(PromptRuleEffectPick(evt.RequestId, evt.CandidateIds));
                 break;
             case DecisionKind.Confirm:
-                // No yes/no UI yet; default to "yes" to match the legacy
-                // path's NotImplementedException behavior (which never
-                // actually executed in the existing happy path).
+                // UI для «да/нет» не существует, и ни один эффект в игре
+                // Confirm не запрашивает — поэтому сюда сегодня не попадают.
+                // Но если попадут, молчаливое «да» будет худшим из возможных
+                // поведений: игрок согласится с тем, чего не видел. Отвечаем,
+                // чтобы не подвесить комнату, и кричим в лог.
+                Debug.LogError($"[UnGameManager] Пришёл запрос Confirm (id {evt.RequestId}), " +
+                               "а окна подтверждения в игре нет. Отвечаю «да» вслепую — " +
+                               "нужен UI, прежде чем каким-либо эффектом пользоваться этим.");
                 NetworkClient.Send(new ResolveConfirmIntent
                 {
                     RequestId = evt.RequestId,
