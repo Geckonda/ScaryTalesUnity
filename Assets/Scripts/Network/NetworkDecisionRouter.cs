@@ -32,6 +32,26 @@ namespace Assets.Scripts.Network
     }
 
     /// <summary>
+    /// Игрок сам отказался от выбора — «передумал».
+    ///
+    /// <para>Отдельный тип, а не <see cref="DecisionAbandonedException"/>:
+    /// брошенное решение это авария (игрок исчез), а отказ — нормальный ход
+    /// событий, и в логах их путать не надо. Общий предок
+    /// <c>OperationCanceledException</c> означает, что оба одинаково
+    /// раскручивают эффект и одинаково ловятся там, где эффект запускали.</para>
+    /// </summary>
+    public class DecisionDeclinedException : OperationCanceledException
+    {
+        public int RequestId { get; }
+
+        public DecisionDeclinedException(int requestId)
+            : base($"Decision {requestId} declined by the player.")
+        {
+            RequestId = requestId;
+        }
+    }
+
+    /// <summary>
     /// Server-only IDecisionRouter. Replaces PlayerInputAdapterRouter when
     /// the engine moves off the clients (Phase 3 cutover).
     ///
@@ -105,7 +125,7 @@ namespace Assets.Scripts.Network
         {
             return Ask(playerId, DecisionKind.PickCard,
                 request.CandidateCardIds.ToArray(), string.Empty,
-                ids => new CardPick(ids[0]));
+                ids => new CardPick(ids[0]), request.CanCancel);
         }
 
         public Task<ItemPick> PickItem(int playerId, PickItemRequest request)
@@ -136,7 +156,7 @@ namespace Assets.Scripts.Network
         /// this body.
         /// </summary>
         private Task<T> Ask<T>(int playerId, DecisionKind kind, int[] candidateIds,
-                               string prompt, Func<int[], T> auto)
+                               string prompt, Func<int[], T> auto, bool canCancel = false)
         {
             // Игрока уже нет за столом — ответа не будет никогда.
             //
@@ -162,6 +182,7 @@ namespace Assets.Scripts.Network
                 Kind = (int)kind,
                 CandidateIds = candidateIds,
                 Prompt = prompt,
+                CanCancel = canCancel,
             };
 
             // RunContinuationsAsynchronously: completion happens on the
@@ -253,6 +274,16 @@ namespace Assets.Scripts.Network
             {
                 if (!_parked.TryGetValue(requestId, out var pending)) continue;
 
+                // От решения, которое можно было отклонить, за ушедшего
+                // отклоняемся, а не выбираем за него: раз игра допускает
+                // «не хочу», это и есть самый безобидный ответ. Подставлять
+                // выбор пришлось бы только там, где отказ не предусмотрен.
+                if (pending.Request.CanCancel)
+                {
+                    unanswerable.Add(requestId);
+                    continue;
+                }
+
                 if (pending.AutoResolve == null || !pending.AutoResolve())
                 {
                     unanswerable.Add(requestId);
@@ -318,11 +349,48 @@ namespace Assets.Scripts.Network
 
         public void OnResolveCardPick(NetworkConnectionToClient conn, ResolveCardPickIntent msg)
         {
+            // Отказ проверяем ДО TryClaim: тот снимает решение с парковки, и
+            // отвергнутый после этого отказ оставил бы эффект висеть навсегда.
+            if (!msg.HasPick && !CanBeCancelled(conn, msg.RequestId))
+                return;
+
             if (TryClaim<CardPick>(conn, msg.RequestId, out var tcs))
             {
-                tcs.TrySetResult(new CardPick(msg.CardId));
+                if (msg.HasPick)
+                    tcs.TrySetResult(new CardPick(msg.CardId));
+                else
+                    tcs.TrySetException(new DecisionDeclinedException(msg.RequestId));
+
                 BroadcastResolved(msg.RequestId);
             }
+        }
+
+        /// <summary>
+        /// Разрешено ли отказаться от этого решения — и от того ли, кого
+        /// спрашивали.
+        ///
+        /// <para>Проверка серверная и обязательная: без неё клиент мог бы
+        /// «передумать» в ответ на любое обязательное решение и бесплатно
+        /// пропустить эффект уже разыгранной карты.</para>
+        /// </summary>
+        private bool CanBeCancelled(NetworkConnectionToClient conn, int requestId)
+        {
+            if (!_parked.TryGetValue(requestId, out var pending))
+            {
+                Debug.LogWarning($"[NetworkDecisionRouter] Cancel for unknown requestId {requestId}");
+                return false;
+            }
+            if (!_channel.IsSeatedAt(pending.PlayerId, conn))
+            {
+                Debug.LogWarning($"[NetworkDecisionRouter] Cancel for requestId {requestId} from the wrong connection.");
+                return false;
+            }
+            if (!pending.Request.CanCancel)
+            {
+                Debug.LogWarning($"[NetworkDecisionRouter] requestId {requestId} is not cancellable; ignoring.");
+                return false;
+            }
+            return true;
         }
 
         public void OnResolveItemPick(NetworkConnectionToClient conn, ResolveItemPickIntent msg)

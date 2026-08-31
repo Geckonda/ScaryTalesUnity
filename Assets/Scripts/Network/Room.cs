@@ -721,26 +721,73 @@ namespace Assets.Scripts.Network
             if (!Channel.IsSeatedAt(current.Id, conn))
                 return;
 
+            // Правило применяется только ДО того, как разыграна карта хода.
+            // Клиент это и так соблюдает (кнопка гаснет), но правило игры не
+            // должно держаться на честности клиента: единственный признак
+            // «карта ещё не сыграна» на сервере — что цикл всё ещё ждёт её.
+            if (_waitingForPlay == null || _waitingForPlay.Task.IsCompleted)
+            {
+                Debug.LogWarning("[Room] UseRuleEffectIntent after the card was played; ignored.");
+                ReportRuleOutcome(current.Id, msg.RuleEffectId, applied: false);
+                return;
+            }
+
             var effect = _session.CurrentRuleInGame.Effects.FirstOrDefault(e => e.Id == msg.RuleEffectId);
-            if (effect == null) return;
+            if (effect == null)
+            {
+                ReportRuleOutcome(current.Id, msg.RuleEffectId, applied: false);
+                return;
+            }
             if (!effect.IsEffectAvailable(_session.Context))
             {
                 Debug.LogWarning($"[Room] UseRuleEffectIntent for unavailable effect {msg.RuleEffectId}.");
+                ReportRuleOutcome(current.Id, msg.RuleEffectId, applied: false);
                 return;
             }
+
+            bool applied = false;
             try
             {
-                await effect.ApplyEffect(_session.Context);
+                applied = await effect.ApplyEffect(_session.Context);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException e)
             {
-                // The room was aborted while this effect was waiting on a
-                // decision. Expected, and already reported to the clients.
+                // Три нормальных исхода с одинаковым концом: игрок передумал
+                // и отказался от выбора (DecisionDeclinedException), игрок
+                // вышел, пока стол ждал его ответа, или комнату прервали.
+                // Во всех случаях правило просто не состоялось, и откатывать
+                // нечего: единственное правило с вопросом (A1-2) спрашивает
+                // ДО того, как забрать меч, а остальные вопросов не задают.
+                Debug.Log($"[Room] Rule effect {msg.RuleEffectId} did not complete: {e.Message}");
             }
             catch (Exception e)
             {
                 Debug.LogError($"[Room] UseRuleEffectIntent application failed: {e}");
             }
+
+            ReportRuleOutcome(current.Id, msg.RuleEffectId, applied);
+        }
+
+        /// <summary>
+        /// Говорит игроку, состоялось ли его правило.
+        ///
+        /// <para>Ответ уходит из КАЖДОЙ ветки — включая отказы по проверкам.
+        /// Клиент по этому событию возвращает игроку право на правило, если
+        /// оно не сработало, и молчание здесь означало бы для него «поезд
+        /// ушёл»: ровно та жалоба, ради которой событие и появилось.</para>
+        ///
+        /// <para>Только этому месту, а не всей комнате: остальным чужая
+        /// неудавшаяся попытка ни о чём не говорит.</para>
+        /// </summary>
+        private void ReportRuleOutcome(int seatId, int ruleEffectId, bool applied)
+        {
+            if (_gameOver || !NetworkServer.active) return;
+
+            Channel.SendToSeat(seatId, new RuleEffectResolvedEvent
+            {
+                RuleEffectId = ruleEffectId,
+                Applied = applied,
+            });
         }
     }
 }

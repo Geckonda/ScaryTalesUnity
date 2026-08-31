@@ -35,12 +35,28 @@ namespace Assets.Libreries.ScaryTales.Rules.Effects
             var monsters = context.GameBoard.GetCardsOnBoard(CardType.Monster);
             var board = context.GameBoard;
 
-            manager.RemoveItemFromPlayerItemBag(ItemType.Sword, player);
-
+            // Сначала спрашиваем, и только потом забираем меч.
+            //
+            // Прежний порядок (забрать, потом спросить) терял меч впустую в
+            // двух случаях сразу: игрок передумал и отказался от выбора, и
+            // игрок вышел, пока стол ждал его ответа. Ни в том, ни в другом
+            // случае злодей не умирал, а меч уже был отдан.
+            //
+            // canCancel: true допустимо ровно потому, что здесь ещё ничего не
+            // потрачено. Отказ прилетит сюда исключением, и до строки с мечом
+            // выполнение просто не дойдёт.
             var pick = await context.Router.PickCard(
                 player.Id,
-                new PickCardRequest(monsters.Select(c => c.Id)));
-            var monster = monsters.First(c => c.Id == pick.CardId);
+                new PickCardRequest(monsters.Select(c => c.Id), canCancel: true));
+
+            var monster = monsters.FirstOrDefault(c => c.Id == pick.CardId);
+            if (monster == null)
+            {
+                manager.PrintMessage("Правило 2: выбранный злодей не найден на столе.");
+                return false;
+            }
+
+            manager.RemoveItemFromPlayerItemBag(ItemType.Sword, player);
             manager.PrintMessage($"Игрок {player.Name} сбросил карту {monster.Name}");
 
             board.RemoveCardFromBoard(monster);

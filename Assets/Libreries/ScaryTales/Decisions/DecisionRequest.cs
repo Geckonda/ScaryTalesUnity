@@ -10,9 +10,26 @@ namespace ScaryTales.Decisions
     {
         public IReadOnlyList<int> CandidateCardIds { get; }
 
-        public PickCardRequest(IEnumerable<int> ids)
+        /// <summary>
+        /// Можно ли отказаться от выбора.
+        ///
+        /// <para>По умолчанию нельзя, и это важное умолчание: у эффекта
+        /// разыгранной карты выбор обязателен — карта уже на столе и очки за
+        /// неё начислены, так что «передумал» означало бы бесплатную отмену
+        /// половины хода. Отказ разрешают только там, где к моменту вопроса
+        /// ещё ничего не потрачено, — сегодня это правило A1-2, которое
+        /// специально спрашивает ДО того, как забрать меч.</para>
+        ///
+        /// <para>Отказ прилетает эффекту как <c>OperationCanceledException</c>:
+        /// эффект просто не доживает до своих последствий, и знать о нём ему
+        /// не нужно.</para>
+        /// </summary>
+        public bool CanCancel { get; }
+
+        public PickCardRequest(IEnumerable<int> ids, bool canCancel = false)
         {
             CandidateCardIds = ids.ToList();
+            CanCancel = canCancel;
         }
     }
 

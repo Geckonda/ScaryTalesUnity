@@ -86,7 +86,16 @@ namespace Assets.Scripts.UIEntities
                 return;
             }
 
-            if (Input.GetKeyDown(_toggleKey)) Toggle();
+            if (!Input.GetKeyDown(_toggleKey)) return;
+
+            // Esc сначала означает «назад», и только потом «меню». Если стол
+            // ждёт от игрока выбора, от которого можно отказаться, — Esc
+            // отказывается от него. Второе нажатие откроет меню как обычно.
+            var manager = UnGameManager.Instance;
+            if (!_visible && manager != null && manager.TryCancelPendingDecision())
+                return;
+
+            Toggle();
         }
 
         private void TrySubscribe()

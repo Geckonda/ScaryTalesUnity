@@ -67,7 +67,15 @@ public class UnGameManager : MonoBehaviour
     public GameManager _gameManager => HostSession?.GameManager;
     public GameManager GameManager => HostSession?.GameManager;
 
-    private bool _canChooseRule = false;
+    // Право применить правило разложено на два независимых факта, потому что
+    // гаснут они от разных событий и восстанавливаются тоже по-разному.
+    //
+    // Раньше это был один флаг _canChooseRule, и он гас в момент ОТПРАВКИ
+    // интента. Если игрок потом отказывался от выбора цели, правило не
+    // применялось, а право было уже потрачено — «поезд ушёл», хотя картой
+    // игрок ещё не ходил.
+    private bool _myTurnCardPending;   // мой ход, и карта ещё не разыграна
+    private bool _ruleUsedThisTurn;    // правило в этом ходу уже сработало
 
     void Awake()
     {
@@ -110,6 +118,7 @@ public class UnGameManager : MonoBehaviour
         ClientView.OnGameEnded += HandleGameEnded;
         ClientView.OnGameAborted += HandleGameAborted;
         ClientView.OnPlayerLeft += HandlePlayerLeft;
+        ClientView.OnRuleEffectResolved += HandleRuleEffectResolved;
 
         StartCoroutine(PumpClientEvents());
     }
@@ -218,7 +227,8 @@ public class UnGameManager : MonoBehaviour
     private void HandleTurnAdvanced(int currentPlayerId)
     {
         DragAndDrop.SelectCard = false;
-        _canChooseRule = (CurrentPlayer == LocalPlayer);
+        _myTurnCardPending = (CurrentPlayer == LocalPlayer);
+        _ruleUsedThisTurn = false;
         _textUIManager.RefreshTurnHighlight();
 
         if (CurrentPlayer == LocalPlayer)
@@ -257,7 +267,8 @@ public class UnGameManager : MonoBehaviour
         while (!cardSelected) yield return null;
 
         DragAndDrop.SelectCard = false;
-        _canChooseRule = false;
+        // Карта разыграна — правила на этот ход кончились.
+        _myTurnCardPending = false;
         CardSelectionService.CurrentSelectionHandler = null;
         foreach (Transform t in playerHandPanel)
         {
@@ -293,7 +304,7 @@ public class UnGameManager : MonoBehaviour
         switch ((DecisionKind)evt.Kind)
         {
             case DecisionKind.PickCard:
-                StartCoroutine(PromptCardPick(evt.RequestId, evt.CandidateIds));
+                StartCoroutine(PromptCardPick(evt.RequestId, evt.CandidateIds, evt.CanCancel));
                 break;
             case DecisionKind.PickItem:
                 StartCoroutine(PromptItemPick(evt.RequestId, evt.CandidateIds));
@@ -319,7 +330,39 @@ public class UnGameManager : MonoBehaviour
         if (_textUIManager != null) _textUIManager.ClearDeciding();
     }
 
-    private IEnumerator PromptCardPick(int requestId, int[] candidateIds)
+    // Отменяемый выбор карты, который ждёт ответа прямо сейчас, или 0.
+    private int _cancellableCardPick;
+    // Запрос, от которого игрок отказался. Отдельное поле, а не обнуление
+    // предыдущего: если когда-нибудь два отменяемых запроса наложатся,
+    // ожидающая корутина должна выйти только по СВОЕМУ отказу, а не потому,
+    // что «текущим» стал чужой.
+    private int _declinedCardPick;
+
+    /// <summary>
+    /// Отказаться от выбора, если игрока сейчас о чём-то спрашивают и от
+    /// этого можно отказаться. Зовётся из <c>PauseMenu</c> по Esc.
+    ///
+    /// <para>Esc, а не отдельная кнопка, потому что выбор карты рисуется не
+    /// панелью, а подсветкой самих карт на столе — вешать кнопку негде, и
+    /// любая новая привязка в сцене имеет свойство остаться непривязанной.
+    /// «Esc — назад» игрок угадывает без подсказки.</para>
+    /// </summary>
+    /// <returns>true, если отказ отправлен — тогда Esc не должен открывать меню.</returns>
+    public bool TryCancelPendingDecision()
+    {
+        if (_cancellableCardPick == 0) return false;
+
+        NetworkClient.Send(new ResolveCardPickIntent
+        {
+            RequestId = _cancellableCardPick,
+            HasPick = false,
+        });
+        _declinedCardPick = _cancellableCardPick;
+        _cancellableCardPick = 0;
+        return true;
+    }
+
+    private IEnumerator PromptCardPick(int requestId, int[] candidateIds, bool canCancel)
     {
         var candidates = candidateIds
             .Select(id => ClientView.FindCard(id))
@@ -342,7 +385,15 @@ public class UnGameManager : MonoBehaviour
         Action<Card> handler = (c) => { chosen = c; clicked = true; };
         foreach (var v in views) v.OnCardClicked += handler;
 
-        while (!clicked) yield return null;
+        if (canCancel) _cancellableCardPick = requestId;
+
+        // Ждём клика по карте — или отказа по Esc именно от этого запроса.
+        while (!clicked && _declinedCardPick != requestId)
+            yield return null;
+
+        bool cancelled = !clicked;
+        if (_cancellableCardPick == requestId) _cancellableCardPick = 0;
+        if (_declinedCardPick == requestId) _declinedCardPick = 0;
 
         foreach (var v in views)
         {
@@ -350,8 +401,14 @@ public class UnGameManager : MonoBehaviour
             v.SetHighlight(false);
         }
 
-        if (chosen != null)
-            NetworkClient.Send(new ResolveCardPickIntent { RequestId = requestId, CardId = chosen.Id });
+        // При отказе интент уже ушёл из TryCancelPendingDecision.
+        if (!cancelled && chosen != null)
+            NetworkClient.Send(new ResolveCardPickIntent
+            {
+                RequestId = requestId,
+                CardId = chosen.Id,
+                HasPick = true,
+            });
     }
 
     private IEnumerator PromptItemPick(int requestId, int[] candidateTypes)
@@ -394,11 +451,16 @@ public class UnGameManager : MonoBehaviour
         IRuleEffect chosen = null;
         bool resolved = false;
         RuleContainer.Instance.OnRuleSelected = (e) => { chosen = e; resolved = true; };
-        RuleContainer.Instance.Show(effects, false);
+        // Закрытие крестиком и есть отказ: отдельной кнопки «Пропустить»
+        // больше нет. Без этой подписки закрытие подвесило бы и корутину, и
+        // комнату — сервер ждёт ответа на свой запрос.
+        RuleContainer.Instance.OnClosed = () => { chosen = null; resolved = true; };
+        RuleContainer.Instance.Show(effects, interactive: true, IsRuleEffectAvailable);
 
         while (!resolved) yield return null;
 
         RuleContainer.Instance.OnRuleSelected = null;
+        RuleContainer.Instance.OnClosed = null;
 
         NetworkClient.Send(new ResolveRuleEffectPickIntent
         {
@@ -426,38 +488,107 @@ public class UnGameManager : MonoBehaviour
     private List<IRuleEffect> RuleEffects() =>
         _currentRuleInGame?.Effects ?? new List<IRuleEffect>();
 
+    /// <summary>
+    /// Можно ли прямо сейчас применить правило: свой ход и карта этого хода
+    /// ещё не разыграна. Второе гасится в WaitForLocalCardPlay сразу после
+    /// выбора карты.
+    ///
+    /// <para>На возможность ОТКРЫТЬ таблицу это не влияет — смотреть правила
+    /// можно когда угодно.</para>
+    /// </summary>
+    private bool CanUseRuleNow => CurrentPlayer != null
+                                  && CurrentPlayer == LocalPlayer
+                                  && _myTurnCardPending
+                                  && !_ruleUsedThisTurn;
+
+    /// <summary>
+    /// Кнопка «Правила» в сцене. Всегда открывает таблицу; кликабельность
+    /// эффектов зависит от <see cref="CanUseRuleNow"/>.
+    ///
+    /// <para>Корутины здесь больше нет намеренно. Прежняя ждала выбора в
+    /// <c>while (!resolved)</c>, а крестик привязан в сцене прямо к
+    /// <c>RuleContainer.Hide()</c> и её не будил — корутина оставалась жить
+    /// вечно, держа ссылку на свой обработчик. Игроку это и виделось как
+    /// «открыл, закрыл, и правило больше не нажимается». Открытию таблицы
+    /// ждать нечего: либо игрок кликнет эффект, либо закроет.</para>
+    /// </summary>
+    /// <param name="openedByPlayer">
+    /// Не используется. Параметр остался, потому что кнопка в сцене привязана
+    /// к сигнатуре с bool.
+    /// </param>
     public void ShowGameRules(bool openedByPlayer)
     {
-        if (CurrentPlayer == LocalPlayer && _canChooseRule)
+        bool interactive = CanUseRuleNow;
+
+        RuleContainer.Instance.OnClosed = null;
+        RuleContainer.Instance.OnRuleSelected = interactive ? UseRuleEffect : null;
+        RuleContainer.Instance.Show(RuleEffects(), interactive, IsRuleEffectAvailable);
+    }
+
+    // Контекст только для чтения поверх зеркала — единственное, для чего он
+    // нужен, это спросить у правила, выполнены ли его условия.
+    private ClientRuleContext _ruleContext;
+
+    /// <summary>
+    /// Выполнены ли условия конкретного правила по данным клиента: есть ли
+    /// нужный предмет, есть ли что брать из сброса, есть ли монстр на столе.
+    ///
+    /// <para>Считается ТЕМ ЖЕ методом, что и на сервере
+    /// (<c>IRuleEffect.IsEffectAvailable</c>), просто поверх клиентского
+    /// снимка мира. Дублировать условия на клиенте нельзя: копия разъедется
+    /// при первой правке правил, а разъехавшаяся подсветка врёт игроку.</para>
+    ///
+    /// <para>Ответ — подсказка, а не разрешение: сервер проверяет условия
+    /// заново. Поэтому исключение здесь не должно ломать окно — считаем, что
+    /// подсвечивать нечего, и пишем в лог.</para>
+    /// </summary>
+    private bool IsRuleEffectAvailable(IRuleEffect effect)
+    {
+        if (effect == null || ClientView == null) return false;
+
+        try
         {
-            StartCoroutine(PlayerInitiateRule());
+            _ruleContext ??= new ClientRuleContext(ClientView);
+            return effect.IsEffectAvailable(_ruleContext);
         }
-        else
+        catch (Exception e)
         {
-            RuleContainer.Instance.Show(RuleEffects(), openedByPlayer);
+            Debug.LogWarning($"[UnGameManager] Не удалось оценить доступность правила {effect.Id}: {e.Message}");
+            return false;
         }
     }
 
-    private IEnumerator PlayerInitiateRule()
+    private void UseRuleEffect(IRuleEffect effect)
     {
-        IRuleEffect chosen = null;
-        bool resolved = false;
-        RuleContainer.Instance.OnRuleSelected = (e) =>
-        {
-            chosen = e;
-            resolved = true;
-        };
-        RuleContainer.Instance.Show(RuleEffects(), false);
+        if (effect == null) return;
+        // Ещё раз, уже по факту клика: между открытием таблицы и нажатием
+        // ход мог смениться или карта — разыграться.
+        if (!CanUseRuleNow) return;
 
-        while (!resolved) yield return null;
+        // Гасим сразу, чтобы не отправить второй интент, пока первый в пути.
+        // Если правило не состоится, сервер скажет об этом
+        // RuleEffectResolvedEvent, и право вернётся.
+        _ruleUsedThisTurn = true;
+        NetworkClient.Send(new UseRuleEffectIntent { RuleEffectId = effect.Id });
+    }
 
-        RuleContainer.Instance.OnRuleSelected = null;
+    /// <summary>
+    /// Сервер сообщил, чем кончилась попытка применить правило.
+    ///
+    /// <para>Право на правило возвращается, если оно НЕ сработало: игрок
+    /// отказался от выбора цели, условия не сошлись, интент опоздал. Ходить
+    /// картой он ещё не ходил, так что и права лишаться не за что.</para>
+    ///
+    /// <para>Решает это именно сервер, а не клиент по факту своего отказа:
+    /// отказ — лишь одна из причин, по которым правило может не состояться,
+    /// и только сервер знает про все.</para>
+    /// </summary>
+    private void HandleRuleEffectResolved(bool applied)
+    {
+        if (applied) return;
+        if (!_myTurnCardPending) return; // карта уже сыграна — поздно
 
-        if (chosen != null)
-        {
-            _canChooseRule = false;
-            NetworkClient.Send(new UseRuleEffectIntent { RuleEffectId = chosen.Id });
-        }
+        _ruleUsedThisTurn = false;
     }
 
     // ---- Misc UI ----
@@ -476,7 +607,7 @@ public class UnGameManager : MonoBehaviour
         // экран результата висит, пока игрок сам не решит уйти.
         _inGame = false;
         DragAndDrop.SelectCard = false;
-        _canChooseRule = false;
+        _myTurnCardPending = false;
 
         var winner = ClientView.FindPlayer(winnerId);
         ResultContainer.Instance.ShowWinner(winner?.Name ?? "?");
@@ -499,7 +630,7 @@ public class UnGameManager : MonoBehaviour
         StopAllCoroutines();
         _inGame = false;
         DragAndDrop.SelectCard = false;
-        _canChooseRule = false;
+        _myTurnCardPending = false;
 
         // Null on a teardown that races the scene reload; the log line is
         // then the only record, which is fine — we're leaving anyway.
@@ -554,7 +685,7 @@ public class UnGameManager : MonoBehaviour
         StopAllCoroutines();
         _inGame = false;
         DragAndDrop.SelectCard = false;
-        _canChooseRule = false;
+        _myTurnCardPending = false;
 
         result.ShowMessage("Связь с сервером потеряна. Партия завершена.");
         Debug.LogWarning("[Client] Connection lost mid-game.");

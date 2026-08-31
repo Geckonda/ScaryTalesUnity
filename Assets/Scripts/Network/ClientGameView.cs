@@ -98,6 +98,9 @@ namespace Assets.Scripts.Network
         /// <summary>Карта ушла из руки обратно в колоду.</summary>
         public event Action<Card, Player> OnCardReturnedToDeck;
 
+        /// <summary>Чем кончилась моя попытка применить правило: сработало ли.</summary>
+        public event Action<bool> OnRuleEffectResolved;
+
         // Decision flow events. UI listens to know when to show pick prompts
         // and when to dismiss them.
         public event Action<DecisionRequestedEvent> OnDecisionRequested;
@@ -131,6 +134,7 @@ namespace Assets.Scripts.Network
             Defer<GameEndedEvent>(HandleGameEnded);
             Defer<PlayerLeftEvent>(HandlePlayerLeft);
             Defer<CardReturnedToDeckEvent>(HandleCardReturnedToDeck);
+            Defer<RuleEffectResolvedEvent>(HandleRuleEffectResolved);
 
             // Прерывание партии — единственное событие в обход очереди.
             //
@@ -233,6 +237,31 @@ namespace Assets.Scripts.Network
             OnGameStarted?.Invoke();
         }
 
+        /// <summary>
+        /// Убирает карту с доски перед тем, как положить её куда-то ещё.
+        ///
+        /// <para><b>Зачем цикл, а не одно удаление.</b> Сервер и клиент
+        /// узнают о переездах карты по-разному. Разыгрывая карту, сервер
+        /// сперва кладёт её на общий стол, а потом молча снимает и кладёт на
+        /// её настоящее место (перед игроком, в слот дня/ночи, в сброс) —
+        /// снятие событием не сопровождается. Клиент же получал оба события
+        /// и на каждое делал <c>AddCardOnBoard</c>, так что в его снимке
+        /// доски заводилось ДВА вхождения одной карты. А
+        /// <c>RemoveCardFromBoard</c> — это <c>List.Remove</c>, то есть одно
+        /// вхождение: карта уходила в сброс, а её двойник оставался на доске
+        /// навсегда.</para>
+        ///
+        /// <para>Так подсветка правила A1-2 и уверяла, что на столе есть
+        /// злодей, когда последнего уже убили. Цикл заодно вычищает
+        /// дубликаты, накопленные до этой правки.</para>
+        /// </summary>
+        private void DetachFromBoard(Card card)
+        {
+            var onBoard = Board.GetCardsOnBoard();
+            while (onBoard.Contains(card))
+                Board.RemoveCardFromBoard(card);
+        }
+
         private void HandleCardDrawn(CardDrawnEvent evt)
         {
             var player = FindPlayer(evt.PlayerId);
@@ -244,6 +273,11 @@ namespace Assets.Scripts.Network
                 DeckOrder.RemoveAt(0);
             else
                 DeckOrder.Remove(evt.CardId); // resilient to out-of-order events
+
+            // Карта могла приехать в руку не из колоды, а СО СТОЛА: так
+            // работают кражи (Огр, Принцесса) — в ядре это
+            // RemoveCardFromBoard без события плюс обычное «положить в руку».
+            DetachFromBoard(card);
 
             player.AddCardToHand(card);
             card.Position = CardPosition.InHand;
@@ -284,6 +318,7 @@ namespace Assets.Scripts.Network
         {
             var card = FindCard(evt.CardId);
             if (card == null) return;
+            DetachFromBoard(card);
             Board.AddCardOnBoard(card);
             card.Position = CardPosition.OnGameBoard;
             OnCardMovedToBoard?.Invoke(card);
@@ -294,6 +329,7 @@ namespace Assets.Scripts.Network
             var card = FindCard(evt.CardId);
             var owner = FindPlayer(evt.OwnerId);
             if (card == null) return;
+            DetachFromBoard(card);
             Board.AddCardOnBoard(card); // legacy behavior: BeforePlayer cards live on the board
             card.Position = CardPosition.BeforePlayer;
             if (owner != null) card.Owner = owner;
@@ -310,6 +346,8 @@ namespace Assets.Scripts.Network
                 Board.AddCardToDiscardPile(current);
                 current.Position = CardPosition.Discarded;
             }
+            // Карта дня/ночи тоже успевает побывать на общем столе по дороге.
+            DetachFromBoard(card);
             Board.SetTimeOfDaySlot(card);
             card.Position = CardPosition.TimeOfDay;
             OnCardMovedToTimeOfDaySlot?.Invoke(card);
@@ -321,7 +359,7 @@ namespace Assets.Scripts.Network
             if (card == null) return;
             // Could be coming from board or hand or anywhere; clean up
             // wherever it was tracked.
-            Board.RemoveCardFromBoard(card);
+            DetachFromBoard(card);
             foreach (var p in Players) p.RemoveCardFromHand(card);
             Board.AddCardToDiscardPile(card);
             card.Position = CardPosition.Discarded;
@@ -445,6 +483,11 @@ namespace Assets.Scripts.Network
             if (!DeckOrder.Contains(card.Id)) DeckOrder.Add(card.Id);
 
             OnCardReturnedToDeck?.Invoke(card, owner);
+        }
+
+        private void HandleRuleEffectResolved(RuleEffectResolvedEvent evt)
+        {
+            OnRuleEffectResolved?.Invoke(evt.Applied);
         }
 
         private void HandleGameAborted(GameAbortedEvent evt)

@@ -163,6 +163,14 @@ namespace Assets.Scripts.Network.Messages
         public int Kind;             // DecisionKind enum cast to int
         public int[] CandidateIds;   // card ids, item types, or rule effect ids
         public string Prompt;        // optional, used by Confirm
+
+        /// <summary>
+        /// Можно ли отказаться от выбора. Решает сервер, клиент только
+        /// показывает: у эффекта разыгранной карты выбор обязателен, а вот
+        /// правило A1-2 спрашивает до того, как что-либо потратить, и там
+        /// отказ безобиден.
+        /// </summary>
+        public bool CanCancel;
     }
 
     /// <summary>
@@ -240,5 +248,23 @@ namespace Assets.Scripts.Network.Messages
     public struct CardReturnedToDeckEvent : NetworkMessage
     {
         public int CardId;
+    }
+
+    /// <summary>
+    /// Чем кончилась попытка применить правило. Уходит только тому, кто
+    /// пытался.
+    ///
+    /// <para><c>Applied == false</c> означает, что правило не сработало:
+    /// игрок отказался от выбора цели, условия не сошлись, интент опоздал.
+    /// Клиент по этому признаку возвращает игроку право на правило — картой
+    /// он ещё не ходил, значит терять право не за что.</para>
+    ///
+    /// <para>Отвечает именно сервер, потому что отказ — лишь одна из причин
+    /// неудачи, и только он знает про все остальные.</para>
+    /// </summary>
+    public struct RuleEffectResolvedEvent : NetworkMessage
+    {
+        public int RuleEffectId;
+        public bool Applied;
     }
 }
