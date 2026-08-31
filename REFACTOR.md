@@ -635,7 +635,7 @@ Nothing here blocks playing. Grouped by what kind of decision it is.
 ### Phase 5 leftovers
 
 - [ ] **`Libreries` → `Libraries`** — the last structural debt. High blast radius across namespaces and imports, and the same case-only-rename trap that bit `ItemVIewService`: use a two-step `git mv` through a temporary name, for `.cs` and `.cs.meta` both.
-- [ ] **`README.md`** — one paragraph on the architecture (lobby → server engine → DomainEvents → clients) and a pointer to [deploy/](deploy/).
+- [x] **`README.md`** — done, and wider than this line asked: the repo README is now the project's front page (Russian, since the game is). Rules, the full 17-card table with types/points/counts, the item supply, both scenario rules, a mermaid architecture diagram, build and self-host sections, and a Releases link. Two inaccuracies surfaced while writing it and are recorded there as "not yet": the end-of-game rule (B2) is shown to players but never scored — `CurrentFinalRule` reaches the client and no path calls `ApplyEffect` on it — and `PauseMenu`'s warning text still says a departure ends the game for everyone, which the 2026-08-31 policy change made false.
 - [x] Sweep for `не работает` markers — grep now returns zero.
 - The behaviour-parity checklist further up this file is an **unfilled duplicate**; the real one is [docs/CARDS.md](docs/CARDS.md) and it is complete (18 cards + both rules).
 
@@ -667,7 +667,7 @@ Nothing here blocks playing. Grouped by what kind of decision it is.
 - [ ] `Rule.Effects` — свойство, создающее **новый список новых экземпляров на каждом обращении** ([A1.cs:20](Assets/Libreries/ScaryTales/Rules/Templates/A/A1.cs#L20)). Работает лишь потому, что эффекты не хранят состояние, а по проводу ходит `Id`.
 - [ ] `NetworkManager` — не корневой объект, поэтому его `DontDestroyOnLoad` работает не так, как задумано Mirror.
 - [ ] `AnimationManager` и `CursorManager` зовут `DontDestroyOnLoad` на **дочерних** объектах — это ничего не делает (Unity пишет предупреждение). Подтвердить, что так и задумано.
-- [ ] `REfA12` тратит меч **до** того, как спросить, какого монстра убить. Если выбор оборвётся (игрок вышел — см. пункт 4), меч потерян впустую.
+- [x] ~~`REfA12` тратит меч до того, как спросить, какого монстра убить.~~ Порядок перевёрнут в 5.1: сначала вопрос, потом плата.
 
 **Диагностика, включённая на время**
 - [ ] `SeatLayout._logCardSizes` — галочка выключена по умолчанию, но сам код держать вечно незачем: убрать, когда раскладка устаканится.
@@ -677,7 +677,7 @@ Nothing here blocks playing. Grouped by what kind of decision it is.
 - [ ] `Libreries` → `Libraries`. Двухшаговый `git mv` через временное имя, для `.cs` и `.cs.meta`.
 - [ ] `README.md` пустой — там одна строка заголовка. Абзац про архитектуру и ссылка на [deploy/](deploy/).
 - [ ] `deploy/Dockerfile` — неприменённый фикс с домашней директорией сервисного пользователя.
-- [ ] `Assembly-CSharp.csproj` правился вручную, чтобы собрать новый файл до импорта в Unity. Unity его перегенерирует; **в коммит не брать**.
+- [x] ~~`Assembly-CSharp.csproj` правился вручную.~~ В коммиты не попал, Unity перегенерировала сама.
 
 ---
 
