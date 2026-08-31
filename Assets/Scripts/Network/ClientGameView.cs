@@ -101,6 +101,9 @@ namespace Assets.Scripts.Network
         /// <summary>Чем кончилась моя попытка применить правило: сработало ли.</summary>
         public event Action<bool> OnRuleEffectResolved;
 
+        /// <summary>Сколько карт осталось в колоде.</summary>
+        public event Action<int> OnDeckCountChanged;
+
         // Decision flow events. UI listens to know when to show pick prompts
         // and when to dismiss them.
         public event Action<DecisionRequestedEvent> OnDecisionRequested;
@@ -135,6 +138,7 @@ namespace Assets.Scripts.Network
             Defer<PlayerLeftEvent>(HandlePlayerLeft);
             Defer<CardReturnedToDeckEvent>(HandleCardReturnedToDeck);
             Defer<RuleEffectResolvedEvent>(HandleRuleEffectResolved);
+            Defer<DeckCountChangedEvent>(HandleDeckCountChanged);
 
             // Прерывание партии — единственное событие в обход очереди.
             //
@@ -251,6 +255,8 @@ namespace Assets.Scripts.Network
             Opponents = Players.Where(p => p.Id != evt.LocalPlayerId).ToList();
             CurrentPlayerId = evt.StartPlayerId;
             DeckOrder = evt.DeckOrder?.ToList() ?? new List<int>();
+            // Стартовый размер, пока сервер не прислал первый пересчёт.
+            DeckRemaining = DeckOrder.Count;
             CurrentRuleId = evt.CurrentRuleId;
             CurrentFinalRuleId = evt.CurrentFinalRuleId;
             IsNight = false;
@@ -505,6 +511,18 @@ namespace Assets.Scripts.Network
             if (!DeckOrder.Contains(card.Id)) DeckOrder.Add(card.Id);
 
             OnCardReturnedToDeck?.Invoke(card, owner);
+        }
+
+        /// <summary>
+        /// Сколько карт осталось в колоде по данным сервера. До первого
+        /// события — размер стартовой колоды из GameStartedEvent.
+        /// </summary>
+        public int DeckRemaining { get; private set; }
+
+        private void HandleDeckCountChanged(DeckCountChangedEvent evt)
+        {
+            DeckRemaining = evt.Remaining;
+            OnDeckCountChanged?.Invoke(DeckRemaining);
         }
 
         private void HandleRuleEffectResolved(RuleEffectResolvedEvent evt)

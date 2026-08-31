@@ -272,6 +272,19 @@ namespace Assets.Scripts.Network.Messages
     /// <para>Отвечает именно сервер, потому что отказ — лишь одна из причин
     /// неудачи, и только он знает про все остальные.</para>
     /// </summary>
+    /// <summary>
+    /// В колоде осталось столько-то карт.
+    ///
+    /// <para>Клиент не может посчитать это сам: не всё, что покидает колоду,
+    /// сопровождается событием — карта Ночи уходит в слот времени суток
+    /// напрямую, а Волшебник раскрывает карту, минуя руку. Поэтому число
+    /// шлёт тот, кто им владеет.</para>
+    /// </summary>
+    public struct DeckCountChangedEvent : NetworkMessage
+    {
+        public int Remaining;
+    }
+
     public struct RuleEffectResolvedEvent : NetworkMessage
     {
         public int RuleEffectId;

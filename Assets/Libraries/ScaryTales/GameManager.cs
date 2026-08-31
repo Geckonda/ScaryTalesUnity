@@ -27,6 +27,24 @@ namespace ScaryTales
         public event Action<Player>? OnAddPointsToPlayer;
         public event Action<string>? OnMessagePrinted;
 
+        /// <summary>
+        /// Сколько карт осталось в колоде. Клиенту иначе неоткуда это узнать:
+        /// колода нарисована рубашкой, и опустевшую от полной не отличить.
+        ///
+        /// <para>Считать на клиенте по событиям взятия нельзя — не всё, что
+        /// уходит из колоды, сопровождается событием: карта Ночи забирается в
+        /// слот времени суток напрямую, а Волшебник раскрывает карту, минуя
+        /// руку. Поэтому число присылает тот, кто им владеет.</para>
+        /// </summary>
+        public event Action<int>? OnDeckCountChanged;
+
+        /// <summary>
+        /// Сообщить о текущем размере колоды. Зовётся отсюда при каждом
+        /// взятии и снаружи — теми, кто трогает колоду напрямую (раздача
+        /// карты Ночи, возврат руки вышедшего игрока).
+        /// </summary>
+        public void NotifyDeckChanged() => OnDeckCountChanged?.Invoke(_context.Deck.CardsRemaining);
+
         public GameManager(IGameState gameState, IGameBoard gameBoard,
             List<Player> players, Deck deck, ItemManager items,
             INotifier notifier, IDecisionRouter router)
@@ -49,6 +67,10 @@ namespace ScaryTales
         {
             var deck = _context.Deck;
             var card = deck.DrawCard();
+            // Единственная воронка, через которую карты покидают колоду в
+            // ходе партии, — поэтому сообщать о новом размере достаточно
+            // отсюда (и из тех мест снаружи, что трогают колоду напрямую).
+            if (card != null) NotifyDeckChanged();
             if (card == null)
             {
                 PrintMessage("В колоде не осталось карт");

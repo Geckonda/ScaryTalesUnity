@@ -385,6 +385,7 @@ namespace Assets.Scripts.Network
                 Channel.SendToRoom(new CardReturnedToDeckEvent { CardId = card.Id });
             }
             int returned = ctx.Deck.ReturnCardsAndShuffle(hand);
+            if (returned > 0) gm.NotifyDeckChanged();
 
             // Только личные баффы: фильтр по позиции, а не по владельцу.
             // GetCardsOnBoard(player) ловит и то, что он выложил на общий
@@ -614,6 +615,10 @@ namespace Assets.Scripts.Network
                 var night = ctx.Deck.TakeCardByName("Ночь");
                 if (night != null)
                     gm.PutCardInTimeOfDaySlot(night);
+                // Карта Ночи ушла из колоды мимо TryDrawCardFromDeck —
+                // сообщаем размер сами, иначе клиент так и будет считать
+                // колоду на одну карту толще, чем она есть.
+                gm.NotifyDeckChanged();
 
                 foreach (var player in ctx.Players)
                 {
