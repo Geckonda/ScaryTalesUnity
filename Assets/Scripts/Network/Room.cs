@@ -50,6 +50,11 @@ namespace Assets.Scripts.Network
         // "no player" sentinel on the wire (GameAbortedEvent.LeftPlayerId,
         // ServerEventBroadcaster's owner fallbacks).
         private int _nextSeatId = 1;
+        // Выбранное место за столом: seat id → номер стула. Отдельно от
+        // самого места, потому что это разные вещи: seat id — личность
+        // игрока, стул — позиция в очереди ходов. Кто не выбрал, здесь и не
+        // числится.
+        private readonly Dictionary<int, int> _chairBySeat = new();
         private bool _gameStarted;
 
         /// <summary>This room's seats, and its only route to their clients.</summary>
@@ -270,6 +275,8 @@ namespace Assets.Scripts.Network
             if (!_gameStarted)
             {
                 _players.RemoveAll(p => p.Id == seatId);
+                // Ушёл из лобби — стул освободился.
+                _chairBySeat.Remove(seatId);
                 Debug.Log($"[Room {Code}] {name} left the lobby: {_players.Count}/{_maxPlayers}");
                 BroadcastLobbyState();
                 return;
@@ -402,6 +409,19 @@ namespace Assets.Scripts.Network
         public void BroadcastLobbyState()
         {
             if (!NetworkServer.active) return;
+
+            var chairSeats = new int[_maxPlayers];
+            var chairNames = new string[_maxPlayers];
+            for (int i = 0; i < _maxPlayers; i++) chairNames[i] = string.Empty;
+
+            foreach (var pair in _chairBySeat)
+            {
+                int chair = pair.Value;
+                if (chair < 0 || chair >= _maxPlayers) continue;
+                chairSeats[chair] = pair.Key;
+                chairNames[chair] = _players.FirstOrDefault(p => p.Id == pair.Key)?.Name ?? string.Empty;
+            }
+
             Channel.SendToRoom(new LobbyStateUpdate
             {
                 PlayerCount = _players.Count,
@@ -409,7 +429,74 @@ namespace Assets.Scripts.Network
                 MaxPlayers = _maxPlayers,
                 PlayerNames = _players.Select(p => p.Name).ToArray(),
                 CanStart = CanStart,
+                ChairSeats = chairSeats,
+                ChairNames = chairNames,
             });
+        }
+
+        /// <summary>
+        /// Занять место за столом. Свободное — занимает, своё же — оставляет
+        /// как есть, чужое — отказ.
+        /// </summary>
+        public void HandleClaimChair(NetworkConnectionToClient conn, ClaimChairIntent msg)
+        {
+            if (_gameStarted)
+            {
+                Debug.LogWarning($"[Room {Code}] ClaimChairIntent after the game started; ignored.");
+                return;
+            }
+            if (msg.Chair < 0 || msg.Chair >= _maxPlayers)
+            {
+                Debug.LogWarning($"[Room {Code}] ClaimChairIntent for chair {msg.Chair} out of range.");
+                return;
+            }
+            if (!_seatByConnection.TryGetValue(conn.connectionId, out int seatId))
+            {
+                Debug.LogWarning($"[Room {Code}] ClaimChairIntent from a connection with no seat.");
+                return;
+            }
+
+            // Занято другим — молча отказываем: гонку за один стул выигрывает
+            // тот, чей интент пришёл первым, и объяснять это игроку нечем,
+            // кроме того же обновления лобби, которое и так придёт.
+            foreach (var pair in _chairBySeat)
+            {
+                if (pair.Value == msg.Chair && pair.Key != seatId)
+                {
+                    Debug.Log($"[Room {Code}] Chair {msg.Chair} already taken by seat {pair.Key}.");
+                    return;
+                }
+            }
+
+            _chairBySeat[seatId] = msg.Chair;
+            Debug.Log($"[Room {Code}] Seat {seatId} took chair {msg.Chair}.");
+            BroadcastLobbyState();
+        }
+
+        /// <summary>
+        /// Ставит игроков в том порядке, в котором они расселись, — и это
+        /// единственное, что нужно движку: очерёдность ходов там и есть
+        /// порядок списка (<c>GameState.CurrentPlayerIndex</c> бегает по
+        /// нему), а <c>Player.Id</c> при этом не меняется ни у кого.
+        ///
+        /// <para>Кто не выбрал места, тех дописываем в конец в порядке
+        /// прихода — так один молчун не держит комнату. Именно поэтому
+        /// сортировка стабильная (<c>OrderBy</c>, а не <c>List.Sort</c>):
+        /// у всех невыбравших ключ одинаковый, и нестабильная сортировка
+        /// перемешала бы их между собой без всякой причины.</para>
+        /// </summary>
+        private void ApplyChosenTurnOrder()
+        {
+            if (_chairBySeat.Count == 0) return;
+
+            var ordered = _players
+                .OrderBy(p => _chairBySeat.TryGetValue(p.Id, out int chair) ? chair : int.MaxValue)
+                .ToList();
+
+            _players.Clear();
+            _players.AddRange(ordered);
+
+            Debug.Log($"[Room {Code}] Turn order: {string.Join(", ", _players.Select(p => p.Name))}.");
         }
 
         // ---- Composition root for this room's game ----
@@ -437,6 +524,10 @@ namespace Assets.Scripts.Network
                 Debug.LogWarning($"[Room] StartGame ignored: started={_gameStarted}, players={_players.Count}/min={_minPlayers}.");
                 return;
             }
+            // Порядок ходов фиксируется здесь, последним действием лобби и до
+            // того, как список увидит движок.
+            ApplyChosenTurnOrder();
+
             _gameStarted = true;
             Debug.Log($"[Room] Starting game with {_players.Count} players.");
 

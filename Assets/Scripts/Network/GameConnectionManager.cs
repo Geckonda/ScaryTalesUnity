@@ -358,6 +358,7 @@ namespace Assets.Scripts.Network
                 Code = room.Code,
                 RoomName = room.Name,
                 IsOwner = player.Id == room.OwnerSeatId,
+                SeatId = player.Id,
             });
 
             Debug.Log($"[Server] {player.Name} took seat {player.Id} in room {room.Code}: {room.PlayerCount}/{_maxPlayers}");

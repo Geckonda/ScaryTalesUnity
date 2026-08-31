@@ -47,6 +47,23 @@ namespace Assets.Scripts.Network.Messages
     public struct StartGameIntent : NetworkMessage { }
 
     /// <summary>
+    /// Client → server. Занять место за столом с этим номером.
+    ///
+    /// <para>Номер места здесь — это <b>позиция в очереди ходов</b>, а не
+    /// <see cref="Player.Id"/>. Их нельзя путать: id выдаётся при входе и
+    /// служит личностью игрока (привязка соединения, авторизация интентов,
+    /// владелец комнаты, задел под переподключение), а позиция — то, что
+    /// игрок выбирает сам и что определяет лишь порядок ходов.</para>
+    ///
+    /// <para>Повторный интент переносит игрока на другое место, если оно
+    /// свободно.</para>
+    /// </summary>
+    public struct ClaimChairIntent : NetworkMessage
+    {
+        public int Chair; // 0..MaxPlayers-1
+    }
+
+    /// <summary>
     /// Server → one client. You are in. Carries the code so the client can
     /// display it for reading out, and whether this client is the owner —
     /// which is what now decides who sees the Start button, since
@@ -58,6 +75,13 @@ namespace Assets.Scripts.Network.Messages
         public string Code;
         public string RoomName;
         public bool IsOwner;
+
+        /// <summary>
+        /// Место этого игрока в комнате — его личность на весь срок партии.
+        /// Клиенту нужно, чтобы узнавать себя в списке мест: сравнивать по
+        /// имени нельзя, имена могут совпасть.
+        /// </summary>
+        public int SeatId;
     }
 
     /// <summary>Why a create or join was refused.</summary>
@@ -95,5 +119,14 @@ namespace Assets.Scripts.Network.Messages
         // rather than recomputed on the client so the min-player rule lives
         // in exactly one place.
         public bool CanStart;
+
+        // Кто где сидит. Обе длиной MaxPlayers и индексируются НОМЕРОМ
+        // МЕСТА — так клиенту не приходится сопоставлять два списка, чтобы
+        // нарисовать ряд стульев.
+        //
+        // Свободное место: seat 0 (0 — сентинел «никого», реальные id
+        // начинаются с 1) и пустое имя.
+        public int[] ChairSeats;
+        public string[] ChairNames;
     }
 }
