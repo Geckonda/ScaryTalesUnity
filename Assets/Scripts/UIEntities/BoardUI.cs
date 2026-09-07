@@ -1,7 +1,6 @@
 ﻿using Assets.Scripts.Network;
 using Assets.Scripts.UIEntities;
 using Assets.Scripts.Views;
-using DG.Tweening;
 using ScaryTales;
 using System.Collections.Generic;
 using TMPro;
@@ -28,6 +27,9 @@ public class BoardUI : MonoBehaviour
 
     [Tooltip("Сколько летит карта до места назначения, секунд.")]
     [SerializeField] private float _moveDuration = 0.5f;
+
+    [Tooltip("Сколько длится разворот карты лицом вверх, секунд. Разворот вложен в конец полёта, а не добавлен к нему: очередь событий ждёт анимации стола, поэтому удлинение полёта замедлило бы всю партию. Ноль — разворота нет, карта просто летит.")]
+    [SerializeField] private float _flipDuration = 0.35f;
 
     [Header("Пустая колода")]
     [Tooltip("Необязательно. Картинка опустевшей колоды. Если не задана, рубашка просто гаснет до цвета ниже — так фича работает без единой привязки в сцене.")]
@@ -159,10 +161,34 @@ public class BoardUI : MonoBehaviour
         var deck = unityManager.Deck;
         var cardView = _cardViewService.GetCardView(card)
             ?? _cardViewService.CreateCardView(card, deck);
-        cardView.FaceUp();
-        var animationTask = AnimateCardTransformToPositionInLayout(cardView, GameBoardPanel);
+        var flip = FlipToFront(cardView);
+
+        var animationTask = AnimateCardTransformToPositionInLayout(cardView, GameBoardPanel, flip);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
+    }
+
+    /// <summary>
+    /// Разворот, который карта должна отыграть по дороге на стол — или
+    /// <c>null</c>, если разворачивать нечего.
+    ///
+    /// <para>Карта оппонента лежит в его веере рубашкой вверх и должна
+    /// повернуться лицом; своя уже лежит лицом вверх, и её разворот был бы
+    /// неправдой. Карту, созданную только что (её представления не было —
+    /// например, она пришла из колоды), кладём рубашкой: без этого она
+    /// вспыхивает лицом прямо в колоде, и переворачивать в полёте уже
+    /// нечего.</para>
+    ///
+    /// <para>Считать это надо <b>до</b> полёта: <c>IsFacedUp</c> переключится
+    /// в середине разворота.</para>
+    /// </summary>
+    private static System.Action FlipToFront(CardView cardView)
+    {
+        if (cardView == null) return null;
+        if (cardView.IsFacedUp) return null;
+
+        cardView.FaceDown();
+        return cardView.FaceUp;
     }
 
     private async void HandleCardMovedToBeforePlayer(Card card)
@@ -171,7 +197,7 @@ public class BoardUI : MonoBehaviour
         var deck = unityManager.Deck;
         var cardView = _cardViewService.GetCardView(card)
             ?? _cardViewService.CreateCardView(card, deck);
-        cardView.FaceUp();
+        var flip = FlipToFront(cardView);
 
         Transform panel = null;
         if (card.Owner != null && _beforePlayerTables.TryGetValue(card.Owner, out var tbl))
@@ -179,7 +205,7 @@ public class BoardUI : MonoBehaviour
         // Fallback: send to general board if we couldn't resolve a seat.
         if (panel == null) panel = GameBoardPanel;
 
-        var animationTask = AnimateCardTransformToPositionInLayout(cardView, panel);
+        var animationTask = AnimateCardTransformToPositionInLayout(cardView, panel, flip);
         AnimationManager.Instance.Register(animationTask);
         await animationTask;
     }
@@ -190,7 +216,7 @@ public class BoardUI : MonoBehaviour
         var deck = unityManager.Deck;
         CardView cardView = _cardViewService.GetCardView(card)
             ?? _cardViewService.CreateCardView(card, deck);
-        cardView.FaceUp();
+        var flip = FlipToFront(cardView);
 
         // Единственный обработчик, который раньше не регистрировал свою
         // анимацию — поэтому карту дня/ночи никто не ждал, и раздача карт
@@ -199,9 +225,9 @@ public class BoardUI : MonoBehaviour
         // Паузы здесь нет намеренно. Карта уже полежала на столе и прочитана,
         // а в начале партии эта же пауза давала две секунды пустого экрана
         // перед вылетом карты Ночи — ту самую «непонятную задержку».
-        var animationTask = AnimateCardTransformToPosition(cardView, TimeOfDaySlot, 0);
+        var animationTask = AnimateCardTransformToPosition(cardView, TimeOfDaySlot, 0, flip);
         AnimationManager.Instance.Register(animationTask);
-        await animationTask;
+        if (!await animationTask) return;
         if (cardView == null || TimeOfDaySlot == null) return;
 
         cardView.transform.SetParent(TimeOfDaySlot);
@@ -222,10 +248,21 @@ public class BoardUI : MonoBehaviour
             bool leavingTimeOfDaySlot = TimeOfDaySlot != null
                 && cardView.transform.parent == TimeOfDaySlot;
 
+            // В сброс карта уходит рубашкой вверх: стопка сброса — рубашка, и
+            // карта должна лечь в неё так же, как легла бы на столе. Разворот
+            // идёт в конце полёта, поэтому прочитать карту он не мешает — на
+            // это есть пауза выше, и всю её карта лежит лицом.
+            //
+            // Уже перевёрнутой вертеться незачем: так уходит карта, сброшенная
+            // из чужой руки, — её лица никто и не видел.
+            var flip = cardView.IsFacedUp ? cardView.FaceDown : (System.Action)null;
+
             var animationTask = AnimateCardTransformToPosition(
-                cardView, DiscardPile, leavingTimeOfDaySlot ? 0 : _discardReadDelay);
+                cardView, DiscardPile, leavingTimeOfDaySlot ? 0 : _discardReadDelay, flip);
             AnimationManager.Instance.Register(animationTask);
-            await animationTask;
+            // Не долетела — значит карту перехватил следующий полёт и она жива
+            // где-то ещё. Уничтожать её здесь нельзя.
+            if (!await animationTask) return;
             if (cardView == null) return;
 
             if (DiscardPileView.Instance != null) DiscardPileView.Instance.SetSuit();
@@ -237,7 +274,9 @@ public class BoardUI : MonoBehaviour
         }
     }
 
-    public async Task AnimateCardTransformToPosition(CardView card, Transform to, int delayMs)
+    /// <returns>Долетела ли карта — см. <see cref="CardFlight.Fly"/>.</returns>
+    public async Task<bool> AnimateCardTransformToPosition(CardView card, Transform to, int delayMs,
+                                                           System.Action onFlipMidpoint = null)
     {
         if (delayMs > 0) await Task.Delay(delayMs);
         // Пауза и полёт переживают перезагрузку сцены (выход в меню посреди
@@ -245,34 +284,37 @@ public class BoardUI : MonoBehaviour
         // await: уничтоженный объект Unity равен null по своей перегрузке ==,
         // но обращение к нему бросает MissingReferenceException — а бросать
         // его отсюда некуда, эти задачи ждут из async void.
-        if (card == null || to == null) return;
+        if (card == null || to == null) return false;
 
-        // Гасим предыдущий полёт этой же карты — см. пояснение в
-        // PlayerHandUI.AnimateCardToHand. Два твина на одном трансформе
-        // тянут его в разные стороны.
-        card.transform.DOKill();
-
-        await card.transform.DOMove(to.position, _moveDuration)
-            .SetEase(Ease.OutQuad)
-            .AsyncWaitForCompletion();
+        // Гашение предыдущего полёта той же карты — внутри CardFlight.Fly:
+        // два твина на одном трансформе тянут его в разные стороны.
+        return await CardFlight.Fly(card, to, _moveDuration, _flipDuration, onFlipMidpoint);
     }
 
-    public async Task AnimateCardTransformToPositionInLayout(CardView card, Transform to)
+    /// <returns>Села ли карта в раскладку назначения.</returns>
+    public async Task<bool> AnimateCardTransformToPositionInLayout(CardView card, Transform to,
+                                                                   System.Action onFlipMidpoint = null)
     {
-        await card.transform.DOMove(to.position, _moveDuration)
-            .SetEase(Ease.OutQuad)
-            .AsyncWaitForCompletion();
-        if (card == null || to == null) return;
+        // Перехваченный полёт сажать нельзя: карту уже ведёт следующий, и
+        // назначенный здесь родитель дрался бы с ним.
+        if (!await CardFlight.Fly(card, to, _moveDuration, _flipDuration, onFlipMidpoint)) return false;
+        if (card == null || to == null) return false;
 
-        // worldPositionStays: false — the destination panel may be rotated
-        // and scaled (seats face the table centre), and keeping world pose
-        // would bake that compensation into localRotation/localScale right
-        // before the layout group overwrites them anyway.
-        card.transform.SetParent(to, false);
+        // Полёт оставил карту в корне канваса — родителя назначаем здесь.
+        //
+        // worldPositionStays: true. Раньше здесь было false, потому что панель
+        // повёрнута к центру стола и сохранение мировой позы оставило бы карте
+        // компенсирующий локальный трансформ. Теперь наоборот: карта уже стоит
+        // ровно там, куда её поставит раскладка (CardFlight замерил это место
+        // заранее), и мировую позу надо именно сохранить. Компенсация живёт
+        // ровно до пересборки строкой ниже, которая перепишет карте и позицию,
+        // и поворот, и масштаб.
+        card.transform.SetParent(to, true);
 
         var toRect = to.GetComponent<RectTransform>();
         if (toRect != null)
             LayoutRebuilder.ForceRebuildLayoutImmediate(toRect);
         await Task.Yield();
+        return true;
     }
 }

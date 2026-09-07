@@ -20,7 +20,14 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     public Card _card;
     private Image _background;
 
-    [SerializeField] private Sprite _enemyBackgroundSprite; 
+    // Лицо карты грузится один раз на представление. Раньше Resources.Load
+    // случался при каждом FaceUp, а теперь этот вызов приходится ровно на
+    // середину разворота в полёте — обращение к диску дало бы рывок именно
+    // там, где он заметнее всего.
+    private Sprite _frontSprite;
+    private bool _frontSpriteLoaded;
+
+    [SerializeField] private Sprite _enemyBackgroundSprite;
 
     public bool IsFacedUp { get; private set; }
 
@@ -43,16 +50,15 @@ public class CardView : MonoBehaviour, IPointerClickHandler
 
     public void FaceUp()
     {
-            ChangeTextVisibility(true);
-            var frontSprite = Resources.Load<Sprite>($"CardsImages/{_card.Name}");
-            if (frontSprite != null)
-            {
-                _background.sprite = frontSprite;
-            }
-            else
-            {
-                _background.sprite = null;
-            }
+        ChangeTextVisibility(true);
+
+        if (!_frontSpriteLoaded)
+        {
+            _frontSprite = Resources.Load<Sprite>($"CardsImages/{_card.Name}");
+            _frontSpriteLoaded = true;
+        }
+
+        _background.sprite = _frontSprite;
     }
     public void FaceDown()
     {
