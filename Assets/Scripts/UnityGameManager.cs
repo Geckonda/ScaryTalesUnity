@@ -41,6 +41,9 @@ public class UnGameManager : MonoBehaviour
     public PlayerHandUI _playerHandUI;
     public TextUIManager _textUIManager;
     public SeatLayout _seatLayout;
+
+    [Tooltip("Показ разбора правила в конце партии. Можно не привязывать: если слот пуст, компонент добавляется сюда же кодом со значениями по умолчанию — разбор работает без работ в сцене, а привязка нужна только чтобы покрутить ручки.")]
+    public EndGameScoringUI _endGameScoringUI;
     public Transform GameBoardPanel;
     public Transform Deck;
 
@@ -233,6 +236,14 @@ public class UnGameManager : MonoBehaviour
         _boardUI.Initialize(ClientView, _seatLayout);
         _playerHandUI.Initialize(ClientView, _seatLayout);
         _textUIManager.Initialize(ClientView, _seatLayout);
+
+        // Слот можно не привязывать: разбор конца партии ничего не берёт из
+        // сцены, кроме мест, а места он получает здесь же. Молчаливо
+        // выключенная функция в этом проекте уже трижды стоила расследования,
+        // поэтому она заводит себя сама.
+        if (_endGameScoringUI == null)
+            _endGameScoringUI = gameObject.AddComponent<EndGameScoringUI>();
+        _endGameScoringUI.Initialize(ClientView, _seatLayout);
     }
 
     private void HandleTurnAdvanced(int currentPlayerId)
@@ -549,6 +560,18 @@ public class UnGameManager : MonoBehaviour
         RuleContainer.Instance.OnClosed = null;
         RuleContainer.Instance.OnRuleSelected = interactive ? UseRuleEffect : null;
         RuleContainer.Instance.Show(RuleEffects(), interactive, IsRuleEffectAvailable);
+
+        // Вторая страница — правило конца партии. До неё игрок не мог добраться
+        // никак: оно приходило клиенту в GameStartedEvent и не показывалось
+        // нигде, хотя решает исход. Применить его нельзя — оно считается само,
+        // когда партия кончилась, — поэтому страница некликабельная.
+        var final = _currentFinalRule?.Effects;
+        if (final != null && final.Count > 0)
+            RuleContainer.Instance.SetAlternatePage(
+                final,
+                hint: $"«{_currentFinalRule.Name}». Это правило посчитается само, когда кончится партия.",
+                openLabel: "Правила в конце партии",
+                backLabel: "← Правила в игре");
     }
 
     // Контекст только для чтения поверх зеркала — единственное, для чего он

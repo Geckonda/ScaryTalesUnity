@@ -1,3 +1,6 @@
+using Assets.Libraries.ScaryTales;
+using Assets.Libraries.ScaryTales.Abstractions;
+using Assets.Libraries.ScaryTales.Rules;
 using Assets.Scripts.Network.Messages;
 using Mirror;
 using ScaryTales;
@@ -104,6 +107,22 @@ namespace Assets.Scripts.Network
         /// <summary>Сколько карт осталось в колоде.</summary>
         public event Action<int> OnDeckCountChanged;
 
+        /// <summary>
+        /// Начался разбор правила конца партии. Дальше по одному
+        /// <see cref="OnFinalScoring"/> на каждого игрока, в порядке ходов.
+        /// </summary>
+        public event Action<Rule> OnFinalScoringStarted;
+
+        /// <summary>
+        /// Правило конца партии посчитано одному игроку: сколько очков и какие
+        /// его предметы за это сыграли (типы с повторами, могут быть пустыми).
+        ///
+        /// <para>Очки к этому моменту ещё НЕ начислены: своё
+        /// <see cref="OnAddPointsToPlayer"/> придёт следующим событием, уже
+        /// после того, как отыграет анимация разбора.</para>
+        /// </summary>
+        public event Action<Player, IRuleEffect, int, IReadOnlyList<ItemType>> OnFinalScoring;
+
         // Decision flow events. UI listens to know when to show pick prompts
         // and when to dismiss them.
         public event Action<DecisionRequestedEvent> OnDecisionRequested;
@@ -139,6 +158,8 @@ namespace Assets.Scripts.Network
             Defer<CardReturnedToDeckEvent>(HandleCardReturnedToDeck);
             Defer<RuleEffectResolvedEvent>(HandleRuleEffectResolved);
             Defer<DeckCountChangedEvent>(HandleDeckCountChanged);
+            Defer<FinalScoringStartedEvent>(HandleFinalScoringStarted);
+            Defer<FinalScoringEvent>(HandleFinalScoring);
 
             // Прерывание партии — единственное событие в обход очереди.
             //
@@ -430,6 +451,40 @@ namespace Assets.Scripts.Network
                 if (tpl.Type == type) return tpl.Clone();
             return null;
         }
+
+        private void HandleFinalScoringStarted(FinalScoringStartedEvent evt)
+        {
+            // Правило строим из каталога по номеру — тем же способом, что и
+            // правила партии в UnGameManager.HandleGameStarted. Текст правил
+            // клиент никогда не получает по проводу.
+            var rule = RuleCatalog.Create(evt.RuleId);
+            if (rule == null)
+            {
+                Debug.LogWarning($"[ClientGameView] Неизвестное правило конца партии {evt.RuleId}.");
+                return;
+            }
+            OnFinalScoringStarted?.Invoke(rule);
+        }
+
+        private void HandleFinalScoring(FinalScoringEvent evt)
+        {
+            var player = FindPlayer(evt.PlayerId);
+            if (player == null) return;
+
+            var counted = evt.CountedItemTypes == null
+                ? new List<ItemType>()
+                : evt.CountedItemTypes.Select(t => (ItemType)t).ToList();
+
+            // Эффект нужен показу только ради описания — по нему подписывают
+            // разбор. Не нашёлся — не беда, очки и предметы важнее.
+            var effect = CurrentFinalRuleEffect(evt.RuleEffectId);
+
+            OnFinalScoring?.Invoke(player, effect, evt.Points, counted);
+        }
+
+        private IRuleEffect CurrentFinalRuleEffect(int effectId)
+            => RuleCatalog.Create(CurrentFinalRuleId)?.Effects?
+                          .FirstOrDefault(e => e.Id == effectId);
 
         private void HandlePointsAwarded(PointsAwardedEvent evt)
         {

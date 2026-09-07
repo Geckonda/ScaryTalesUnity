@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace Assets.Scripts.Menus
@@ -33,8 +34,10 @@ namespace Assets.Scripts.Menus
         public static RuleContainer Instance { get; private set; }
 
         [SerializeField] public Transform contentPanel; // Куда добавляются предметы
-        [Tooltip("Наследство прежнего режима «выбери или пропусти». Больше не используется и выключается в Awake; поле оставлено, чтобы не рвать привязку в сцене.")]
-        [SerializeField] public Button SkipBtn;
+
+        [Tooltip("Переключатель страниц таблицы: правила в игре ↔ правила в конце партии. Это бывшая кнопка «Пропустить» из прежнего режима «выбери или пропусти» — привязка в сцене та же, поэтому переименование идёт через FormerlySerializedAs. Не привязана — переключателя не будет, и об этом скажет лог.")]
+        [FormerlySerializedAs("SkipBtn")]
+        [SerializeField] public Button ToggleBtn;
         [SerializeField] private Button ShowBtn;
         [SerializeField] private Button CloseBtn;
         [SerializeField] private GameObject UIBlockerOverlay;
@@ -54,6 +57,36 @@ namespace Assets.Scripts.Menus
 
         private List<RuleEffectView> _ruleEffectViews = new List<RuleEffectView>();
 
+        /// <summary>
+        /// Одна страница таблицы: что показать, кликается ли это и что написать
+        /// внизу.
+        /// </summary>
+        private readonly struct Page
+        {
+            public readonly List<IRuleEffect> Effects;
+            public readonly bool Interactive;
+            public readonly Func<IRuleEffect, bool> IsAvailable;
+            public readonly string Hint;
+
+            public Page(List<IRuleEffect> effects, bool interactive,
+                        Func<IRuleEffect, bool> isAvailable, string hint)
+            {
+                Effects = effects ?? new List<IRuleEffect>();
+                Interactive = interactive;
+                IsAvailable = isAvailable;
+                Hint = hint;
+            }
+        }
+
+        // Первая страница — та, с которой таблица открылась. Вторая появляется
+        // только если её задали через SetAlternatePage; без неё переключателя
+        // нет вовсе.
+        private Page _primary;
+        private Page? _alternate;
+        private bool _showingAlternate;
+        private string _toggleOpenLabel;
+        private string _toggleBackLabel;
+
         /// <summary>Игрок выбрал эффект. Вызывается только в интерактивном режиме.</summary>
         public Action<IRuleEffect> OnRuleSelected;
 
@@ -70,8 +103,9 @@ namespace Assets.Scripts.Menus
         private void Awake()
         {
             Instance = this;
-            // Кнопки «Пропустить» больше нет ни в одном сценарии.
-            if (SkipBtn != null) SkipBtn.gameObject.SetActive(false);
+            // Переключатель включается только тогда, когда есть куда
+            // переключаться, — см. SetAlternatePage.
+            if (ToggleBtn != null) ToggleBtn.gameObject.SetActive(false);
             gameObject.SetActive(false); // По умолчанию скрыто
         }
         /// <summary>
@@ -89,18 +123,72 @@ namespace Assets.Scripts.Menus
         /// сошлось И <paramref name="interactive"/>, И условия. Может быть
         /// null — тогда никто не подсвечивается.
         /// </param>
+        /// <param name="hint">
+        /// Своя подпись под таблицей вместо дежурной.
+        ///
+        /// <para>Нужна разбору конца партии: он показывает этой же панелью
+        /// баннер с финальным правилом, а дежурная подпись говорит «применить
+        /// правило можно только в свой ход» — для конца партии прямая
+        /// неправда. Пусто или null — подпись прежняя.</para>
+        /// </param>
         public void Show(List<IRuleEffect> ruleEffects, bool interactive,
-                         Func<IRuleEffect, bool> isAvailable = null)
+                         Func<IRuleEffect, bool> isAvailable = null,
+                         string hint = null)
         {
             gameObject.SetActive(true);
             ShowBtn.gameObject.SetActive(false);
             CloseBtn.gameObject.SetActive(true);
             UIBlockerOverlay.SetActive(true); // включает блокировку
 
-            if (_hintText != null)
-                _hintText.text = interactive ? _hintActive : _hintInactive;
+            _primary = new Page(ruleEffects, interactive, isAvailable, hint);
+            // Вторая страница задаётся отдельным вызовом уже после Show, и
+            // сбрасывать её здесь обязательно: иначе прошлое открытие оставило
+            // бы переключатель, ведущий неизвестно куда.
+            _alternate = null;
+            _showingAlternate = false;
 
-            ConvertRuleEffectsToViews(ruleEffects);
+            RefreshToggleButton();
+            Render();
+        }
+
+        /// <summary>
+        /// Добавляет таблице вторую страницу и переключатель на неё.
+        /// </summary>
+        ///
+        /// <para>Ради правил конца партии: игрок должен их видеть, но применить
+        /// не может — они считаются сами, когда партия кончилась. Поэтому
+        /// вторая страница всегда некликабельная, каким бы ни был ход.</para>
+        ///
+        /// <param name="openLabel">Что написано на кнопке, пока открыта первая страница.</param>
+        /// <param name="backLabel">Что написано на ней же, пока открыта вторая.</param>
+        public void SetAlternatePage(List<IRuleEffect> effects, string hint,
+                                     string openLabel, string backLabel)
+        {
+            if (effects == null || effects.Count == 0) return;
+
+            _alternate = new Page(effects, interactive: false, isAvailable: null, hint: hint);
+            _toggleOpenLabel = openLabel;
+            _toggleBackLabel = backLabel;
+
+            RefreshToggleButton();
+        }
+
+        /// <summary>
+        /// Перерисовывает содержимое под текущую страницу. Строки создаются
+        /// заново, поэтому подписка на клик не накапливается между показами.
+        /// </summary>
+        private void Render()
+        {
+            var page = _showingAlternate && _alternate.HasValue ? _alternate.Value : _primary;
+
+            ClearContentPanelChildren();
+
+            if (_hintText != null)
+                _hintText.text = string.IsNullOrEmpty(page.Hint)
+                    ? (page.Interactive ? _hintActive : _hintInactive)
+                    : page.Hint;
+
+            ConvertRuleEffectsToViews(page.Effects);
             foreach (var view in _ruleEffectViews)
             {
                 view.transform.SetParent(contentPanel, false);
@@ -110,12 +198,53 @@ namespace Assets.Scripts.Menus
                 // сервером в мелочи, и тогда запрет на клик отнял бы у игрока
                 // правило, которое он имеет право применить. Сервер всё равно
                 // проверяет условия заново и откажет сам.
-                bool highlighted = interactive && isAvailable != null && isAvailable(view.Effect);
+                bool highlighted = page.Interactive
+                                   && page.IsAvailable != null
+                                   && page.IsAvailable(view.Effect);
                 view.SetAvailable(highlighted, _availableColor);
 
-                if (interactive)
+                if (page.Interactive)
                     view.OnRuleEffectClicked += Pick;
             }
+        }
+
+        private void TogglePage()
+        {
+            if (!_alternate.HasValue) return;
+            _showingAlternate = !_showingAlternate;
+            RefreshToggleButton();
+            Render();
+        }
+
+        /// <summary>
+        /// Приводит кнопку-переключатель в соответствие состоянию: показать,
+        /// подписать и подключить — или спрятать, если переключаться некуда.
+        /// </summary>
+        private void RefreshToggleButton()
+        {
+            if (ToggleBtn == null)
+            {
+                // Молчаливо выключенная функция в этом проекте уже трижды
+                // стоила расследования, поэтому она говорит о себе сама.
+                if (_alternate.HasValue)
+                    Debug.LogWarning("[RuleContainer] Слот ToggleBtn не привязан — " +
+                                     "правила конца партии посмотреть будет нечем.");
+                return;
+            }
+
+            bool available = _alternate.HasValue;
+            ToggleBtn.gameObject.SetActive(available);
+            if (!available) return;
+
+            // Слушателей снимаем перед каждой подпиской: таблицу открывают
+            // много раз за партию, и без этого один клик звал бы переключение
+            // столько раз, сколько её открывали.
+            ToggleBtn.onClick.RemoveAllListeners();
+            ToggleBtn.onClick.AddListener(TogglePage);
+
+            var label = ToggleBtn.GetComponentInChildren<TMP_Text>(true);
+            if (label != null)
+                label.text = _showingAlternate ? _toggleBackLabel : _toggleOpenLabel;
         }
 
         /// <summary>
@@ -131,11 +260,14 @@ namespace Assets.Scripts.Menus
         }
         public void ClearContentPanelChildren()
         {
-            // Очищаем контейнер перед добавлением новых элементов
             foreach (Transform child in contentPanel)
             {
+                // Гасим перед уничтожением. Destroy откладывается до конца
+                // кадра, а переключение страниц чистит и наполняет таблицу в
+                // одном кадре — раскладка успела бы посчитать обе пачки строк
+                // сразу. Выключенных детей LayoutGroup не видит.
+                child.gameObject.SetActive(false);
                 Destroy(child.gameObject);
-                Debug.Log($"Destroying {child.name}");
             }
             _ruleEffectViews.Clear();
         }
@@ -158,6 +290,12 @@ namespace Assets.Scripts.Menus
             CloseBtn.gameObject.SetActive(true);
             ShowBtn.gameObject.SetActive(true);
             UIBlockerOverlay.SetActive(false); // отключает блокировку
+
+            // Следующее открытие начинается с первой страницы: игрок пришёл за
+            // правилами своего хода, а не за тем, где его оставили в прошлый раз.
+            _alternate = null;
+            _showingAlternate = false;
+            if (ToggleBtn != null) ToggleBtn.gameObject.SetActive(false);
         }
         private void ConvertRuleEffectsToViews(List<IRuleEffect> effects)
         {

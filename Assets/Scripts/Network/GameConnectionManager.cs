@@ -1,6 +1,7 @@
 using Assets.Scripts.Network.Messages;
 using Mirror;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -245,6 +246,84 @@ namespace Assets.Scripts.Network
             // go with it and the next server start builds fresh ones.
             _dispatcher = null;
         }
+
+#if UNITY_EDITOR
+        // ---- Проверка концовки ----
+        //
+        // Разбор правила в конце партии иначе стоит целой партии: колода — 40
+        // карт, вдвоём это под сорок ходов. И даже доиграв, увидишь скорее
+        // всего пустой разбор: набор «3 монеты и палка» требует, чтобы одному
+        // игроку пришли и достались нужные четыре карты.
+        //
+        // Вход сделан ДВУМЯ способами намеренно. Пункт верхнего меню
+        // «ScaryTales» видно всегда и искать его не надо; контекстное меню
+        // компонента удобнее, когда NetworkManager и так выделен, но добраться
+        // до него — целый квест: объект живёт под DontDestroyOnLoad, зовётся
+        // NetworkManager, а компонент на нём — GameConnectionManager.
+        //
+        // Всё под UNITY_EDITOR: в собранной игре обрывать чужие партии нечем.
+
+        private const string DebugMenu = "ScaryTales/";
+
+        [UnityEditor.MenuItem(DebugMenu + "Закончить партию с предметами (проверка)", false, 0)]
+        private static void DebugMenuEndWithItems() => DebugMenuEnd(seedItems: true);
+
+        [UnityEditor.MenuItem(DebugMenu + "Закончить партию как есть (проверка)", false, 1)]
+        private static void DebugMenuEndAsIs() => DebugMenuEnd(seedItems: false);
+
+        /// <summary>
+        /// Находит живой сервер и заканчивает его партию.
+        ///
+        /// <para>Через <c>NetworkManager.singleton</c>, а не поиском по сцене:
+        /// объект переживает смену сцен (<c>dontDestroyOnLoad</c>), а в сценах
+        /// их лежит два — в меню и в игре, — и Mirror оставляет живым ровно
+        /// один. Синглтон и есть тот единственный.</para>
+        /// </summary>
+        private static void DebugMenuEnd(bool seedItems)
+        {
+            var manager = NetworkManager.singleton as GameConnectionManager;
+            if (manager == null)
+            {
+                Debug.LogWarning("[Server] Сеть не запущена. Пункт работает в Play mode " +
+                                 "и только в том редакторе, который создал комнату: сервер живёт там.");
+                return;
+            }
+            manager.DebugEndGame(seedItems);
+        }
+
+        [ContextMenu("Проверка: закончить партию с предметами")]
+        private void DebugEndGameWithItems() => DebugEndGame(seedItems: true);
+
+        [ContextMenu("Проверка: закончить партию как есть")]
+        private void DebugEndGameAsIs() => DebugEndGame(seedItems: false);
+
+        private void DebugEndGame(bool seedItems)
+        {
+            if (!NetworkServer.active || _registry == null)
+            {
+                Debug.LogWarning("[Server] Сервер не запущен в этом редакторе — заканчивать нечего. " +
+                                 "Сервер живёт там, где нажали «создать комнату».");
+                return;
+            }
+
+            var started = _registry.Rooms.Where(r => r.IsGameStarted && !r.IsAborted).ToList();
+            if (started.Count == 0)
+            {
+                Debug.LogWarning("[Server] Ни одной идущей партии.");
+                return;
+            }
+
+            // Все идущие, а не первая попавшаяся: при отладке в комнате обычно
+            // ровно одна партия, а если их несколько — молча выбрать одну хуже,
+            // чем закончить все и сказать об этом.
+            foreach (var room in started)
+            {
+                Debug.Log($"[Server] Проверка: заканчиваю партию в комнате {room.Code}" +
+                          (seedItems ? " с раздачей предметов." : "."));
+                room.DebugEndGameNow(seedItems);
+            }
+        }
+#endif
 
         // ---- Room lifecycle handlers ----
 

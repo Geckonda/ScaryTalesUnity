@@ -290,4 +290,47 @@ namespace Assets.Scripts.Network.Messages
         public int RuleEffectId;
         public bool Applied;
     }
+
+    /// <summary>
+    /// Начался разбор правила конца партии. Идёт перед первым
+    /// <see cref="FinalScoringEvent"/> и нужен показу: под него клиент
+    /// показывает баннер с правилом, чтобы дальнейшая раздача очков не
+    /// выглядела беспричинной.
+    ///
+    /// <para>Едет номер правила, а не его текст: правила клиент и так строит
+    /// сам из <c>RuleCatalog</c> по номеру из <see cref="GameStartedEvent"/>.</para>
+    /// </summary>
+    public struct FinalScoringStartedEvent : NetworkMessage
+    {
+        public int RuleId;
+    }
+
+    /// <summary>
+    /// Правило конца партии посчитано одному игроку.
+    ///
+    /// <para><b>Уходит ДО начисления очков.</b> В очереди клиента получается
+    /// «разбор игрока — его очки — разбор следующего», и насос выпускает очки
+    /// только после того, как отыграла анимация разбора: счёт на табличке
+    /// подскакивает ровно тогда, когда в неё влетают предметы. Обратный
+    /// порядок обессмыслил бы всю сцену.</para>
+    ///
+    /// <para><see cref="CountedItemTypes"/> — <c>ItemType</c> <b>с повторами</b>
+    /// ([Coin, Coin, Coin, MagicStick]). Типы, а не идентификаторы предметов:
+    /// id на сервере и на клиенте расходятся после первого же снятия предмета
+    /// правилом (см. <c>ClientGameView.HandleItemRemoved</c>), а монеты
+    /// взаимозаменяемы — «подсветить три монеты из пяти» и есть то, что нужно.</para>
+    ///
+    /// <para>Событие приходит <b>каждому</b> игроку, включая тех, кому правило
+    /// ничего не дало: очередь должна обойти стол целиком, иначе непонятно,
+    /// разобрали игрока или пропустили. У них <see cref="Points"/> равен нулю,
+    /// и своего <c>PointsAwardedEvent</c> следом не будет — начисление нуля на
+    /// сервере молчит.</para>
+    /// </summary>
+    public struct FinalScoringEvent : NetworkMessage
+    {
+        public int PlayerId;
+        public int RuleEffectId;
+        public int Points;
+        public int[] CountedItemTypes;
+    }
 }

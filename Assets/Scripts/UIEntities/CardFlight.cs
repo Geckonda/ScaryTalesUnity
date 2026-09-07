@@ -7,8 +7,9 @@ using UnityEngine.UI;
 namespace Assets.Scripts.UIEntities
 {
     /// <summary>
-    /// Перелёт карты туда, где она останется лежать: движение, доводка позы и
-    /// разворот по дороге.
+    /// Перелёт туда, где вещь останется лежать: движение, доводка позы и
+    /// разворот по дороге. Задумывалось для карт (отсюда имя), но работает с
+    /// любым объектом канваса — в конце партии так же летят предметы игроков.
     ///
     /// <para><b>Карта уходит в корень канваса и там остаётся.</b> Родителя ей
     /// назначает вызывающий — у каждого полёта своя посадка: одни проверяют,
@@ -49,15 +50,23 @@ namespace Assets.Scripts.UIEntities
         /// вызывающий обязан просто уйти, иначе он назначит родителя и позу
         /// карте, которую уже ведёт кто-то другой.
         /// </returns>
-        public static async Task<bool> Fly(CardView card, Transform to,
+        public static Task<bool> Fly(CardView card, Transform to,
+                                     float duration, float flipDuration,
+                                     Action onFlipMidpoint)
+            // Перегрузка ради читаемости вызовов: карта — самое частое, что
+            // здесь летает, но не единственное (в конце партии так же летят
+            // предметы игроков).
+            => Fly(card != null ? card.transform : null, to, duration, flipDuration, onFlipMidpoint);
+
+        /// <inheritdoc cref="Fly(CardView, Transform, float, float, Action)"/>
+        public static async Task<bool> Fly(Transform t, Transform to,
                                            float duration, float flipDuration,
                                            Action onFlipMidpoint)
         {
-            if (card == null || to == null) return false;
+            if (t == null || to == null) return false;
 
-            var t = card.transform;
             var root = t.root;
-            if (root == t) return false; // карта вне канваса — лететь неоткуда и некуда
+            if (root == t) return false; // объект вне канваса — лететь неоткуда и некуда
 
             // Гасим предыдущий полёт этой же карты. DOTween сам старый твин не
             // убирает: два полёта на одном трансформе тянут его в разные
@@ -103,7 +112,7 @@ namespace Assets.Scripts.UIEntities
             // выводить из тела лямбды.
             await DOTween.To(() => 0f, (float u) =>
             {
-                if (card == null) return;
+                if (t == null) return;
 
                 t.position = Vector3.LerpUnclamped(
                     fromPosition, toPosition, DOVirtual.EasedValue(0f, 1f, u, Ease.OutQuad));
@@ -163,7 +172,7 @@ namespace Assets.Scripts.UIEntities
             // своей перегрузке ==, но обращение к нему бросает
             // MissingReferenceException, а бросать его отсюда некуда: эти
             // задачи ждут из async void.
-            if (card == null || !completed) return false;
+            if (t == null || !completed) return false;
 
             // Последний кадр твина мог не совпасть с единицей — доводим позу
             // до конца, чтобы карта не осталась приподнятой, недовёрнутой или

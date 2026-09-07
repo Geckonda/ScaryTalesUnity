@@ -1,8 +1,10 @@
+using Assets.Libraries.ScaryTales.Abstractions;
 using Assets.Libraries.ScaryTales.Rules;
 using Assets.Scripts;
 using Assets.Scripts.Network.Messages;
 using Mirror;
 using ScaryTales;
+using ScaryTales.Abstractions;
 using ScaryTales.Enums;
 using ScaryTales.Interaction_Entities.EnvUnity;
 using System;
@@ -659,6 +661,12 @@ namespace Assets.Scripts.Network
                     {
                         _waitingForPlay = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
                         int chosenCardId = await _waitingForPlay.Task;
+
+                        // Партия могла кончиться, пока стол ждал карту. Выходим
+                        // из цикла, а не из метода: за ним стоит разбор правила
+                        // конца партии, и пропустить его нельзя.
+                        if (ctx.GameState.IsGameOver) break;
+
                         var card = current.Hand.FirstOrDefault(c => c.Id == chosenCardId);
                         if (card == null)
                         {
@@ -696,6 +704,13 @@ namespace Assets.Scripts.Network
                 }
 
                 if (_gameOver) return;
+
+                // Разбор ДО _gameOver: он рассылает события комнате, а
+                // ReportRuleOutcome и прочие отправители под этим флагом
+                // замолкают. И до подсчёта победителя — правило вполне может
+                // его сменить, ради того и считается.
+                ScoreFinalRule(ctx);
+
                 _gameOver = true;
 
                 int winnerId = ctx.Players.OrderByDescending(p => p.Score).First().Id;
@@ -720,6 +735,150 @@ namespace Assets.Scripts.Network
                 AbortGame(0, "Ошибка на сервере. Игра прервана.");
             }
         }
+
+        /// <summary>
+        /// Разбор правила конца партии: считает его каждому игроку и рассылает
+        /// комнате, что вышло.
+        ///
+        /// <para><b>Порядок обхода — порядок списка игроков</b>, то есть
+        /// очерёдность ходов, выбранная в лобби. Другого понятия очереди в
+        /// движке нет, и это ровно тот порядок, который игроки видели всю
+        /// партию.</para>
+        ///
+        /// <para><b>Событие уходит ПЕРЕД начислением.</b> У клиента получается
+        /// очередь «разбор игрока — его очки — разбор следующего», а насос
+        /// событий выпускает очки только после того, как отыграла анимация
+        /// разбора. Так счёт растёт в тот самый миг, когда предметы долетели до
+        /// таблички. Поменять строки местами — значит показать результат до
+        /// того, как показали причину.</para>
+        ///
+        /// <para>Событие уходит и на нулевой разбор: очередь обязана обойти
+        /// стол целиком, иначе непонятно, разобрали игрока или пропустили.
+        /// Начисление нуля при этом молчит само (<c>AddPointsToPlayer</c>
+        /// отсеивает неположительные), так что лишнего <c>PointsAwardedEvent</c>
+        /// не будет.</para>
+        ///
+        /// <para>Синхронный: <see cref="IFinalRuleEffect.Score"/> ничего не
+        /// спрашивает у игроков — см. пояснение в самом интерфейсе.</para>
+        /// </summary>
+        private void ScoreFinalRule(IGameContext ctx)
+        {
+            var rule = _session?.CurrentFinalRule;
+            if (rule == null)
+            {
+                Debug.LogWarning("[Room] Финального правила нет — разбор конца партии пропущен.");
+                return;
+            }
+
+            var effects = rule.Effects?.OfType<IFinalRuleEffect>().ToList();
+            if (effects == null || effects.Count == 0)
+            {
+                // Правило есть, но считать в конце партии нечего: ни один его
+                // эффект не объявил себя финальным. Молчать нельзя — снаружи
+                // это выглядит как «правила опять не работают», а искать
+                // причину пришлось бы в четырёх файлах.
+                Debug.LogWarning($"[Room] У правила «{rule.Name}» нет ни одного IFinalRuleEffect — считать в конце партии нечего.");
+                return;
+            }
+
+            Channel.SendToRoom(new FinalScoringStartedEvent { RuleId = rule.Id });
+
+            // Копия списка: начисление очков в списке игроков ничего не меняет,
+            // но обходить коллекцию движка напрямую — привычка, которая рано
+            // или поздно встретит правило, забирающее игрока со стола.
+            foreach (var player in ctx.Players.ToList())
+            {
+                foreach (var effect in effects)
+                {
+                    var scoring = effect.Score(ctx, player);
+
+                    Channel.SendToRoom(new FinalScoringEvent
+                    {
+                        PlayerId = player.Id,
+                        RuleEffectId = effect.Id,
+                        Points = scoring.Points,
+                        CountedItemTypes = scoring.CountedItems.Select(t => (int)t).ToArray(),
+                    });
+
+                    ctx.GameManager.AddPointsToPlayer(player, scoring.Points);
+                }
+            }
+        }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// ТОЛЬКО ДЛЯ ПРОВЕРКИ. Обрывает партию так, будто колода кончилась, —
+        /// со всем разбором правила и окном победителя.
+        ///
+        /// <para><b>Зачем.</b> Концовка иначе стоит целой партии: колода — 19
+        /// карт, это около восемнадцати ходов вдвоём. И даже сыграв её, увидишь
+        /// скорее всего пустой разбор: набор «3 монеты и палка» требует, чтобы
+        /// одному игроку пришли и достались нужные четыре карты из девятнадцати.
+        /// Проверять анимацию так нельзя.</para>
+        ///
+        /// <para><paramref name="seedItems"/> раздаёт предметы через обычный
+        /// <c>PutItemInPlayerItemBag</c>, то есть с настоящими событиями: мешки
+        /// на клиентах окажутся ровно теми, что показывает разбор. Первому
+        /// игроку — полный набор, второму — недобор (правило ничего не даст),
+        /// остальным ничего. Так за один прогон видно все три случая сразу.</para>
+        ///
+        /// <para>Компилируется только в редакторе: метод обрывает чужие партии,
+        /// и в собранной игре его быть не должно ни при каких условиях.</para>
+        /// </summary>
+        public void DebugEndGameNow(bool seedItems)
+        {
+            if (!_gameStarted || _gameOver || _session == null)
+            {
+                Debug.LogWarning($"[Room {Code}] Партия не идёт — обрывать нечего.");
+                return;
+            }
+
+            if (seedItems) DebugSeedItems();
+
+            // Тем же путём, что и настоящий конец: поднимаем флаг движка и
+            // будим цикл. Он выйдет из while по IsGameOver и упрётся в разбор
+            // правила — то есть проверяется настоящий путь, а не его подделка.
+            _session.GameManager.EndGame();
+            _waitingForPlay?.TrySetResult(-1);
+        }
+
+        /// <summary>
+        /// Раздаёт предметы для проверки разбора: полный набор, недобор, пусто.
+        /// </summary>
+        private void DebugSeedItems()
+        {
+            var ctx = _session.Context;
+            var gm = _session.GameManager;
+
+            // Пары «сколько монет, сколько палок» по местам в порядке ходов.
+            // Первому — набор (12 ПО), второму — недобор (ноль, но предметы
+            // на столе есть), дальше пусто.
+            var plan = new[] { (coins: 3, sticks: 1), (coins: 2, sticks: 1) };
+
+            for (int i = 0; i < ctx.Players.Count && i < plan.Length; i++)
+            {
+                Give(ctx, gm, ctx.Players[i], ItemType.Coin, plan[i].coins);
+                Give(ctx, gm, ctx.Players[i], ItemType.MagicStick, plan[i].sticks);
+            }
+
+            static void Give(IGameContext ctx, IGameManager gm, Player player, ItemType type, int count)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    var item = ctx.ItemManager.GetItemByType(type);
+                    if (item == null)
+                    {
+                        // Запас предметов конечен (8 монет, по 4 остальных), и
+                        // за партию его могли разобрать. Это не поломка — просто
+                        // раздать больше нечего.
+                        Debug.LogWarning($"[Room] Предметов типа {type} не осталось — {player.Name} получил меньше задуманного.");
+                        return;
+                    }
+                    gm.PutItemInPlayerItemBag(item, player);
+                }
+            }
+        }
+#endif
 
         /// <summary>
         /// Bails out of the turn loop if the room ended while we were away.
