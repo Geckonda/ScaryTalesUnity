@@ -6106,6 +6106,10 @@ MonoBehaviour:
   _useOutline: 0
   _outlineWidth: 0.2
   _outlineColor: {r: 0.4, g: 0.28, b: 0, a: 1}
+  _showOpponentScores: 0
+  _scorePulseScale: 1.35
+  _scorePulseSeconds: 0.3
+  _scorePulseColor: {r: 1, g: 0.84, b: 0, a: 1}
 --- !u!1 &1066556997
 GameObject:
   m_ObjectHideFlags: 0

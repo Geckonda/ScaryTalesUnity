@@ -1,5 +1,7 @@
+using Assets.Libraries.ScaryTales;
 using Assets.Scripts.Network;
 using Assets.Scripts.UIEntities;
+using DG.Tweening;
 using ScaryTales;
 using System.Collections.Generic;
 using TMPro;
@@ -45,8 +47,36 @@ public class TextUIManager : MonoBehaviour
     [SerializeField, Range(0f, 0.5f)] private float _outlineWidth = 0.2f;
     [SerializeField] private Color _outlineColor = new Color(0.4f, 0.28f, 0f);
 
+    [Header("Счёт")]
+    [Tooltip("Показывать ли счёт оппонентов всю партию. Выключено: свои очки игрок видит, чужие — нет. На разборе конца партии чужой счёт откроется в любом случае — иначе разбор и победителя смотреть нечем.")]
+    [SerializeField] private bool _showOpponentScores = false;
+
+    [Header("Всплеск очков")]
+    [Tooltip("Во сколько раз счёт подскакивает в момент начисления. Единица — всплеска нет.")]
+    [SerializeField] private float _scorePulseScale = 1.35f;
+
+    [Tooltip("Сколько длится всплеск целиком, секунд: половина на рост, половина на возврат. Держать коротким: очки приходят подряд (Цыганка даёт по очку за каждое раскрытое место), и длинный всплеск слипся бы в мельтешение.")]
+    [SerializeField] private float _scorePulseSeconds = 0.3f;
+
+    [Tooltip("Каким цветом загорается счёт на время всплеска.")]
+    [SerializeField] private Color _scorePulseColor = new Color(1f, 0.84f, 0f); // золотой, как подсветка хода
+
     private readonly Dictionary<Player, TMP_Text> _playerScorePanels = new();
     private readonly Dictionary<Player, TMP_Text> _playerNameTexts = new();
+
+    /// <summary>
+    /// Исходные цвет и масштаб счёта — то, к чему возвращается всплеск.
+    ///
+    /// <para>Снимаются один раз, при привязке места, а НЕ в начале всплеска.
+    /// Очки приходят подряд, и второй всплеск, начатый посреди первого, принял
+    /// бы за исходное уже подскочившее значение — счёт так и остался бы
+    /// раздутым и жёлтым.</para>
+    /// </summary>
+    private readonly Dictionary<TMP_Text, (Color Color, Vector3 Scale)> _scoreBase = new();
+
+    // Спрятанные на время партии таблички чужого счёта. Держим списком, чтобы
+    // открыть их все разом в конце.
+    private readonly List<TMP_Text> _hiddenScores = new();
 
     // Ожидаемых может быть НЕСКОЛЬКО: Зачарованный лес спрашивает всех
     // сразу. Пока это был один игрок, подсвечивался последний спрошенный, а
@@ -68,6 +98,8 @@ public class TextUIManager : MonoBehaviour
 
         _playerScorePanels.Clear();
         _playerNameTexts.Clear();
+        _scoreBase.Clear();
+        _hiddenScores.Clear();
         _deciding.Clear();
 
         var localSeat = _seatLayout?.LocalSeat;
@@ -79,11 +111,37 @@ public class TextUIManager : MonoBehaviour
             var seat = _seatLayout?.GetOpponentSeat(i);
             if (seat == null) continue;
             BindSeat(_view.Opponents[i], seat.NameText, seat.ScoreText);
+
+            // Табличку прячем, но привязку оставляем: счёт под ней продолжает
+            // обновляться и к концу партии будет верным — открыть её тогда
+            // достаточно одним SetActive.
+            if (_showOpponentScores || seat.ScoreText == null) continue;
+            seat.ScoreText.gameObject.SetActive(false);
+            _hiddenScores.Add(seat.ScoreText);
         }
 
         _view.OnAddPointsToPlayer += HandleAddPointsToPlayer;
+        // Конец партии открывает чужой счёт: разбор правила и победителя иначе
+        // смотреть нечем. Два входа, потому что разбора может и не быть —
+        // финального правила у партии может не оказаться.
+        _view.OnFinalScoringStarted += HandleFinalScoringStarted;
+        _view.OnGameEnded += HandleGameEnded;
 
         RefreshTurnHighlight();
+    }
+
+    private void HandleFinalScoringStarted(Rule rule) => RevealAllScores();
+    private void HandleGameEnded(int winnerId) => RevealAllScores();
+
+    /// <summary>
+    /// Открывает счёт всех игроков. Идемпотентна: зовётся и из разбора правила,
+    /// и из конца партии, а случиться может и то, и другое подряд.
+    /// </summary>
+    public void RevealAllScores()
+    {
+        foreach (var text in _hiddenScores)
+            if (text != null) text.gameObject.SetActive(true);
+        _hiddenScores.Clear();
     }
 
     private void BindSeat(Player player, TMP_Text nameText, TMP_Text scoreText)
@@ -98,6 +156,9 @@ public class TextUIManager : MonoBehaviour
         if (scoreText != null)
         {
             _playerScorePanels[player] = scoreText;
+            // Исходное состояние снимаем здесь, до первого всплеска, — см.
+            // пояснение у _scoreBase.
+            _scoreBase[scoreText] = (scoreText.color, scoreText.transform.localScale);
             // Seed it now; otherwise the scene placeholder shows until
             // this player first scores.
             scoreText.text = ScorePrefix + player.Score;
@@ -106,10 +167,47 @@ public class TextUIManager : MonoBehaviour
 
     private void HandleAddPointsToPlayer(Player player)
     {
-        if (_playerScorePanels.TryGetValue(player, out TMP_Text panel))
-        {
-            panel.text = ScorePrefix + player.Score;
-        }
+        if (!_playerScorePanels.TryGetValue(player, out TMP_Text panel)) return;
+
+        panel.text = ScorePrefix + player.Score;
+
+        // Спрятанный счёт обновляем молча: всплеск на невидимой табличке —
+        // пустая работа, а её значение всё равно верно к моменту, когда её
+        // откроют в конце партии.
+        if (panel.gameObject.activeInHierarchy) PulseScore(panel);
+    }
+
+    /// <summary>
+    /// Счёт подскакивает, загорается и возвращается на место.
+    ///
+    /// <para>Нарочно ничем не блокирует очередь событий: это украшение, и
+    /// партия не должна его ждать. Живёт само по себе на двух твинах —
+    /// масштаб на трансформе, цвет на тексте; они пишут разные свойства и не
+    /// дерутся.</para>
+    /// </summary>
+    private void PulseScore(TMP_Text panel)
+    {
+        if (panel == null || _scorePulseSeconds <= 0f) return;
+        if (!_scoreBase.TryGetValue(panel, out var start)) return;
+
+        var t = panel.transform;
+
+        // Предыдущий всплеск мог не доиграть: очки приходят подряд. Гасим его
+        // и возвращаем исходное — иначе следующий начал бы с уже подскочившего
+        // и накапливал бы масштаб.
+        t.DOKill();
+        DOTween.Kill(panel);
+        t.localScale = start.Scale;
+        panel.color = start.Color;
+
+        // Yoyo из двух проходов: половина времени вверх, половина обратно.
+        // Возврат — часть самого твина, поэтому даже прерванный всплеск не
+        // оставит счёт раздутым: следующий вызов начнёт с восстановления выше.
+        float half = _scorePulseSeconds / 2f;
+        t.DOScale(start.Scale * _scorePulseScale, half)
+            .SetEase(Ease.OutQuad).SetLoops(2, LoopType.Yoyo);
+        panel.DOColor(_scorePulseColor, half)
+            .SetEase(Ease.OutQuad).SetLoops(2, LoopType.Yoyo);
     }
 
     // ---- Подсветка ----

@@ -323,6 +323,10 @@ namespace Assets.Scripts.UIEntities
             var root = seat.ScoreText.transform.root;
             var popup = Instantiate(seat.ScoreText.gameObject, root);
             _spawned.Add(popup);
+            // Клон наследует и выключенность: счёт оппонента прячется на всю
+            // партию (TextUIManager), и хотя к разбору его уже открыли, копия
+            // всплытия не должна зависеть от того, кто и когда это сделал.
+            popup.SetActive(true);
 
             var text = popup.GetComponent<TMP_Text>();
             if (text == null) { Destroy(popup); return; }
