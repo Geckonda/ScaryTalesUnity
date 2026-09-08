@@ -123,6 +123,19 @@ namespace ScaryTales.Abstractions
         /// </summary>
         public void ShowcaseCard(Card card, bool stepOut);
 
+        /// <summary>
+        /// Дать текущему игроку разыграть ещё одну карту в этом ходу.
+        ///
+        /// <para>Вход для эффектов вида «можно разыграть 1 дополнительную
+        /// карту». Право <b>предлагается, а не навязывается</b>: игрок вправе
+        /// закончить ход, не тратя его. Нерастраченное сгорает со сменой хода.</para>
+        ///
+        /// <para>Сколько именно карт получится разыграть, решает игровой цикл
+        /// (<c>Room.RunGameLoopAsync</c>): пустая рука обрывает предложение
+        /// сама собой.</para>
+        /// </summary>
+        public void GrantExtraPlay();
+
 
         public event Action<Card, Player>? OnCardAddedToHand;
         public event Action<Card, Player>? OnCardAddedToHandFromDiscardPile;

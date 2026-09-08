@@ -28,6 +28,20 @@ namespace ScaryTales
             IsGameOver = true;
         }
 
+        /// <inheritdoc/>
+        public int ExtraPlays { get; private set; }
+
+        /// <inheritdoc/>
+        public void GrantExtraPlay() => ExtraPlays++;
+
+        /// <inheritdoc/>
+        public bool TryConsumeExtraPlay()
+        {
+            if (ExtraPlays <= 0) return false;
+            ExtraPlays--;
+            return true;
+        }
+
         public Player GetCurrentPlayer() => Players[CurrentPlayerIndex];
 
         public List<Player> GetPlayers() => Players;
@@ -36,6 +50,9 @@ namespace ScaryTales
         {
             TurnCount++;
             CurrentPlayerIndex = (CurrentPlayerIndex + 1) % Players.Count;
+            // Нерастраченные дополнительные ходы сгорают: это подарок на ЭТОТ
+            // ход, и перенести его на следующего игрока было бы прямой ошибкой.
+            ExtraPlays = 0;
         }
 
         /// <summary>

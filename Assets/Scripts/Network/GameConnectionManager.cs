@@ -271,6 +271,21 @@ namespace Assets.Scripts.Network
         [UnityEditor.MenuItem(DebugMenu + "Закончить партию как есть (проверка)", false, 1)]
         private static void DebugMenuEndAsIs() => DebugMenuEnd(seedItems: false);
 
+        [UnityEditor.MenuItem(DebugMenu + "Дать дополнительный ход (проверка)", false, 20)]
+        private static void DebugMenuGrantExtraPlay()
+        {
+            var manager = NetworkManager.singleton as GameConnectionManager;
+            if (manager == null || !NetworkServer.active || manager._registry == null)
+            {
+                Debug.LogWarning("[Server] Сервер не запущен в этом редакторе. " +
+                                 "Пункт работает в Play mode и только там, где создали комнату.");
+                return;
+            }
+
+            foreach (var room in manager._registry.Rooms.Where(r => r.IsGameStarted && !r.IsAborted).ToList())
+                room.DebugGrantExtraPlay();
+        }
+
         /// <summary>
         /// Находит живой сервер и заканчивает его партию.
         ///

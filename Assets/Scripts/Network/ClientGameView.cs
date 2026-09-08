@@ -121,6 +121,15 @@ namespace Assets.Scripts.Network
         public event Action<Card, bool> OnCardShowcased;
 
         /// <summary>
+        /// Игровой цикл ждёт карту от этого игрока. Второй аргумент — можно ли
+        /// не играть (у дополнительной карты можно, у обязательной нет).
+        ///
+        /// <para>Приходит перед КАЖДЫМ ожиданием, а не раз в ход: карт в ходу
+        /// может быть несколько.</para>
+        /// </summary>
+        public event Action<Player, bool> OnAwaitingCardPlay;
+
+        /// <summary>
         /// Начался разбор правила конца партии. Дальше по одному
         /// <see cref="OnFinalScoring"/> на каждого игрока, в порядке ходов.
         /// </summary>
@@ -175,6 +184,7 @@ namespace Assets.Scripts.Network
             Defer<FinalScoringEvent>(HandleFinalScoring);
             Defer<HandsRevealedEvent>(HandleHandsRevealed);
             Defer<CardShowcasedEvent>(HandleCardShowcased);
+            Defer<AwaitingCardPlayEvent>(HandleAwaitingCardPlay);
 
             // Прерывание партии — единственное событие в обход очереди.
             //
@@ -472,6 +482,13 @@ namespace Assets.Scripts.Network
             // Игрока может уже не быть за столом — раскрытие от этого не
             // отменяется, оно про руки, а не про него.
             OnHandsRevealed?.Invoke(FindPlayer(evt.ByPlayerId), evt.Revealed);
+        }
+
+        private void HandleAwaitingCardPlay(AwaitingCardPlayEvent evt)
+        {
+            var player = FindPlayer(evt.PlayerId);
+            if (player == null) return;
+            OnAwaitingCardPlay?.Invoke(player, evt.CanDecline);
         }
 
         private void HandleCardShowcased(CardShowcasedEvent evt)

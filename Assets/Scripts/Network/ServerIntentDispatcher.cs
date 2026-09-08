@@ -51,6 +51,7 @@ namespace Assets.Scripts.Network
         public void RegisterHandlers()
         {
             NetworkServer.RegisterHandler<PlayCardIntent>(OnPlayCard);
+            NetworkServer.RegisterHandler<EndTurnIntent>(OnEndTurn);
             NetworkServer.RegisterHandler<UseRuleEffectIntent>(OnUseRuleEffect);
             NetworkServer.RegisterHandler<ResolveCardPickIntent>(OnResolveCardPick);
             NetworkServer.RegisterHandler<ResolveItemPickIntent>(OnResolveItemPick);
@@ -89,6 +90,11 @@ namespace Assets.Scripts.Network
         private void OnPlayCard(NetworkConnectionToClient conn, PlayCardIntent msg)
         {
             if (TryResolveRoom(conn, out var room)) room.HandlePlayCard(conn, msg);
+        }
+
+        private void OnEndTurn(NetworkConnectionToClient conn, EndTurnIntent msg)
+        {
+            if (TryResolveRoom(conn, out var room)) room.HandlePlayerEndTurn(conn, msg);
         }
 
         private void OnUseRuleEffect(NetworkConnectionToClient conn, UseRuleEffectIntent msg)

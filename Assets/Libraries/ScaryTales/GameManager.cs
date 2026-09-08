@@ -73,6 +73,13 @@ namespace ScaryTales
         /// <inheritdoc/>
         public void ShowcaseCard(Card card, bool stepOut) => OnCardShowcased?.Invoke(card, stepOut);
 
+        /// <inheritdoc/>
+        public void GrantExtraPlay()
+        {
+            _context.GameState.GrantExtraPlay();
+            PrintMessage($"Игрок {_context.GameState.GetCurrentPlayer().Name} может разыграть ещё одну карту в этом ходу.");
+        }
+
         /// <summary>
         /// Пытается вытянуть карту из колоды, если она не пуста.
         /// </summary>

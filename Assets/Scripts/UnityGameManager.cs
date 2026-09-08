@@ -79,6 +79,15 @@ public class UnGameManager : MonoBehaviour
     // игрок ещё не ходил.
     private bool _myTurnCardPending;   // мой ход, и карта ещё не разыграна
     private bool _ruleUsedThisTurn;    // правило в этом ходу уже сработало
+    private bool _endTurnRequested;    // игрок нажал «Закончить ход»
+
+    private bool _endTurnKeyHintShown; // предупреждение о непривязанной кнопке — один раз за сессию
+
+    [Tooltip("Кнопка «Закончить ход». Показывается ТОЛЬКО когда у игрока есть нерастраченная дополнительная карта — обязательную карту хода пропускать нельзя. Слот можно не привязывать: закончить ход всегда можно клавишей ниже.")]
+    [SerializeField] private UnityEngine.UI.Button _endTurnButton;
+
+    [Tooltip("Клавиша «Закончить ход». Работает всегда, и с привязанной кнопкой тоже. Пока кнопки в сцене нет, это единственный способ отказаться от дополнительной карты — без него право выдавалось бы и тут же сгорало.")]
+    [SerializeField] private KeyCode _endTurnKey = KeyCode.Space;
 
     void Awake()
     {
@@ -116,6 +125,7 @@ public class UnGameManager : MonoBehaviour
         ClientView = new ClientGameView();
         ClientView.OnGameStarted += HandleGameStarted;
         ClientView.OnTurnAdvanced += HandleTurnAdvanced;
+        ClientView.OnAwaitingCardPlay += HandleAwaitingCardPlay;
         ClientView.OnDecisionRequested += HandleDecisionRequested;
         ClientView.OnDecisionResolved += HandleDecisionResolved;
         ClientView.OnGameEnded += HandleGameEnded;
@@ -249,18 +259,41 @@ public class UnGameManager : MonoBehaviour
     private void HandleTurnAdvanced(int currentPlayerId)
     {
         DragAndDrop.SelectCard = false;
-        _myTurnCardPending = (CurrentPlayer == LocalPlayer);
+        _myTurnCardPending = false;
         _ruleUsedThisTurn = false;
         _textUIManager.RefreshTurnHighlight();
 
-        if (CurrentPlayer == LocalPlayer)
-        {
-            EnablePlayerDrag(CurrentPlayer);
-            StartCoroutine(WaitForLocalCardPlay(CurrentPlayer));
-        }
+        // Ожидание карты взводит не смена хода, а AwaitingCardPlayEvent: карт
+        // в ходу может быть несколько (Тайная помощница, Ведьма), и «начался
+        // ход» больше не совпадает с «от меня ждут карту».
     }
 
-    private IEnumerator WaitForLocalCardPlay(Player player)
+    /// <summary>
+    /// Сервер ждёт карту от игрока. Приходит и на обязательную карту хода, и
+    /// на каждую дополнительную.
+    /// </summary>
+    /// <param name="canDecline">
+    /// Можно ли не играть. У обязательной карты нельзя, у дополнительной
+    /// можно — её дают со словом «можно».
+    /// </param>
+    private void HandleAwaitingCardPlay(Player player, bool canDecline)
+    {
+        if (player != LocalPlayer)
+        {
+            ShowEndTurnButton(false);
+            return;
+        }
+
+        _myTurnCardPending = true;
+        _endTurnRequested = false;
+        _textUIManager.RefreshTurnHighlight();
+
+        ShowEndTurnButton(canDecline);
+        EnablePlayerDrag(player);
+        StartCoroutine(WaitForLocalCardPlay(player, canDecline));
+    }
+
+    private IEnumerator WaitForLocalCardPlay(Player player, bool canDecline)
     {
         if (!Application.isPlaying) yield break;
 
@@ -286,26 +319,78 @@ public class UnGameManager : MonoBehaviour
             if (dnd != null) dnd.OnCardSelected += onCardSelected;
         }
 
-        while (!cardSelected) yield return null;
+        // Ждём либо карту, либо отказ. Отказ возможен только у дополнительной
+        // карты: обязательную пропускать нельзя, иначе игрок мог бы стоять на
+        // месте вечно, а партия кончается тогда, когда руки опустели.
+        while (!cardSelected && !(canDecline && _endTurnRequested))
+        {
+            // Клавишу опрашиваем здесь, а не в Update: право отказаться живёт
+            // ровно столько, сколько идёт это ожидание.
+            if (canDecline && Input.GetKeyDown(_endTurnKey)) _endTurnRequested = true;
+            yield return null;
+        }
 
         DragAndDrop.SelectCard = false;
         // Карта разыграна — правила на этот ход кончились.
         _myTurnCardPending = false;
         CardSelectionService.CurrentSelectionHandler = null;
+        ShowEndTurnButton(false);
         foreach (Transform t in playerHandPanel)
         {
             var dnd = t.GetComponent<DragAndDrop>();
             if (dnd != null) dnd.OnCardSelected -= onCardSelected;
         }
 
-        if (selectedCard != null)
+        if (cardSelected && selectedCard != null)
         {
             NetworkClient.Send(new PlayCardIntent { CardId = selectedCard.Id });
+        }
+        else if (_endTurnRequested)
+        {
+            _endTurnRequested = false;
+            DisablePlayerDrag(player);
+            NetworkClient.Send(new EndTurnIntent());
         }
         else
         {
             DisablePlayerDrag(CurrentPlayer);
         }
+    }
+
+    /// <summary>
+    /// Кнопка «Закончить ход» в сцене. Привязывается к ней напрямую.
+    /// </summary>
+    public void EndTurn()
+    {
+        if (!_myTurnCardPending) return;
+        _endTurnRequested = true;
+    }
+
+    /// <summary>
+    /// Показывает или прячет кнопку отказа.
+    ///
+    /// <para><b>Без кнопки отказ всё равно возможен — клавишей</b>
+    /// (<see cref="_endTurnKey"/>). Первая версия в этом случае отказывалась
+    /// сама, «чтобы стол не завис», — и дополнительный ход было невозможно
+    /// сыграть вообще: право выдавалось и тут же сгорало. Клавиша решает обе
+    /// задачи сразу: комната не виснет, а карту сыграть можно.</para>
+    /// </summary>
+    private void ShowEndTurnButton(bool visible)
+    {
+        if (_endTurnButton != null)
+        {
+            _endTurnButton.gameObject.SetActive(visible);
+            return;
+        }
+
+        if (!visible || _endTurnKeyHintShown) return;
+
+        // Один раз за сессию: предупреждение приходило бы перед каждой
+        // дополнительной картой и забило бы лог.
+        _endTurnKeyHintShown = true;
+        Debug.LogWarning($"[UnGameManager] Слот _endTurnButton не привязан — закончить ход можно " +
+                         $"клавишей {_endTurnKey}. Привяжите кнопку «Закончить ход» и повесьте на неё " +
+                         "UnGameManager.EndTurn().");
     }
 
     // ---- Server-initiated decision prompts ----

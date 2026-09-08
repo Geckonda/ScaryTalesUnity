@@ -68,10 +68,19 @@ namespace Assets.Scripts.Network
             public bool IsGameOver => false;
             public int TurnCount => _view.TurnCount;
 
+            /// <summary>
+            /// Ноль всегда: сколько дополнительных карт осталось, знает только
+            /// сервер, и клиенту это не нужно — правила проверяют на
+            /// доступность предметы и стол, а не право на лишний ход.
+            /// </summary>
+            public int ExtraPlays => 0;
+
             public Player GetCurrentPlayer() => _view.CurrentPlayer;
             public List<Player> GetPlayers() => _view.Players;
             public string GetTimeOfday() => IsNight ? "Ночь" : "День";
 
+            public void GrantExtraPlay() => throw Mutation(nameof(GrantExtraPlay));
+            public bool TryConsumeExtraPlay() => throw Mutation(nameof(TryConsumeExtraPlay));
             public void NextTurn() => throw Mutation(nameof(NextTurn));
             public bool RemovePlayer(Player player) => throw Mutation(nameof(RemovePlayer));
             public void EndGame() => throw Mutation(nameof(EndGame));

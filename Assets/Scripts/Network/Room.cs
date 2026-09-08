@@ -80,6 +80,26 @@ namespace Assets.Scripts.Network
         // же индекс, и второй сдвиг перескочил бы через него.
         private bool _currentTurnAbandoned;
 
+        /// <summary>
+        /// Ответ «карту не играю» в ожидании <see cref="_waitingForPlay"/>.
+        /// Отрицательный, потому что настоящие номера карт начинаются с 1.
+        /// </summary>
+        private const int DeclineCardId = -1;
+
+        // Сколько карт уже разыграно в текущем ходу. Нужно ровно для одного:
+        // отказаться можно только от ДОПОЛНИТЕЛЬНОЙ карты. Позволить отказ от
+        // первой значило бы дать игроку стоять на месте вечно — партия
+        // кончается тогда, когда руки опустели.
+        private int _playsThisTurn;
+
+        // Правило игры уже применено в этом ходу.
+        //
+        // Настоящий флаг вместо прежней косвенной проверки «цикл всё ещё ждёт
+        // карту». Та работала, пока ожидание было ровно одно за ход: с двумя
+        // ожиданиями окно правила молча открывалось заново, и игрок применял
+        // правило дважды.
+        private bool _ruleUsedThisTurn;
+
         // ---- Identity ----
         /// <summary>Short code players type to join. Assigned by the registry.</summary>
         public string Code { get; }
@@ -657,24 +677,63 @@ namespace Assets.Scripts.Network
                         break;
                     }
 
+                    _playsThisTurn = 0;
+                    _ruleUsedThisTurn = false;
+
                     try
                     {
-                        _waitingForPlay = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-                        int chosenCardId = await _waitingForPlay.Task;
-
-                        // Партия могла кончиться, пока стол ждал карту. Выходим
-                        // из цикла, а не из метода: за ним стоит разбор правила
-                        // конца партии, и пропустить его нельзя.
-                        if (ctx.GameState.IsGameOver) break;
-
-                        var card = current.Hand.FirstOrDefault(c => c.Id == chosenCardId);
-                        if (card == null)
+                        // Ход — это НЕ одна карта. Обязательная карта хода
+                        // одна, но карта может подарить право разыграть ещё
+                        // (Тайная помощница, Ведьма), и тогда цикл ждёт снова.
+                        //
+                        // Раньше ожидание было ровно одно, и «одна карта за
+                        // ход» держалась не на счётчике, а на этой структуре:
+                        // второй PlayCardIntent падал в уже завершённый TCS и
+                        // молча пропадал.
+                        while (true)
                         {
-                            Debug.LogWarning($"[Room] PlayCardIntent for unknown card {chosenCardId}; loop continues.");
-                            continue;
+                            bool canDecline = _playsThisTurn > 0;
+                            Channel.SendToRoom(new AwaitingCardPlayEvent
+                            {
+                                PlayerId = current.Id,
+                                CanDecline = canDecline,
+                            });
+
+                            _waitingForPlay = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+                            int chosenCardId = await _waitingForPlay.Task;
+
+                            // Партия могла кончиться, пока стол ждал карту.
+                            // Проверка первая: отладочный обрыв будит ожидание
+                            // тем же признаком, что и отказ (см. DeclineCardId).
+                            if (ctx.GameState.IsGameOver) break;
+
+                            // Игрок закончил ход, не потратив дополнительную
+                            // карту. HandlePlayerEndTurn пропускает это только
+                            // когда хотя бы одна карта уже разыграна.
+                            if (chosenCardId == DeclineCardId) break;
+
+                            var card = current.Hand.FirstOrDefault(c => c.Id == chosenCardId);
+                            if (card == null)
+                            {
+                                // Ждём заново, а НЕ начинаем ход сначала: раньше
+                                // здесь стоял continue внешнего цикла, и неверный
+                                // номер карты дарил игроку лишнее взятие.
+                                Debug.LogWarning($"[Room] PlayCardIntent for unknown card {chosenCardId}; awaiting again.");
+                                continue;
+                            }
+
+                            await gm.PlayCard(card);
+                            ThrowIfGameOver();
+                            _playsThisTurn++;
+
+                            // Пустой рукой дополнительное право не отыграть, и
+                            // предлагать его — значит подвесить стол на карте,
+                            // которой нет.
+                            if (current.Hand.Count == 0) break;
+                            if (!ctx.GameState.TryConsumeExtraPlay()) break;
                         }
-                        await gm.PlayCard(card);
-                        ThrowIfGameOver();
+
+                        if (ctx.GameState.IsGameOver) break;
 
                         await gm.ActivateAllPlayerPermanentCardEffects(current);
                         ThrowIfGameOver();
@@ -843,6 +902,26 @@ namespace Assets.Scripts.Network
         }
 
         /// <summary>
+        /// ТОЛЬКО ДЛЯ ПРОВЕРКИ. Даёт текущему игроку право разыграть ещё одну
+        /// карту — то же самое, что сделает эффект Тайной помощницы или Ведьмы.
+        ///
+        /// <para>Без него дополнительный ход не проверить: карт, которые его
+        /// дают, в игре пока нет, а фундамент под них уже есть.</para>
+        /// </summary>
+        public void DebugGrantExtraPlay()
+        {
+            if (!_gameStarted || _gameOver || _session == null)
+            {
+                Debug.LogWarning($"[Room {Code}] Партия не идёт — дарить дополнительный ход некому.");
+                return;
+            }
+
+            _session.GameManager.GrantExtraPlay();
+            Debug.Log($"[Room {Code}] Проверка: {_session.CurrentPlayer?.Name} получил дополнительный ход " +
+                      $"(всего накоплено {_session.Context.GameState.ExtraPlays}).");
+        }
+
+        /// <summary>
         /// Раздаёт предметы для проверки разбора: полный набор, недобор, пусто.
         /// </summary>
         private void DebugSeedItems()
@@ -967,6 +1046,33 @@ namespace Assets.Scripts.Network
             _waitingForPlay?.TrySetResult(msg.CardId);
         }
 
+        /// <summary>
+        /// Игрок закончил ход, не потратив право на дополнительную карту.
+        ///
+        /// <para><b>Только когда хотя бы одна карта уже разыграна.</b>
+        /// Обязательную карту хода пропускать нельзя: партия кончается ровно
+        /// тогда, когда руки опустели, и игрок, отказывающийся играть, держал
+        /// бы стол вечно.</para>
+        /// </summary>
+        public void HandlePlayerEndTurn(NetworkConnectionToClient conn, EndTurnIntent msg)
+        {
+            if (_gameOver) return;
+            var current = _session?.CurrentPlayer;
+            if (current == null) return;
+            if (!Channel.IsSeatedAt(current.Id, conn))
+            {
+                Debug.LogWarning("[Room] EndTurnIntent from wrong connection.");
+                return;
+            }
+            if (_playsThisTurn == 0)
+            {
+                Debug.LogWarning("[Room] EndTurnIntent before a card was played; ignored.");
+                return;
+            }
+
+            _waitingForPlay?.TrySetResult(DeclineCardId);
+        }
+
         public async void HandleUseRuleEffect(NetworkConnectionToClient conn, UseRuleEffectIntent msg)
         {
             if (_gameOver) return;
@@ -975,13 +1081,24 @@ namespace Assets.Scripts.Network
             if (!Channel.IsSeatedAt(current.Id, conn))
                 return;
 
-            // Правило применяется только ДО того, как разыграна карта хода.
-            // Клиент это и так соблюдает (кнопка гаснет), но правило игры не
-            // должно держаться на честности клиента: единственный признак
-            // «карта ещё не сыграна» на сервере — что цикл всё ещё ждёт её.
+            // Раз в ход — и это ход, а не карта: сколько бы карт игрок ни
+            // разыграл, правило ему полагается одно.
+            //
+            // Раньше здесь стояла косвенная проверка «цикл всё ещё ждёт карту».
+            // Она работала, пока ожидание было ровно одно за ход; с
+            // дополнительными картами ожиданий несколько, и окно правила
+            // молча открывалось заново перед каждой.
+            if (_ruleUsedThisTurn)
+            {
+                Debug.LogWarning("[Room] UseRuleEffectIntent twice in one turn; ignored.");
+                ReportRuleOutcome(current.Id, msg.RuleEffectId, applied: false);
+                return;
+            }
+
+            // И только пока цикл ещё ждёт карту: правило применяют ДО неё.
             if (_waitingForPlay == null || _waitingForPlay.Task.IsCompleted)
             {
-                Debug.LogWarning("[Room] UseRuleEffectIntent after the card was played; ignored.");
+                Debug.LogWarning("[Room] UseRuleEffectIntent while no card is awaited; ignored.");
                 ReportRuleOutcome(current.Id, msg.RuleEffectId, applied: false);
                 return;
             }
@@ -1018,6 +1135,11 @@ namespace Assets.Scripts.Network
             {
                 Debug.LogError($"[Room] UseRuleEffectIntent application failed: {e}");
             }
+
+            // Флаг ставим только на состоявшемся правиле: несработавшее (игрок
+            // передумал, условия не сошлись) права не тратит — ровно то, ради
+            // чего появился RuleEffectResolvedEvent.
+            if (applied) _ruleUsedThisTurn = true;
 
             ReportRuleOutcome(current.Id, msg.RuleEffectId, applied);
         }
