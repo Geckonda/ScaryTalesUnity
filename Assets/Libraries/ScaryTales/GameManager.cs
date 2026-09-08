@@ -125,6 +125,11 @@ namespace ScaryTales
             if (player.HasCard(card))
             {
                 player.RemoveCardFromHand(card);
+                // Сказать об уходе из руки ДО того, как карта куда-то ляжет:
+                // клиент повторяет порядок вызовов сервера, а зеркало руки
+                // иначе копит разыгранное — из руки его убирало только
+                // попадание в сброс, и карты со стола оставались в ней навсегда.
+                OnCardPlayed?.Invoke(card);
                 PrintMessage($"Игрок {player.Name} разыгрывает карту {card.Name}.");
                 PutCardOnBoard(card);
                 AddPointsToPlayer(player, card.Points);
