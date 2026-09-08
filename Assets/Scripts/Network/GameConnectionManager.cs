@@ -286,6 +286,28 @@ namespace Assets.Scripts.Network
                 room.DebugGrantExtraPlay();
         }
 
+        [UnityEditor.MenuItem(DebugMenu + "Выдать «Тайную помощницу» (проверка)", false, 21)]
+        private static void DebugMenuDealSecretHelper() => DebugMenuDeal("Тайная помощница");
+
+        /// <summary>
+        /// Кладёт названную карту в руку тому, чей сейчас ход. Экземпляров
+        /// новой карты в колоде две штуки из сорока шести — без этого пункта
+        /// проверка сводится к тому, чтобы играть, пока не повезёт.
+        /// </summary>
+        private static void DebugMenuDeal(string cardName)
+        {
+            var manager = NetworkManager.singleton as GameConnectionManager;
+            if (manager == null || !NetworkServer.active || manager._registry == null)
+            {
+                Debug.LogWarning("[Server] Сервер не запущен в этом редакторе. " +
+                                 "Пункт работает в Play mode и только там, где создали комнату.");
+                return;
+            }
+
+            foreach (var room in manager._registry.Rooms.Where(r => r.IsGameStarted && !r.IsAborted).ToList())
+                room.DebugDealCard(cardName);
+        }
+
         /// <summary>
         /// Находит живой сервер и заканчивает его партию.
         ///

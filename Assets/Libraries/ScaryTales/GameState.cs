@@ -42,6 +42,9 @@ namespace ScaryTales
             return true;
         }
 
+        /// <inheritdoc/>
+        public void ClearExtraPlays() => ExtraPlays = 0;
+
         public Player GetCurrentPlayer() => Players[CurrentPlayerIndex];
 
         public List<Player> GetPlayers() => Players;
@@ -52,7 +55,11 @@ namespace ScaryTales
             CurrentPlayerIndex = (CurrentPlayerIndex + 1) % Players.Count;
             // Нерастраченные дополнительные ходы сгорают: это подарок на ЭТОТ
             // ход, и перенести его на следующего игрока было бы прямой ошибкой.
-            ExtraPlays = 0;
+            //
+            // Обнуление здесь оставлено ради самого NextTurn: цикл гасит счётчик
+            // и сам, в начале хода, но метод «перейти к следующему ходу» не
+            // должен зависеть от того, что зовущий не забудет.
+            ClearExtraPlays();
         }
 
         /// <summary>

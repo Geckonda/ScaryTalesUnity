@@ -83,6 +83,18 @@ namespace ScaryTales.Abstractions
         /// </summary>
         public void PutCardInTimeOfDaySlot(Card card);
         /// <summary>
+        /// Убрать карту из партии совсем — ни в руке, ни на столе, ни в сбросе.
+        ///
+        /// <para>Отличается от сброса тем, что вернуть карту нечем: из сброса
+        /// карты возвращаются (Дракон, правила), отсюда — никак. Своей зоны у
+        /// удалённой карты нет, она просто никуда не кладётся.</para>
+        ///
+        /// <para>Карту, всё ещё лежащую в колоде, метод снимает сам: Тайная
+        /// помощница смотрит верх колоды, не снимая карт, и удаление лишней —
+        /// часть этого хода, а не отдельный шаг.</para>
+        /// </summary>
+        public void RemoveCardFromGame(Card card);
+        /// <summary>
         /// Поместить предмет в интвентарь игрока
         /// </summary>
         public void PutItemInPlayerItemBag(Item item, Player player);
@@ -124,6 +136,24 @@ namespace ScaryTales.Abstractions
         public void ShowcaseCard(Card card, bool stepOut);
 
         /// <summary>
+        /// Игрок смотрит верх колоды: столько-то рубашек приподнимается над ней.
+        ///
+        /// <para>Чистый показ, состояние партии он не меняет — карты остаются в
+        /// колоде, пока игрок не ответил. Нужен ради тех, кто за столом: сам
+        /// смотрящий видит окно выбора, а остальные без этого видели бы паузу
+        /// непонятно из-за чего.</para>
+        ///
+        /// <para><b>Номера карт не передаются намеренно.</b> Показываются
+        /// рубашки, и какие именно карты за ними — знать никому не нужно.
+        /// Убирать рубашки отдельным вызовом не требуется: их разбирают
+        /// последствия выбора (одна улетает из игры, вторая уходит в руку), а
+        /// застрявшие снимает смена хода.</para>
+        /// </summary>
+        /// <param name="by">Кто смотрит — над чьим ходом идёт пауза.</param>
+        /// <param name="count">Сколько карт он смотрит.</param>
+        public void ShowPeekedCards(Player by, int count);
+
+        /// <summary>
         /// Дать текущему игроку разыграть ещё одну карту в этом ходу.
         ///
         /// <para>Вход для эффектов вида «можно разыграть 1 дополнительную
@@ -144,11 +174,13 @@ namespace ScaryTales.Abstractions
         public event Action<Card>? OnCardMovedToBoard;
         public event Action<Card>? OnCardMovedToBeforePlayer;
         public event Action<Card>? OnCardMovedToTimeOfDaySlot;
+        public event Action<Card>? OnCardRemovedFromGame;
         public event Action<Item, Player>? OnItemAddToPlayer;
         public event Action<Item, Player>? OnItemRemovedFromPlayer;
         public event Action<Player>? OnAddPointsToPlayer;
         public event Action<string>? OnMessagePrinted;
         public event Action<Player, bool>? OnHandsRevealed;
         public event Action<Card, bool>? OnCardShowcased;
+        public event Action<Player, int>? OnCardsPeeked;
     }
 }

@@ -123,7 +123,11 @@ namespace Assets.Scripts.Network
 
         public Task<CardPick> PickCard(int playerId, PickCardRequest request)
         {
-            return Ask(playerId, DecisionKind.PickCard,
+            // Вид запроса решает, чем клиент это покажет: подсветкой карт на
+            // столе или отдельным окном. Карты из колоды на столе нет — см.
+            // DecisionKind.PickCardFromDeck.
+            var kind = request.FromDeck ? DecisionKind.PickCardFromDeck : DecisionKind.PickCard;
+            return Ask(playerId, kind,
                 request.CandidateCardIds.ToArray(), string.Empty,
                 ids => new CardPick(ids[0]), request.CanCancel);
         }
@@ -193,7 +197,9 @@ namespace Assets.Scripts.Network
 
             // Выбор карты и предмета обязан на что-то указывать; правило и
             // подтверждение обходятся без кандидатов.
-            bool needsCandidate = kind == DecisionKind.PickCard || kind == DecisionKind.PickItem;
+            bool needsCandidate = kind == DecisionKind.PickCard
+                                  || kind == DecisionKind.PickCardFromDeck
+                                  || kind == DecisionKind.PickItem;
 
             _parked[id] = new PendingDecision
             {

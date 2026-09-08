@@ -81,6 +81,15 @@ namespace Assets.Scripts.Network
         public event Action<Card> OnCardMovedToBoard;
         public event Action<Card> OnCardMovedToBeforePlayer;
         public event Action<Card> OnCardMovedToTimeOfDaySlot;
+
+        /// <summary>Карта убрана из партии совсем — вернуть её нечем.</summary>
+        public event Action<Card> OnCardRemovedFromGame;
+
+        /// <summary>
+        /// Игрок смотрит верх колоды: (кто, сколько карт). Чистый показ —
+        /// в зеркале от этого не меняется ничего.
+        /// </summary>
+        public event Action<Player, int> OnCardsPeeked;
         public event Action<Item, Player> OnItemAddToPlayer;
         public event Action<Item, Player> OnItemRemovedFromPlayer;
         public event Action<Player> OnAddPointsToPlayer;
@@ -167,6 +176,8 @@ namespace Assets.Scripts.Network
             Defer<CardMovedToBeforePlayerEvent>(HandleCardMovedToBeforePlayer);
             Defer<CardMovedToTimeOfDaySlotEvent>(HandleCardMovedToTimeOfDay);
             Defer<CardMovedToDiscardPileEvent>(HandleCardMovedToDiscard);
+            Defer<CardRemovedFromGameEvent>(HandleCardRemovedFromGame);
+            Defer<CardsPeekedEvent>(HandleCardsPeeked);
             Defer<ItemAddedToPlayerEvent>(HandleItemAdded);
             Defer<ItemRemovedFromPlayerEvent>(HandleItemRemoved);
             Defer<PointsAwardedEvent>(HandlePointsAwarded);
@@ -439,6 +450,41 @@ namespace Assets.Scripts.Network
             card.Position = CardPosition.Discarded;
             card.Owner = null;
             OnCardMovedToDiscardPile?.Invoke(card);
+        }
+
+        /// <summary>
+        /// Карта ушла из партии совсем. Показывать нечего — она нигде и не
+        /// появлялась, — но убрать её из зеркала обязательно: иначе она
+        /// навсегда останется числиться в порядке колоды.
+        /// </summary>
+        private void HandleCardRemovedFromGame(CardRemovedFromGameEvent evt)
+        {
+            var card = FindCard(evt.CardId);
+            if (card == null) return;
+
+            // Сегодня такая карта приходит только из колоды, но чистим всюду:
+            // «удалить из игры» на то и удаление, что откуда бы карта ни
+            // уходила, следов оставаться не должно.
+            DeckOrder.Remove(card.Id);
+            DetachFromBoard(card);
+            foreach (var p in Players) p.RemoveCardFromHand(card);
+
+            card.Owner = null;
+            card.Position = CardPosition.RemovedFromGame;
+
+            OnCardRemovedFromGame?.Invoke(card);
+        }
+
+        /// <summary>
+        /// Игрок смотрит верх колоды. Зеркало не трогаем вовсе: карты всё ещё
+        /// в колоде, и до его ответа там и останутся. Это чистый показ.
+        /// </summary>
+        private void HandleCardsPeeked(CardsPeekedEvent evt)
+        {
+            var player = FindPlayer(evt.PlayerId);
+            if (player == null || evt.Count <= 0) return;
+
+            OnCardsPeeked?.Invoke(player, evt.Count);
         }
 
         private void HandleItemAdded(ItemAddedToPlayerEvent evt)

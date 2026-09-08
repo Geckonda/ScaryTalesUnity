@@ -91,6 +91,7 @@ namespace ScaryTales
                 // этого списка (см. Deck), поэтому вставка в середину
                 // перенумеровывает всё, что ниже.
                 new GypsyCard(),
+                new SecretHelperCard(),
             };
         }
         public static List<Item> MakeItemTemplates()

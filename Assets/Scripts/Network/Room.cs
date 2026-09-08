@@ -679,6 +679,13 @@ namespace Assets.Scripts.Network
 
                     _playsThisTurn = 0;
                     _ruleUsedThisTurn = false;
+                    // Право на дополнительную карту гасим в начале КАЖДОГО
+                    // хода, а не только в NextTurn. Ход брошенного игрока
+                    // обрывается на месте, очередь двигает RemovePlayer, и
+                    // NextTurn при этом намеренно пропускается — иначе игрок,
+                    // вышедший посреди Тайной помощницы, дарил бы лишнюю карту
+                    // тому, кто ходит следующим.
+                    ctx.GameState.ClearExtraPlays();
 
                     try
                     {
@@ -919,6 +926,39 @@ namespace Assets.Scripts.Network
             _session.GameManager.GrantExtraPlay();
             Debug.Log($"[Room {Code}] Проверка: {_session.CurrentPlayer?.Name} получил дополнительный ход " +
                       $"(всего накоплено {_session.Context.GameState.ExtraPlays}).");
+        }
+
+        /// <summary>
+        /// ТОЛЬКО ДЛЯ ПРОВЕРКИ. Выдаёт текущему игроку карту с таким именем
+        /// прямо из колоды.
+        ///
+        /// <para>Иначе новую карту не проверить: экземпляров в колоде две штуки
+        /// из сорока шести, и ждать их пришлось бы полпартии. Карта уходит в
+        /// руку обычным путём, со всеми событиями, — то есть проверяется
+        /// настоящий путь, а не его подделка.</para>
+        /// </summary>
+        public void DebugDealCard(string cardName)
+        {
+            if (!_gameStarted || _gameOver || _session == null)
+            {
+                Debug.LogWarning($"[Room {Code}] Партия не идёт — выдавать карту некому.");
+                return;
+            }
+
+            var player = _session.CurrentPlayer;
+            var card = _session.Context.Deck.TakeCardByName(cardName);
+            if (player == null || card == null)
+            {
+                Debug.LogWarning($"[Room {Code}] Карты «{cardName}» в колоде не нашлось " +
+                                 "(все экземпляры уже на руках или сыграны).");
+                return;
+            }
+
+            _session.GameManager.PutCardInPlayerHand(card, player);
+            // TakeCardByName трогает колоду напрямую, мимо TryDrawCardFromDeck,
+            // — размер клиенту приходится сообщать самим.
+            _session.GameManager.NotifyDeckChanged();
+            Debug.Log($"[Room {Code}] Проверка: {player.Name} получил карту «{cardName}».");
         }
 
         /// <summary>

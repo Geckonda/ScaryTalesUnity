@@ -22,6 +22,7 @@ namespace ScaryTales
         public event Action<Card>? OnCardMovedToBoard;
         public event Action<Card>? OnCardMovedToBeforePlayer;
         public event Action<Card>? OnCardMovedToTimeOfDaySlot;
+        public event Action<Card>? OnCardRemovedFromGame;
         public event Action<Item, Player>? OnItemAddToPlayer;
         public event Action<Item, Player>? OnItemRemovedFromPlayer;
         public event Action<Player>? OnAddPointsToPlayer;
@@ -32,6 +33,9 @@ namespace ScaryTales
 
         /// <summary>Карта выступила вперёд или вернулась — см. <see cref="ShowcaseCard"/>.</summary>
         public event Action<Card, bool>? OnCardShowcased;
+
+        /// <summary>Игрок смотрит верх колоды — см. <see cref="ShowPeekedCards"/>.</summary>
+        public event Action<Player, int>? OnCardsPeeked;
 
 
         /// <summary>
@@ -72,6 +76,9 @@ namespace ScaryTales
 
         /// <inheritdoc/>
         public void ShowcaseCard(Card card, bool stepOut) => OnCardShowcased?.Invoke(card, stepOut);
+
+        /// <inheritdoc/>
+        public void ShowPeekedCards(Player by, int count) => OnCardsPeeked?.Invoke(by, count);
 
         /// <inheritdoc/>
         public void GrantExtraPlay()
@@ -213,6 +220,20 @@ namespace ScaryTales
                     }
             }
         }
+        /// <inheritdoc/>
+        public void RemoveCardFromGame(Card card)
+        {
+            // Карта может ещё лежать в колоде: Помощница смотрит её верх, не
+            // снимая карт, и снять лишнюю — часть удаления, а не отдельный шаг.
+            // Иначе у зовущего появился бы соблазн «удалить» карту, оставив её
+            // при этом в колоде.
+            if (_context.Deck.TakeCardById(card.Id) != null) NotifyDeckChanged();
+
+            card.Owner = null;
+            card.Position = CardPosition.RemovedFromGame;
+            OnCardRemovedFromGame?.Invoke(card);
+        }
+
         public void PutCardToDiscardPile(Card card)
         {
             var board = _context.GameBoard;

@@ -75,6 +75,35 @@ namespace ScaryTales
 
 
         /// <summary>
+        /// Показывает верх колоды, НЕ снимая карт.
+        ///
+        /// <para>Ради Тайной помощницы: «посмотрите 2 верхние карты» — это
+        /// именно взгляд. Снять обе и вернуть лишнюю было бы хуже, потому что
+        /// между вопросом и ответом игрок может выйти: снятые карты остались бы
+        /// вне партии, а колода — короче, чем должна. Пока карты в колоде,
+        /// брошенный вопрос не стоит ничего.</para>
+        /// </summary>
+        /// <param name="count">Сколько карт сверху. Меньше, если их столько нет.</param>
+        /// <returns>Карты в порядке от вершины; пустой список у пустой колоды.</returns>
+        public List<Card> PeekTop(int count)
+        {
+            if (count <= 0) return new List<Card>();
+            return _cards.Take(count).ToList();
+        }
+
+        /// <summary>
+        /// Снимает из колоды конкретную карту, где бы она в ней ни лежала.
+        /// </summary>
+        /// <returns>Карта или null, если такой в колоде нет.</returns>
+        public Card? TakeCardById(int id)
+        {
+            var card = _cards.FirstOrDefault(x => x.Id == id);
+            if (card != null)
+                _cards.Remove(card);
+            return card;
+        }
+
+        /// <summary>
         /// Метод для вытягивания карты из колоды
         /// </summary>
         /// <returns>Карта на вершине колоды</returns>

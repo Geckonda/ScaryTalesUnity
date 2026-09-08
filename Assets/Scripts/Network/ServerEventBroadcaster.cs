@@ -31,6 +31,8 @@ namespace Assets.Scripts.Network
             gm.OnCardMovedToBeforePlayer += HandleCardMovedToBeforePlayer;
             gm.OnCardMovedToTimeOfDaySlot += HandleCardMovedToTimeOfDay;
             gm.OnCardMovedToDiscardPile += HandleCardMovedToDiscard;
+            gm.OnCardRemovedFromGame += HandleCardRemovedFromGame;
+            gm.OnCardsPeeked += HandleCardsPeeked;
             gm.OnItemAddToPlayer += HandleItemAdded;
             gm.OnItemRemovedFromPlayer += HandleItemRemoved;
             gm.OnAddPointsToPlayer += HandlePointsAwarded;
@@ -115,6 +117,20 @@ namespace Assets.Scripts.Network
         private void HandleCardMovedToDiscard(Card card)
         {
             _channel.SendToRoom(new CardMovedToDiscardPileEvent { CardId = card.Id });
+        }
+
+        private void HandleCardRemovedFromGame(Card card)
+        {
+            _channel.SendToRoom(new CardRemovedFromGameEvent { CardId = card.Id });
+        }
+
+        private void HandleCardsPeeked(Player by, int count)
+        {
+            _channel.SendToRoom(new CardsPeekedEvent
+            {
+                PlayerId = by?.Id ?? 0,
+                Count = count,
+            });
         }
 
         private void HandleItemAdded(Item item, Player player)

@@ -81,6 +81,7 @@ namespace Assets.Scripts.Network
 
             public void GrantExtraPlay() => throw Mutation(nameof(GrantExtraPlay));
             public bool TryConsumeExtraPlay() => throw Mutation(nameof(TryConsumeExtraPlay));
+            public void ClearExtraPlays() => throw Mutation(nameof(ClearExtraPlays));
             public void NextTurn() => throw Mutation(nameof(NextTurn));
             public bool RemovePlayer(Player player) => throw Mutation(nameof(RemovePlayer));
             public void EndGame() => throw Mutation(nameof(EndGame));

@@ -44,6 +44,12 @@ public class UnGameManager : MonoBehaviour
 
     [Tooltip("Показ разбора правила в конце партии. Можно не привязывать: если слот пуст, компонент добавляется сюда же кодом со значениями по умолчанию — разбор работает без работ в сцене, а привязка нужна только чтобы покрутить ручки.")]
     public EndGameScoringUI _endGameScoringUI;
+
+    [Tooltip("Окно выбора карты из колоды (Тайная помощница). Можно не привязывать: если слот пуст, компонент добавляется сюда же кодом. Окно собирается целиком в коде и ничего из сцены не берёт — привязка нужна только чтобы покрутить ручки.")]
+    public CardPickPanel _cardPickPanel;
+
+    [Tooltip("Показ «игрок смотрит верх колоды»: рубашки над колодой. Можно не привязывать — компонент добавляется сюда же кодом. Привязка нужна только чтобы покрутить ручки показа.")]
+    public PeekUI _peekUI;
     public Transform GameBoardPanel;
     public Transform Deck;
 
@@ -254,6 +260,11 @@ public class UnGameManager : MonoBehaviour
         if (_endGameScoringUI == null)
             _endGameScoringUI = gameObject.AddComponent<EndGameScoringUI>();
         _endGameScoringUI.Initialize(ClientView, _seatLayout);
+
+        // Тем же порядком и по той же причине: показ «смотрит верх колоды»
+        // берёт из сцены только саму колоду и строится кодом.
+        if (_peekUI == null) _peekUI = gameObject.AddComponent<PeekUI>();
+        _peekUI.Initialize(ClientView);
     }
 
     private void HandleTurnAdvanced(int currentPlayerId)
@@ -417,6 +428,9 @@ public class UnGameManager : MonoBehaviour
             case DecisionKind.PickCard:
                 StartCoroutine(PromptCardPick(evt.RequestId, evt.CandidateIds, evt.CanCancel));
                 break;
+            case DecisionKind.PickCardFromDeck:
+                StartCoroutine(PromptCardPickFromDeck(evt.RequestId, evt.CandidateIds));
+                break;
             case DecisionKind.PickItem:
                 StartCoroutine(PromptItemPick(evt.RequestId, evt.CandidateIds));
                 break;
@@ -531,6 +545,90 @@ public class UnGameManager : MonoBehaviour
                 CardId = chosen.Id,
                 HasPick = true,
             });
+    }
+
+    /// <summary>
+    /// Выбор карты, которой нет на столе, — верх колоды (Тайная помощница).
+    ///
+    /// <para>Отдельная корутина, а не ветка в <see cref="PromptCardPick"/>:
+    /// тот подсвечивает карты, у которых уже есть представление на столе, и
+    /// для карты из колоды <c>GetCardView</c> вернул бы null. Кандидат молча
+    /// выпал бы, ожидание клика осталось бы вечным, а комната — стоять на
+    /// неотвеченном вопросе.</para>
+    ///
+    /// <para>Отказаться нельзя: карта уже разыграна и очки за неё начислены.
+    /// Поэтому любой путь отсюда, кроме клика, обязан всё равно чем-то
+    /// ответить — иначе стол виснет.</para>
+    /// </summary>
+    private IEnumerator PromptCardPickFromDeck(int requestId, int[] candidateIds)
+    {
+        var cards = candidateIds
+            .Select(id => ClientView.FindCard(id))
+            .Where(c => c != null)
+            .ToList();
+
+        if (cards.Count == 0)
+        {
+            // Каталоги карт сервера и клиента разошлись — это проверяется на
+            // старте партии, так что сюда попасть трудно. Но промолчать
+            // нельзя: сервер ждёт ответа именно от нас.
+            Debug.LogError($"[UnGameManager] Выбор карты из колоды (запрос {requestId}): " +
+                           $"ни одной из {candidateIds.Length} карт нет в каталоге. " +
+                           "Отвечаю первой, чтобы не подвесить стол.");
+            SendFirstCandidate(requestId, candidateIds);
+            yield break;
+        }
+
+        Card chosen = null;
+        bool picked = false;
+
+        var panel = EnsureCardPickPanel();
+        panel.Show(cards,
+                   "Выберите карту — она уйдёт к вам на руку. Вторая покинет игру.",
+                   c => { chosen = c; picked = true; });
+
+        if (!panel.IsShowing)
+        {
+            Debug.LogError($"[UnGameManager] Окно выбора карты (запрос {requestId}) не открылось. " +
+                           "Отвечаю первой картой, чтобы не подвесить стол.");
+            SendFirstCandidate(requestId, candidateIds);
+            yield break;
+        }
+
+        // Окно закрывается только выбором — либо снаружи, при обрыве партии.
+        while (!picked && panel.IsShowing) yield return null;
+
+        // Закрыли снаружи: партии больше нет, и отвечать некому.
+        if (!picked || chosen == null) yield break;
+
+        NetworkClient.Send(new ResolveCardPickIntent
+        {
+            RequestId = requestId,
+            CardId = chosen.Id,
+            HasPick = true,
+        });
+    }
+
+    private void SendFirstCandidate(int requestId, int[] candidateIds)
+    {
+        if (candidateIds == null || candidateIds.Length == 0) return;
+        NetworkClient.Send(new ResolveCardPickIntent
+        {
+            RequestId = requestId,
+            CardId = candidateIds[0],
+            HasPick = true,
+        });
+    }
+
+    /// <summary>
+    /// Окно выбора карты из колоды. Слот можно не привязывать: окно ничего не
+    /// берёт из сцены и собирается кодом, поэтому заводит себя само — по
+    /// образцу разбора конца партии.
+    /// </summary>
+    private CardPickPanel EnsureCardPickPanel()
+    {
+        if (_cardPickPanel == null) _cardPickPanel = gameObject.AddComponent<CardPickPanel>();
+        return _cardPickPanel;
     }
 
     private IEnumerator PromptItemPick(int requestId, int[] candidateTypes)
@@ -765,6 +863,9 @@ public class UnGameManager : MonoBehaviour
         // Stop any prompt coroutine that is still waiting on a click for a
         // decision the server has already given up on.
         StopAllCoroutines();
+        // Корутину остановили — окно она за собой уже не закроет, а живёт оно
+        // в корне канваса и пережило бы конец партии.
+        if (_cardPickPanel != null) _cardPickPanel.Hide();
         _inGame = false;
         DragAndDrop.SelectCard = false;
         _myTurnCardPending = false;

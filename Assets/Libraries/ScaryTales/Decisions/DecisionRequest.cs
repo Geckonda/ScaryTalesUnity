@@ -26,10 +26,25 @@ namespace ScaryTales.Decisions
         /// </summary>
         public bool CanCancel { get; }
 
-        public PickCardRequest(IEnumerable<int> ids, bool canCancel = false)
+        /// <summary>
+        /// Кандидатов на столе НЕТ — их надо показать самому.
+        ///
+        /// <para>Обычный выбор карты рисуется подсветкой карт, уже лежащих на
+        /// столе. Для карт из колоды это не работает и не работало бы молча:
+        /// у карты из колоды нет представления, кандидат просто выпал бы из
+        /// списка, а ожидание клиента и вместе с ним вся комната повисли бы
+        /// навсегда. Поэтому такой выбор — отдельный вид запроса, и клиент
+        /// показывает его окном.</para>
+        ///
+        /// <para>Сегодня так спрашивает только Тайная помощница.</para>
+        /// </summary>
+        public bool FromDeck { get; }
+
+        public PickCardRequest(IEnumerable<int> ids, bool canCancel = false, bool fromDeck = false)
         {
             CandidateCardIds = ids.ToList();
             CanCancel = canCancel;
+            FromDeck = fromDeck;
         }
     }
 
