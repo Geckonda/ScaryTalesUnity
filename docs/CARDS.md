@@ -20,6 +20,7 @@
 | `DragonCard` | Discard 1 played Location and 1 played Man. Gain 2 VP per card discarded this way. |
 | `OldMasterCard` | If it is Day, gain 2 VP at the end of your turn. |
 | `MerchantCard` | Draw 2 cards. Gain 2 VP per played Merchant. |
+| `GypsyCard` | All players reveal their hands. Gain 1 VP per revealed Location. Draw 1 card per revealed Gypsy. |
 
 
 ## Global Rules

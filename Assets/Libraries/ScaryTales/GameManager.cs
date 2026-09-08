@@ -27,6 +27,13 @@ namespace ScaryTales
         public event Action<Player>? OnAddPointsToPlayer;
         public event Action<string>? OnMessagePrinted;
 
+        /// <summary>Все показали руки или спрятали обратно — см. <see cref="RevealAllHands"/>.</summary>
+        public event Action<Player, bool>? OnHandsRevealed;
+
+        /// <summary>Карта выступила вперёд или вернулась — см. <see cref="ShowcaseCard"/>.</summary>
+        public event Action<Card, bool>? OnCardShowcased;
+
+
         /// <summary>
         /// Сколько карт осталось в колоде. Клиенту иначе неоткуда это узнать:
         /// колода нарисована рубашкой, и опустевшую от полной не отличить.
@@ -59,6 +66,13 @@ namespace ScaryTales
             _notifier.Notify(message);
             OnMessagePrinted?.Invoke(message);
         }
+
+        /// <inheritdoc/>
+        public void RevealAllHands(Player by, bool revealed) => OnHandsRevealed?.Invoke(by, revealed);
+
+        /// <inheritdoc/>
+        public void ShowcaseCard(Card card, bool stepOut) => OnCardShowcased?.Invoke(card, stepOut);
+
         /// <summary>
         /// Пытается вытянуть карту из колоды, если она не пуста.
         /// </summary>

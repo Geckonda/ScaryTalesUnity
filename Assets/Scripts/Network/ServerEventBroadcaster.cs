@@ -36,11 +36,31 @@ namespace Assets.Scripts.Network
             gm.OnAddPointsToPlayer += HandlePointsAwarded;
             gm.OnMessagePrinted += HandleMessagePrinted;
             gm.OnDeckCountChanged += HandleDeckCountChanged;
+            gm.OnHandsRevealed += HandleHandsRevealed;
+            gm.OnCardShowcased += HandleCardShowcased;
+        }
+
+        private void HandleCardShowcased(Card card, bool stepOut)
+        {
+            _channel.SendToRoom(new CardShowcasedEvent
+            {
+                CardId = card.Id,
+                StepOut = stepOut,
+            });
         }
 
         private void HandleDeckCountChanged(int remaining)
         {
             _channel.SendToRoom(new DeckCountChangedEvent { Remaining = remaining });
+        }
+
+        private void HandleHandsRevealed(Player by, bool revealed)
+        {
+            _channel.SendToRoom(new HandsRevealedEvent
+            {
+                ByPlayerId = by?.Id ?? 0,
+                Revealed = revealed,
+            });
         }
 
         private void HandleCardAddedToHand(Card card, Player player)

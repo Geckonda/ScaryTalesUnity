@@ -19,12 +19,30 @@ namespace Assets.Scripts.UIEntities.Components
     public class FanLayoutGroup : LayoutGroup
     {
         [Range(0, 180)] public float angle = 110f;
+
+        [Tooltip("НЕ ИСПОЛЬЗУЕТСЯ. Поле осталось от прежней раскладки: ArrangeCards считает позицию только через radius, а spacing не читает никто. Подключить его сейчас нельзя — в сцене оно ненулевое, и веера разъехались бы прямо в обычной игре. Раздвижка для показа рук делается через extraSpread.")]
         [Range(0, 100)] public float spacing = 40f;
+
         [Range(-1000, 1000)] public float verticalOffset = -150f; // <- добавили
 
         [Range(0, 300)] public float radius = 0f;
         [Range(0.1f, 3f)] public float scale = 1f; // масштаб карты
         public bool fanUpwards = true; // направление веера
+
+        /// <summary>
+        /// Сколько пикселей добавить между соседними картами по горизонтали.
+        ///
+        /// <para><b>Ноль по умолчанию — обычная игра не меняется.</b> Рычаг
+        /// нужен показу рук (Цыганка): у трёх вееров в сцене
+        /// <see cref="radius"/> равен нулю, а вся позиция карты считается как
+        /// <c>sin(угол) * radius</c> — значит все карты получают одну и ту же
+        /// точку и различаются только наклоном. Лежащую стопку не разобрать,
+        /// сколько её ни увеличивай, поэтому карты не укрупняют, а разводят.</para>
+        ///
+        /// <para>Раздвижка идёт от центра в обе стороны, так что веер остаётся
+        /// там же, где был, и только становится шире.</para>
+        /// </summary>
+        [HideInInspector] public float extraSpread = 0f;
 
         public override void CalculateLayoutInputHorizontal()
         {
@@ -63,7 +81,12 @@ namespace Assets.Scripts.UIEntities.Components
                 float h = child.rect.height;
                 float centred = rectTransform.rect.height / 2f - h + h * scale / 2f;
 
-                SetChildAlongAxis(child, 0, rectTransform.rect.width / 2 + pos.x - child.rect.width / 2);
+                // Раздвижка от центра: средняя карта остаётся на месте, крайние
+                // разъезжаются в стороны поровну. При extraSpread == 0 слагаемое
+                // обнуляется, и веер лежит ровно так, как лежал.
+                float spread = extraSpread * (i - (count - 1) / 2f);
+
+                SetChildAlongAxis(child, 0, rectTransform.rect.width / 2 + pos.x + spread - child.rect.width / 2);
                 SetChildAlongAxis(child, 1, centred + pos.y + verticalOffset);
 
                 child.localRotation = Quaternion.Euler(0, 0, rotationZ);

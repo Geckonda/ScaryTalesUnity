@@ -75,6 +75,23 @@ public class AnimationManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Пауза внутри анимации, отсчитанная кадрами.
+    ///
+    /// <para>Не <c>Task.Delay</c>: тот считает время в своём потоке и
+    /// продолжает тикать, когда редактор на паузе, — анимация уезжала бы
+    /// вперёд от игры. Здесь же возврат гарантированно в главном потоке, где
+    /// только и можно трогать сцену.</para>
+    ///
+    /// <para>Живёт здесь, потому что это вопрос темпа показа, а темпом
+    /// заведует этот класс.</para>
+    /// </summary>
+    public static async Task Delay(float seconds)
+    {
+        for (float t = 0f; t < seconds; t += Time.unscaledDeltaTime)
+            await Task.Yield();
+    }
+
+    /// <summary>
     /// Чистка завершённых — именно здесь, а не в <c>ContinueWith</c>.
     ///
     /// Раньше удаление висело на <c>animationTask.ContinueWith(...)</c>, а он

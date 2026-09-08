@@ -56,6 +56,15 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         {
             _frontSprite = Resources.Load<Sprite>($"CardsImages/{_card.Name}");
             _frontSpriteLoaded = true;
+
+            // Без картинки карта отрисуется пустой — и молча. Новая карта
+            // попадает в игру раньше, чем её рисунок, и «почему карта белая»
+            // не должно стоить расследования. Один раз на представление:
+            // флаг выше не даёт повториться.
+            if (_frontSprite == null)
+                Debug.LogWarning($"[CardView] Нет картинки для карты «{_card.Name}» — " +
+                                 $"ожидается Assets/Resources/CardsImages/{_card.Name}.PNG. " +
+                                 "Карта покажется без лица.");
         }
 
         _background.sprite = _frontSprite;

@@ -108,6 +108,19 @@ namespace Assets.Scripts.Network
         public event Action<int> OnDeckCountChanged;
 
         /// <summary>
+        /// Все игроки показывают карты на руках — или прячут обратно. Первый
+        /// аргумент — тот, чья карта это сделала (может быть null, если игрок
+        /// уже вышел), второй — открыть или вернуть.
+        /// </summary>
+        public event Action<Player, bool> OnHandsRevealed;
+
+        /// <summary>
+        /// Одна карта выступает вперёд из раскрытой руки (<c>true</c>) или
+        /// возвращается на место (<c>false</c>).
+        /// </summary>
+        public event Action<Card, bool> OnCardShowcased;
+
+        /// <summary>
         /// Начался разбор правила конца партии. Дальше по одному
         /// <see cref="OnFinalScoring"/> на каждого игрока, в порядке ходов.
         /// </summary>
@@ -160,6 +173,8 @@ namespace Assets.Scripts.Network
             Defer<DeckCountChangedEvent>(HandleDeckCountChanged);
             Defer<FinalScoringStartedEvent>(HandleFinalScoringStarted);
             Defer<FinalScoringEvent>(HandleFinalScoring);
+            Defer<HandsRevealedEvent>(HandleHandsRevealed);
+            Defer<CardShowcasedEvent>(HandleCardShowcased);
 
             // Прерывание партии — единственное событие в обход очереди.
             //
@@ -450,6 +465,20 @@ namespace Assets.Scripts.Network
             foreach (var tpl in GameBuilder.MakeItemTemplates())
                 if (tpl.Type == type) return tpl.Clone();
             return null;
+        }
+
+        private void HandleHandsRevealed(HandsRevealedEvent evt)
+        {
+            // Игрока может уже не быть за столом — раскрытие от этого не
+            // отменяется, оно про руки, а не про него.
+            OnHandsRevealed?.Invoke(FindPlayer(evt.ByPlayerId), evt.Revealed);
+        }
+
+        private void HandleCardShowcased(CardShowcasedEvent evt)
+        {
+            var card = FindCard(evt.CardId);
+            if (card == null) return;
+            OnCardShowcased?.Invoke(card, evt.StepOut);
         }
 
         private void HandleFinalScoringStarted(FinalScoringStartedEvent evt)

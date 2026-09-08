@@ -340,13 +340,8 @@ namespace Assets.Scripts.UIEntities
             if (popup != null) Destroy(popup);
         }
 
-        // Ожидание кадрами, а не Task.Delay: тот считает время в своём потоке и
-        // продолжает тикать, когда редактор на паузе, — анимация уезжала бы
-        // вперёд от игры. Плюс возврат гарантированно в главном потоке.
-        private static async Task Delay(float seconds)
-        {
-            for (float t = 0f; t < seconds; t += Time.unscaledDeltaTime)
-                await Task.Yield();
-        }
+        // Покадровое ожидание переехало в AnimationManager: им пользуется уже
+        // не только разбор, а темпом показа заведует он.
+        private static Task Delay(float seconds) => AnimationManager.Delay(seconds);
     }
 }

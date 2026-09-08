@@ -1772,6 +1772,7 @@ MonoBehaviour:
   radius: 0
   scale: 1
   fanUpwards: 1
+  extraSpread: 0
 --- !u!1 &363967181
 GameObject:
   m_ObjectHideFlags: 0
@@ -2006,6 +2007,7 @@ MonoBehaviour:
   radius: 260
   scale: 1
   fanUpwards: 1
+  extraSpread: 0
 --- !u!1 &432935235
 GameObject:
   m_ObjectHideFlags: 0
@@ -4230,6 +4232,7 @@ MonoBehaviour:
   radius: 0
   scale: 1
   fanUpwards: 1
+  extraSpread: 0
 --- !u!1 &838658142
 GameObject:
   m_ObjectHideFlags: 0
@@ -4436,6 +4439,7 @@ MonoBehaviour:
   radius: 0
   scale: 1
   fanUpwards: 1
+  extraSpread: 0
 --- !u!1 &844944717
 GameObject:
   m_ObjectHideFlags: 0
@@ -9961,6 +9965,15 @@ MonoBehaviour:
   _dealDuration: 1
   _dealStagger: 0.15
   _flipDuration: 0.35
+  _revealSeconds: 5
+  _revealForwardOffset: 130
+  _revealFanSpread: 115
+  _revealScreenMargin: 24
+  _revealMoveDuration: 0.4
+  _showcaseOffset: 170
+  _showcaseScale: 1.4
+  _showcaseMoveDuration: 0.35
+  _showcaseHold: 1.2
 --- !u!1 &1901278115
 GameObject:
   m_ObjectHideFlags: 0

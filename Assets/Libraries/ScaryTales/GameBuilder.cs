@@ -69,24 +69,28 @@ namespace ScaryTales
         {
             return new List<Card>()
             {
-                //new NightChildCard(),
-                //new OldMasterCard(),
-                //new DarkLordCard(),
-                //new DragonCard(),
-                //new EnchantedForestCard(),
-                //new PrincessCard(),
+                new NightChildCard(),
+                new OldMasterCard(),
+                new DarkLordCard(),
+                new DragonCard(),
+                new EnchantedForestCard(),
+                new PrincessCard(),
                 new MerchantCard(),
                 new WizardCard(),
                 new NightCard(),
-                //new DayCard(),
+                new DayCard(),
                 new OgreCard(),
-                //new WisdomKingCard(),
-                //new FollyKingCard(),
+                new WisdomKingCard(),
+                new FollyKingCard(),
                 new FairyCard(),
                 new YoungHeroCard(),
                 new HiddenCaveCard(),
                 new CursedCastleCard(),
                 new CharmCard(),
+                // Новые карты дописываются В КОНЕЦ. Id раздаются по порядку
+                // этого списка (см. Deck), поэтому вставка в середину
+                // перенумеровывает всё, что ниже.
+                new GypsyCard(),
             };
         }
         public static List<Item> MakeItemTemplates()

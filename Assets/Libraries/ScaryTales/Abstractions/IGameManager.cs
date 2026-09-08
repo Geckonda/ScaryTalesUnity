@@ -95,6 +95,34 @@ namespace ScaryTales.Abstractions
         /// </summary>
         public void EndGame();
 
+        /// <summary>
+        /// Все игроки показывают карты на руках — или прячут обратно.
+        ///
+        /// <para>Ничего не меняет в состоянии игры — это чистый показ. Клиенты
+        /// и так знают все карты во всех руках (карта взятия рассылается всей
+        /// комнате), чужие просто рисуются рубашкой; событие говорит им, когда
+        /// эту рубашку на время убрать.</para>
+        ///
+        /// <para>Раскрытие и возврат — два вызова, а не один с паузой внутри:
+        /// между ними сервер начисляет очки и выдаёт карты, и пока это идёт,
+        /// руки должны оставаться открытыми. Сколько именно их держать, решает
+        /// клиент — темп показа его дело.</para>
+        /// </summary>
+        /// <param name="by">Кто раскрыл — тот, чья карта это сделала.</param>
+        /// <param name="revealed">Открыть или вернуть как было.</param>
+        public void RevealAllHands(Player by, bool revealed);
+
+        /// <summary>
+        /// Одна карта выступает вперёд из раскрытой руки — или возвращается.
+        ///
+        /// <para>Так показывают, за что именно даются очки и карты: каждое
+        /// место выезжает, приносит очко и уезжает; каждая цыганка выезжает,
+        /// приносит карту и уезжает. Выезд и заезд — два вызова, а не один с
+        /// паузой внутри: между ними сервер начисляет очко или выдаёт карту, и
+        /// порядок этих событий у клиента и есть порядок показа.</para>
+        /// </summary>
+        public void ShowcaseCard(Card card, bool stepOut);
+
 
         public event Action<Card, Player>? OnCardAddedToHand;
         public event Action<Card, Player>? OnCardAddedToHandFromDiscardPile;
@@ -107,5 +135,7 @@ namespace ScaryTales.Abstractions
         public event Action<Item, Player>? OnItemRemovedFromPlayer;
         public event Action<Player>? OnAddPointsToPlayer;
         public event Action<string>? OnMessagePrinted;
+        public event Action<Player, bool>? OnHandsRevealed;
+        public event Action<Card, bool>? OnCardShowcased;
     }
 }
