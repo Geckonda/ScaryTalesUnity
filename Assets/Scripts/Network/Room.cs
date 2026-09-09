@@ -179,8 +179,13 @@ namespace Assets.Scripts.Network
             return JoinResult.Ok;
         }
 
-        /// <summary>Longest name a player may end up with, in characters.</summary>
-        private const int MaxNameLength = 16;
+        /// <summary>
+        /// Longest name a player may end up with, in characters. Держится
+        /// заодно и лимитом ввода в поле ника (<c>Character Limit</c> у
+        /// <c>NicknameField</c> в сцене) — но решает всё равно сервер:
+        /// в поле можно не набрать больше, а прислать по сети — сколько угодно.
+        /// </summary>
+        private const int MaxNameLength = 14;
 
         /// <summary>
         /// Turns what a player asked to be called into what this room will
@@ -197,6 +202,10 @@ namespace Assets.Scripts.Network
         /// <c>&gt;</c>: those labels are rendered by TextMeshPro, which parses
         /// markup. A player calling themselves <c>&lt;size=400&gt;Вася</c>
         /// would wreck the layout on everyone else's screen, not their own.</para>
+        ///
+        /// <para>Регистр приводится к одному виду: первая буква заглавная,
+        /// остальные строчные. Иначе за столом соседствуют «ВАСЯ», «вася» и
+        /// «вАсЯ», и капс тянет на себя внимание сильнее, чем чужой ход.</para>
         /// </summary>
         private string SanitizeName(string requested)
         {
@@ -229,7 +238,21 @@ namespace Assets.Scripts.Network
             if (name.Length == 0)
                 name = $"Player{_players.Count + 1}";
 
-            return MakeUnique(name);
+            return MakeUnique(Capitalize(name));
+        }
+
+        /// <summary>
+        /// Первая буква заглавная, остальные строчные.
+        ///
+        /// <para>Инвариантная культура, а не текущая: сервер может крутиться
+        /// где угодно, а в турецкой локали <c>ToLower('I')</c> даёт «ı» —
+        /// и один и тот же ник превращался бы в разный в зависимости от
+        /// машины. Кириллице инвариантная культура не мешает.</para>
+        /// </summary>
+        private static string Capitalize(string name)
+        {
+            if (name.Length == 0) return name;
+            return char.ToUpperInvariant(name[0]) + name.Substring(1).ToLowerInvariant();
         }
 
         /// <summary>
@@ -242,7 +265,15 @@ namespace Assets.Scripts.Network
             if (!IsNameTaken(name)) return name;
             for (int suffix = 2; suffix < 100; suffix++)
             {
-                var candidate = $"{name} ({suffix})";
+                // Подрезаем основу, а не готовую строку: обрезав результат
+                // целиком, мы бы откусили сам различитель и получили второго
+                // игрока с тем же именем — ровно то, от чего этот метод и есть.
+                var tail = $" ({suffix})";
+                var head = name.Length + tail.Length > MaxNameLength
+                    ? name.Substring(0, Math.Max(1, MaxNameLength - tail.Length)).TrimEnd()
+                    : name;
+
+                var candidate = head + tail;
                 if (!IsNameTaken(candidate)) return candidate;
             }
             // Unreachable at four seats; a seat id is at least unambiguous.
