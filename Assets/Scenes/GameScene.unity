@@ -11410,6 +11410,7 @@ MonoBehaviour:
   _endGameScoringUI: {fileID: 0}
   _cardPickPanel: {fileID: 0}
   _peekUI: {fileID: 0}
+  _taleTitleUI: {fileID: 0}
   GameBoardPanel: {fileID: 730480510}
   Deck: {fileID: 879811623}
   _endTurnButton: {fileID: 110360839}
