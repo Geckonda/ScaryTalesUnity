@@ -1,4 +1,4 @@
-﻿using ScaryTales;
+using ScaryTales;
 using ScaryTales.Enums;
 using System;
 using TMPro;
@@ -20,6 +20,25 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     public Card _card;
     private Image _background;
 
+    [Header("Лицо карты")]
+    [Tooltip("Контейнер со всем, что видно только у лицевой стороны.")]
+    [SerializeField] private GameObject _face;
+
+    [Tooltip("Картинка карты. Отдельный Image, а не корневой: корень занят рамкой и рубашкой.")]
+    [SerializeField] private Image _artImage;
+
+    [Header("Значки")]
+    [SerializeField] private Image _pointsIcon;
+    [SerializeField] private Image _typeIcon;
+    [SerializeField] private Image _countIcon;
+    [SerializeField] private GameObject _afterPlayBadge;
+    [SerializeField] private Image _afterPlayIcon;
+
+    [Header("Оформление")]
+    [SerializeField] private CardStyle _style;
+
+    [SerializeField] private Sprite _enemyBackgroundSprite;
+
     // Лицо карты грузится один раз на представление. Раньше Resources.Load
     // случался при каждом FaceUp, а теперь этот вызов приходится ровно на
     // середину разворота в полёте — обращение к диску дало бы рывок именно
@@ -27,7 +46,17 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     private Sprite _frontSprite;
     private bool _frontSpriteLoaded;
 
-    [SerializeField] private Sprite _enemyBackgroundSprite;
+    // Фон лицевой стороны берётся с самого префаба, а не из отдельного поля.
+    //
+    // Рубашка подменяет корневому Image и спрайт, и цвет (ей нужен чистый белый,
+    // иначе картинка уйдёт в тон фона), поэтому исходный вид надо где-то держать —
+    // после переворота обратно его больше неоткуда взять. Раньше для этого было
+    // сериализованное поле, и фон приходилось задавать дважды: на Image и в нём.
+    // Забыл второе — фон возвращался к старому в первый же FaceUp, причём только
+    // в игре, потому что в редакторе Image выглядел правильно.
+    private Sprite _frontFrameSprite;
+    private Color _frontFrameColor = Color.white;
+    private bool _frontLookCached;
 
     public bool IsFacedUp { get; private set; }
 
@@ -35,6 +64,8 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     {
         _card = card;
         _background = GetComponent<Image>();
+        CacheFrontLook();
+
         DisplayCard();
         SetHighlight(false); // По умолчанию рамка выключена
     }
@@ -46,11 +77,90 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         _cardScoreText.text = _card.Points == 0 ? "?" : _card.Points.ToString();
         _cardTypeText.text = _card.Type.GetDescription();
         _cardQuantityText.text = _card.CardCountInDeck.ToString();
+
+        ApplyStyle();
+    }
+
+    /// <summary>
+    /// Раскладывает по значкам то, что зависит от самой карты: иконку и цвет типа,
+    /// картинки ПО и количества, значок «куда уходит карта после розыгрыша».
+    ///
+    /// <para>Пока художник не нарисовал иконки, все поля стиля пустые — тогда мы просто
+    /// не трогаем картинки, и карта читается словом и числом, как читалась раньше.
+    /// Появился спрайт — достаточно положить его в <see cref="CardStyle"/>.</para>
+    /// </summary>
+    private void ApplyStyle()
+    {
+        if (_style == null) return;
+
+        SetIcon(_pointsIcon, _style.PointsIcon);
+        SetIcon(_countIcon, _style.CountIcon);
+
+        Sprite typeSprite = _style.GetTypeIcon(_card.Type);
+        bool showTypeIcon = _style.ShowTypeIcon && typeSprite != null;
+
+        if (_typeIcon != null)
+        {
+            // Тинт на иконку не идёт: Image умножает спрайт на цвет, и настоящий
+            // рисунок от этого только портится. Цвет типа остаётся для слова —
+            // то есть для случая, когда иконки для типа ещё нет.
+            _typeIcon.sprite = typeSprite;
+            _typeIcon.gameObject.SetActive(showTypeIcon);
+        }
+
+        // Иконка заменяет слово, а не дополняет его. Тип, у которого картинки пока
+        // нет, продолжает читаться словом — так набор иконок можно пополнять по одной,
+        // не оставляя карты без обозначения типа.
+        if (_cardTypeText != null)
+        {
+            _cardTypeText.color = _style.GetTypeTint(_card.Type);
+            _cardTypeText.gameObject.SetActive(!showTypeIcon);
+        }
+
+        if (_afterPlayBadge != null)
+            _afterPlayBadge.SetActive(_style.ShowAfterPlayBadge);
+
+        if (_afterPlayIcon != null)
+            SetIcon(_afterPlayIcon, _style.GetPositionIcon(_card.PositionAfterPlay));
+    }
+
+    private static void SetIcon(Image image, Sprite sprite)
+    {
+        if (image == null) return;
+        if (sprite == null)
+        {
+            image.gameObject.SetActive(false);
+            return;
+        }
+
+        image.sprite = sprite;
+        image.gameObject.SetActive(true);
+    }
+
+    /// <summary>
+    /// Запоминает, как выглядит корневой Image до того, как его накроет рубашка.
+    /// Зовётся из <see cref="Initialize"/>, то есть до первого FaceUp/FaceDown —
+    /// там на нём ещё стоит то, что задано в префабе.
+    /// </summary>
+    private void CacheFrontLook()
+    {
+        if (_frontLookCached || _background == null) return;
+
+        _frontFrameSprite = _background.sprite;
+        _frontFrameColor = _background.color;
+        _frontLookCached = true;
     }
 
     public void FaceUp()
     {
-        ChangeTextVisibility(true);
+        SetFaceVisible(true);
+
+        if (_background != null)
+        {
+            CacheFrontLook();
+            _background.color = _frontFrameColor;
+            _background.sprite = _frontFrameSprite;
+        }
 
         if (!_frontSpriteLoaded)
         {
@@ -67,18 +177,25 @@ public class CardView : MonoBehaviour, IPointerClickHandler
                                  "Карта покажется без лица.");
         }
 
-        _background.sprite = _frontSprite;
+        if (_artImage != null) _artImage.sprite = _frontSprite;
     }
+
     public void FaceDown()
     {
-        _background.color = new Color(1f, 1f, 1f, 1f); // Белый цвет с полной непрозрачностью
-        ChangeTextVisibility(false);
-        _background.sprite = _enemyBackgroundSprite;
+        SetFaceVisible(false);
+
+        if (_background != null)
+        {
+            _background.color = new Color(1f, 1f, 1f, 1f); // Белый цвет с полной непрозрачностью
+            _background.sprite = _enemyBackgroundSprite;
+        }
     }
+
     public void OnPointerClick(PointerEventData eventData)
     {
         OnCardClicked?.Invoke(_card);
     }
+
     /// <summary>
     /// Включает или выключает рамку
     /// </summary>
@@ -87,13 +204,17 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         if (_highlightFrame != null)
             _highlightFrame.gameObject.SetActive(isHighlighted);
     }
-    private void ChangeTextVisibility(bool isVisible)
+
+    /// <summary>
+    /// Показывает или прячет лицо карты целиком — одним контейнером.
+    ///
+    /// <para>Раньше здесь гасились пять текстов по отдельности, и каждое новое поле
+    /// нужно было не забыть сюда дописать: забыл — и оно светится поверх рубашки.
+    /// Один контейнер закрывает этот класс ошибок целиком.</para>
+    /// </summary>
+    private void SetFaceVisible(bool isVisible)
     {
         IsFacedUp = isVisible;
-        _cardNameText.gameObject.SetActive(isVisible);
-        _cardDescriptionText.gameObject.SetActive(isVisible);
-        _cardScoreText.gameObject.SetActive(isVisible);
-        _cardTypeText.gameObject.SetActive(isVisible);
-        _cardQuantityText.gameObject.SetActive(isVisible);
+        if (_face != null) _face.SetActive(isVisible);
     }
 }

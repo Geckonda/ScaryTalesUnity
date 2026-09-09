@@ -41,9 +41,12 @@ public class CardTableLayout : LayoutGroup
         foreach (var child in rectChildren)
         {
             var cardView = child.GetComponent<CardView>();
-            if (cardView == null) continue;
+            if (cardView == null || cardView._card == null) continue;
 
-            string name = cardView._cardNameText.text;
+            // По данным карты, а не по отрисованному заголовку: иначе стопки на столе
+            // зависят от того, что заголовок остаётся именно TMP-объектом, и любая
+            // перевёрстка лица карты рискует их сломать.
+            string name = cardView._card.Name;
             if (!cardGroups.ContainsKey(name))
                 cardGroups[name] = new List<RectTransform>();
 
