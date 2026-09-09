@@ -5578,7 +5578,7 @@ MonoBehaviour:
   _autoStartWhenFull: 0
   _maxRooms: 32
   _fixedRoomCode: 
-  _inGameRuleId: 1
+  _inGameRuleId: 0
   _finalRuleId: 2
   _autoStartDedicatedServer: 1
   _serverFlag: -server

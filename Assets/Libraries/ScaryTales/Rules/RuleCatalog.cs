@@ -1,6 +1,7 @@
 using Assets.Libraries.ScaryTales.Enums;
 using Assets.Libraries.ScaryTales.Rules.Templates.A;
 using Assets.Libraries.ScaryTales.Rules.Templates.B;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -23,8 +24,16 @@ namespace Assets.Libraries.ScaryTales.Rules
     /// </summary>
     public static class RuleCatalog
     {
+        /// <summary>
+        /// Не правило, а просьба выбрать случайное. Ноль занят под это
+        /// намеренно: настоящие id начинаются с единицы, и <see cref="Create"/>
+        /// на ноль и так вернул бы null.
+        /// </summary>
+        public const int RandomRuleId = 0;
+
         public const int A1Id = 1;
         public const int B2Id = 2;
+        public const int A2Id = 3;
 
         /// <summary>
         /// Builds a fresh rule instance with its <see cref="Rule.Id"/> set.
@@ -37,6 +46,7 @@ namespace Assets.Libraries.ScaryTales.Rules
             {
                 A1Id => new A1(),
                 B2Id => new B2(),
+                A2Id => new A2(),
                 _ => null,
             };
             if (rule != null) rule.Id = id;
@@ -55,6 +65,29 @@ namespace Assets.Libraries.ScaryTales.Rules
         public static int DefaultInGameRuleId => A1Id;
         public static int DefaultFinalRuleId => B2Id;
 
-        private static IEnumerable<int> AllIds => new[] { A1Id, B2Id };
+        private static IEnumerable<int> AllIds => new[] { A1Id, B2Id, A2Id };
+
+        /// <summary>
+        /// Случайное правило каждого вида на партию.
+        ///
+        /// <para>Выбирает <b>только сервер</b>, в <c>Room.StartGame</c>, и
+        /// рассылает выбранные id в <c>GameStartedEvent</c>. Дай выбирать
+        /// клиенту — и за одним столом оказались бы разные правила.</para>
+        ///
+        /// <para><paramref name="rng"/> передаётся снаружи, а не создаётся
+        /// здесь: два стола, стартовавшие в один тик, получили бы от
+        /// <c>new Random()</c> одинаковое зерно и одинаковые правила.</para>
+        /// </summary>
+        public static int RandomInGameRuleId(Random rng) => PickOrDefault(InGameRuleIds, DefaultInGameRuleId, rng);
+
+        /// <inheritdoc cref="RandomInGameRuleId"/>
+        public static int RandomFinalRuleId(Random rng) => PickOrDefault(FinalRuleIds, DefaultFinalRuleId, rng);
+
+        private static int PickOrDefault(IEnumerable<int> ids, int fallback, Random rng)
+        {
+            var pool = ids.ToList();
+            if (pool.Count == 0) return fallback;
+            return pool[rng.Next(pool.Count)];
+        }
     }
 }

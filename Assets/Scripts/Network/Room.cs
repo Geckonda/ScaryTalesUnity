@@ -43,6 +43,12 @@ namespace Assets.Scripts.Network
         private int _inGameRuleId;
         private int _finalRuleId;
 
+        // Один генератор на все комнаты. Свой на комнату брать нельзя:
+        // System.Random без явного зерна берёт его из времени, и два стола,
+        // стартовавшие в один тик, получили бы одинаковые правила. Обращения
+        // идут из главного цикла Mirror, то есть из одного потока.
+        private static readonly System.Random _ruleRng = new System.Random();
+
         // ---- Lobby ----
         private readonly List<Player> _players = new();
         // Reverse index: Mirror's connection id → seat id. Needed because a
@@ -595,6 +601,17 @@ namespace Assets.Scripts.Network
             // The server is the only authority on which rules are in play;
             // the ids go out in GameStartedEvent so clients rebuild the same
             // ones instead of hardcoding their own copy.
+            //
+            // Ноль означает «выбрать случайно» и разрешается здесь, до
+            // Create: жребий должен быть брошен ровно один раз на партию и
+            // осесть в поле, потому что этот же _inGameRuleId уходит потом в
+            // GameStartedEvent. Бросать его при каждом обращении значило бы
+            // разослать игрокам разные правила.
+            if (_inGameRuleId == RuleCatalog.RandomRuleId)
+                _inGameRuleId = RuleCatalog.RandomInGameRuleId(_ruleRng);
+            if (_finalRuleId == RuleCatalog.RandomRuleId)
+                _finalRuleId = RuleCatalog.RandomFinalRuleId(_ruleRng);
+
             var inGameRule = RuleCatalog.Create(_inGameRuleId);
             if (inGameRule == null)
             {

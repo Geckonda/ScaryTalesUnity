@@ -36,11 +36,11 @@ namespace Assets.Scripts.Network
         [SerializeField] private string _fixedRoomCode = "LOCALHOST";
 
         [Header("Rules in play")]
-        [Tooltip("Rule id from RuleCatalog used during the game. The server is the only place this is chosen; clients learn it from GameStartedEvent. A lobby picker would drive these two fields.")]
-        [SerializeField] private int _inGameRuleId = Assets.Libraries.ScaryTales.Rules.RuleCatalog.DefaultInGameRuleId;
+        [Tooltip("Rule id from RuleCatalog used during the game. 0 = pick at random for every game (the normal setting); a specific id pins that rule, which is what you want while testing one. The server is the only place this is chosen; clients learn it from GameStartedEvent.")]
+        [SerializeField] private int _inGameRuleId = Assets.Libraries.ScaryTales.Rules.RuleCatalog.RandomRuleId;
 
-        [Tooltip("Rule id from RuleCatalog scored at the end of the game.")]
-        [SerializeField] private int _finalRuleId = Assets.Libraries.ScaryTales.Rules.RuleCatalog.DefaultFinalRuleId;
+        [Tooltip("Rule id from RuleCatalog scored at the end of the game. 0 = pick at random for every game.")]
+        [SerializeField] private int _finalRuleId = Assets.Libraries.ScaryTales.Rules.RuleCatalog.RandomRuleId;
 
         [Header("Dedicated server")]
         [Tooltip("Start as a server with no player of its own when the process is headless or was launched with the server flag below.")]
