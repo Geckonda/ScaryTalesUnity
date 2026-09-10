@@ -2601,7 +2601,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   contentPanel: {fileID: 1010939747}
-  ShowBtn: {fileID: 838658144}
   CloseBtn: {fileID: 1307828190}
   IsEmptyText: {fileID: 1809086997}
 --- !u!1 &489656557
@@ -11292,10 +11291,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_UiScaleMode: 0
+  m_UiScaleMode: 1
   m_ReferencePixelsPerUnit: 100
   m_ScaleFactor: 1
-  m_ReferenceResolution: {x: 800, y: 450}
+  m_ReferenceResolution: {x: 1920, y: 1080}
   m_ScreenMatchMode: 1
   m_MatchWidthOrHeight: 0
   m_PhysicalUnit: 3
@@ -11410,6 +11409,7 @@ MonoBehaviour:
   _endGameScoringUI: {fileID: 0}
   _cardPickPanel: {fileID: 0}
   _peekUI: {fileID: 0}
+  _playerItemsUI: {fileID: 0}
   _taleTitleUI: {fileID: 0}
   GameBoardPanel: {fileID: 730480510}
   Deck: {fileID: 879811623}

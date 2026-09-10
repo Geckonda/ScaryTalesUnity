@@ -124,6 +124,7 @@ public class UnGameManager : MonoBehaviour
         CardViewService.Reset();
         ItemViewService.Reset();
         RuleEffectService.Reset();
+        CardPreviewService.Reset();
         // Left true by a game that ended while a card was selectable, which
         // made every card in the next game draggable from the start.
         DragAndDrop.SelectCard = false;
