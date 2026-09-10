@@ -21,7 +21,9 @@ namespace ScaryTales.CardEffects
             var deck = context.Deck;
 
             manager.DrawCard(player);
-            await Task.Delay(300);
+            // Две карты подряд без паузы сливаются в одно движение — игрок не
+            // видит, что взял именно две.
+            await context.Clock.Beat(300);
             manager.DrawCard(player);
 
             var merchants = board.GetCardsOnBoard("Купец");

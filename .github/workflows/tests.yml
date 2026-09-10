@@ -1,0 +1,24 @@
+name: tests
+
+# Тесты движка — обычный .NET-проект, поэтому лицензия Unity здесь не нужна
+# и прогон занимает секунды. Всё, что требует редактора (сцены, префабы, UI),
+# по-прежнему проверяется руками.
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      # Проект тянет исходники движка глобом прямо из Assets, так что этот шаг
+      # заодно проверяет, что библиотека компилируется без Unity.
+      - name: Тесты движка
+        run: dotnet test Tests/ScaryTales.Tests --nologo --verbosity minimal

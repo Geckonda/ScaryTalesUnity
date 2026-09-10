@@ -16,5 +16,11 @@ namespace ScaryTales.Abstractions
         public ItemManager ItemManager { get; }
         public IGameManager GameManager { get; }
         public IDecisionRouter Router { get; }
+
+        /// <summary>
+        /// Темп показа: пауза, чтобы игрок успел увидеть, что произошло.
+        /// Подробнее — в <see cref="IGameClock"/>.
+        /// </summary>
+        public IGameClock Clock { get; }
     }
 }

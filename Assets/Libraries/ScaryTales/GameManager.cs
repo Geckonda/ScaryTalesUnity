@@ -58,11 +58,11 @@ namespace ScaryTales
 
         public GameManager(IGameState gameState, IGameBoard gameBoard,
             List<Player> players, Deck deck, ItemManager items,
-            INotifier notifier, IDecisionRouter router)
+            INotifier notifier, IDecisionRouter router, IGameClock clock = null)
         {
             _context = new GameContext(
                 gameState, gameBoard,
-                    players, deck, items, this, router);
+                    players, deck, items, this, router, clock);
             _notifier = notifier;
         }
         public void PrintMessage(string message)
@@ -198,7 +198,10 @@ namespace ScaryTales
                 PrintMessage($"Игрок {player.Name} разыгрывает карту {card.Name}.");
                 PutCardOnBoard(card);
                 AddPointsToPlayer(player, card.Points);
-                await Task.Delay(1000);
+                // Пауза, чтобы игрок успел увидеть легшую карту и начисленные
+                // очки до того, как сработает эффект. Темп задаётся снаружи
+                // (см. IGameClock) — правила от него не зависят.
+                await _context.Clock.Beat(1000);
                 await ActivateInstantCardEffect(card);
                 if(card.PositionAfterPlay != CardPosition.OnGameBoard)
                 {

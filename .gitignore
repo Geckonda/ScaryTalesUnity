@@ -83,3 +83,11 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# --- Тесты движка (обычный .NET-проект, не Unity) ---
+# Выше *.csproj игнорируется целиком, потому что Unity их генерирует.
+# Этот — наш, написан руками, и должен лежать в репозитории.
+!Tests/**/*.csproj
+# /[Oo]bj/ выше привязан к корню и до Tests/ не достаёт.
+Tests/**/[Bb]in/
+Tests/**/[Oo]bj/

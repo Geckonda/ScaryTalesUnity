@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Тесты движка, живущие ВНЕ Assets/ — иначе Unity попыталась бы их собрать.
+
+    Исходники движка не копируются, а подтягиваются глобом прямо из Assets:
+    один и тот же файл компилируется и Unity, и здесь. Копия разошлась бы с
+    оригиналом в первый же день.
+
+    Собирается только чистая часть библиотеки. Единственное исключение —
+    EnvUnity/UnityNotifier.cs: ровно один файл во всей библиотеке, который
+    ссылается на UnityEngine.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+
+    <!--
+      Версия языка прибита к той, что понимает Unity 2022.3 (C# 9). Без этого
+      в файл движка легко просочится синтаксис, который здесь соберётся, а в
+      редакторе — нет, и узнаем мы об этом только при следующем открытии Unity.
+    -->
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+
+    <!--
+      Движок пишет `Card?` без #nullable enable. Unity это проглатывает,
+      здесь получился бы шум на каждую сборку.
+    -->
+    <NoWarn>$(NoWarn);CS8632</NoWarn>
+
+    <IsPackable>false</IsPackable>
+    <RootNamespace>ScaryTales.Tests</RootNamespace>
+    <AssemblyName>ScaryTales.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Assets\Libraries\ScaryTales\**\*.cs"
+             Exclude="..\..\Assets\Libraries\ScaryTales\Interaction Entities\EnvUnity\**\*.cs"
+             LinkBase="Engine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      NUnit 3, а не 4 и не xUnit: ровно та версия, что стоит в Unity Test
+      Framework. Если однажды захочется гонять эти же тесты в редакторе,
+      файлы линкуются в asmdef-сборку без единой правки.
+    -->
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+  </ItemGroup>
+
+</Project>

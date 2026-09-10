@@ -20,13 +20,17 @@ namespace ScaryTales
             _players = players.ToList();
         }
 
-        public GameManager Build(IDecisionRouter router)
+        /// <param name="clock">
+        /// Темп показа. По умолчанию — настоящие паузы (см. <see cref="IGameClock"/>);
+        /// прогон без зрителей передаёт <see cref="InstantGameClock"/>.
+        /// </param>
+        public GameManager Build(IDecisionRouter router, IGameClock clock = null)
         {
             var deck = new Deck(MakeCardTemplates());
             var items = new ItemManager(MakeItemTemplates());
             var players = new List<Player>(_players);
             var gameState = new GameState(players);
-            return new GameManager(gameState, _gameBoard, players, deck, items, _notifier, router);
+            return new GameManager(gameState, _gameBoard, players, deck, items, _notifier, router, clock);
         }
 
         // Static so client-side ClientGameView can build the same Card

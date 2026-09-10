@@ -49,6 +49,11 @@ namespace Assets.Scripts.Network
         public IGameManager GameManager => throw Unavailable(nameof(GameManager));
         public IDecisionRouter Router => throw Unavailable(nameof(Router));
 
+        // Часы — темп показа партии, а проверка доступности правила ничего не
+        // показывает и ничего не ждёт. По той же причине, что и всё выше:
+        // обращение сюда означало бы ошибку в логике, и пусть она будет громкой.
+        public IGameClock Clock => throw Unavailable(nameof(Clock));
+
         private static NotSupportedException Unavailable(string member) =>
             new NotSupportedException(
                 $"ClientRuleContext.{member}: на клиенте этого нет. " +

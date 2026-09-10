@@ -17,6 +17,7 @@ namespace ScaryTales
         public ItemManager ItemManager { get; private set; }
         public IGameManager GameManager { get; private set; }
         public IDecisionRouter Router { get; private set; }
+        public IGameClock Clock { get; private set; }
 
         public GameContext(IGameState gameState,
             IGameBoard gameBoard,
@@ -24,7 +25,8 @@ namespace ScaryTales
             Deck deck,
             ItemManager itemManager,
             IGameManager gameManager,
-            IDecisionRouter router)
+            IDecisionRouter router,
+            IGameClock clock = null)
         {
             GameState = gameState;
             GameBoard = gameBoard;
@@ -33,6 +35,9 @@ namespace ScaryTales
             ItemManager = itemManager;
             GameManager = gameManager;
             Router = router;
+            // Умолчание — настоящая пауза: партия с живыми игроками не должна
+            // зависеть от того, что кто-то не забыл передать часы.
+            Clock = clock ?? new RealGameClock();
         }
     }
 }

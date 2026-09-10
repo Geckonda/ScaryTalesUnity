@@ -7,6 +7,7 @@ using ScaryTales;
 using ScaryTales.Abstractions;
 using ScaryTales.Enums;
 using ScaryTales.Interaction_Entities.EnvUnity;
+using ScaryTales.Lobby;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -213,81 +214,12 @@ namespace Assets.Scripts.Network
         /// остальные строчные. Иначе за столом соседствуют «ВАСЯ», «вася» и
         /// «вАсЯ», и капс тянет на себя внимание сильнее, чем чужой ход.</para>
         /// </summary>
-        private string SanitizeName(string requested)
-        {
-            var cleaned = new StringBuilder(MaxNameLength);
-            bool lastWasSpace = false;
-
-            foreach (var c in requested ?? string.Empty)
-            {
-                // Rich-text delimiters, control characters and newlines all go:
-                // the first would let one player restyle everyone's UI, the
-                // rest would break single-line labels.
-                if (c == '<' || c == '>' || char.IsControl(c)) continue;
-
-                if (char.IsWhiteSpace(c))
-                {
-                    // Collapse runs, and never start with a space.
-                    if (lastWasSpace || cleaned.Length == 0) continue;
-                    lastWasSpace = true;
-                    cleaned.Append(' ');
-                }
-                else
-                {
-                    lastWasSpace = false;
-                    cleaned.Append(c);
-                }
-                if (cleaned.Length >= MaxNameLength) break;
-            }
-
-            var name = cleaned.ToString().TrimEnd();
-            if (name.Length == 0)
-                name = $"Player{_players.Count + 1}";
-
-            return MakeUnique(Capitalize(name));
-        }
-
-        /// <summary>
-        /// Первая буква заглавная, остальные строчные.
-        ///
-        /// <para>Инвариантная культура, а не текущая: сервер может крутиться
-        /// где угодно, а в турецкой локали <c>ToLower('I')</c> даёт «ı» —
-        /// и один и тот же ник превращался бы в разный в зависимости от
-        /// машины. Кириллице инвариантная культура не мешает.</para>
-        /// </summary>
-        private static string Capitalize(string name)
-        {
-            if (name.Length == 0) return name;
-            return char.ToUpperInvariant(name[0]) + name.Substring(1).ToLowerInvariant();
-        }
-
-        /// <summary>
-        /// Two people called "Саша" at one table is a worse experience than
-        /// one of them being "Саша (2)". Compared case-insensitively, because
-        /// "саша" and "Саша" are the same problem.
-        /// </summary>
-        private string MakeUnique(string name)
-        {
-            if (!IsNameTaken(name)) return name;
-            for (int suffix = 2; suffix < 100; suffix++)
-            {
-                // Подрезаем основу, а не готовую строку: обрезав результат
-                // целиком, мы бы откусили сам различитель и получили второго
-                // игрока с тем же именем — ровно то, от чего этот метод и есть.
-                var tail = $" ({suffix})";
-                var head = name.Length + tail.Length > MaxNameLength
-                    ? name.Substring(0, Math.Max(1, MaxNameLength - tail.Length)).TrimEnd()
-                    : name;
-
-                var candidate = head + tail;
-                if (!IsNameTaken(candidate)) return candidate;
-            }
-            // Unreachable at four seats; a seat id is at least unambiguous.
-            return $"{name} #{_nextSeatId}";
-        }
-
-        private bool IsNameTaken(string name) =>
-            _players.Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        private string SanitizeName(string requested) =>
+            NameSanitizer.Sanitize(
+                requested,
+                _players.Select(p => p.Name),
+                _players.Count + 1,
+                MaxNameLength);
 
         public bool HasConnection(int connectionId) => _seatByConnection.ContainsKey(connectionId);
 
@@ -549,9 +481,7 @@ namespace Assets.Scripts.Network
         {
             if (_chairBySeat.Count == 0) return;
 
-            var ordered = _players
-                .OrderBy(p => _chairBySeat.TryGetValue(p.Id, out int chair) ? chair : int.MaxValue)
-                .ToList();
+            var ordered = SeatOrder.Arrange(_players, _chairBySeat);
 
             _players.Clear();
             _players.AddRange(ordered);
@@ -838,17 +768,8 @@ namespace Assets.Scripts.Network
 
                 _gameOver = true;
 
-                // Побеждают все, у кого счёт наибольший. Тайбрейкера в правилах
-                // нет, а прежний OrderByDescending().First() тихо отдавал победу
-                // тому, кто раньше сел за стол: сортировка устойчивая, так что
-                // при равенстве первым оставался игрок с меньшим номером места.
-                // На экране это выглядело как случайный выбор.
-                int best = ctx.Players.Count == 0 ? 0 : ctx.Players.Max(p => p.Score);
-                int[] winnerIds = ctx.Players
-                    .Where(p => p.Score == best)
-                    .OrderBy(p => p.Id)
-                    .Select(p => p.Id)
-                    .ToArray();
+                // Побеждают все, у кого счёт наибольший (см. Outcome).
+                int[] winnerIds = Outcome.ComputeWinners(ctx.Players);
 
                 Channel.SendToRoom(new GameEndedEvent
                 {

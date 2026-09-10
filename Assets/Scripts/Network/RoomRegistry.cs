@@ -1,6 +1,6 @@
+using ScaryTales.Lobby;
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace Assets.Scripts.Network
 {
@@ -27,63 +27,17 @@ namespace Assets.Scripts.Network
 
         // ---- Codes ----
 
-        /// <summary>
-        /// Letters only, and missing I, L and O.
-        ///
-        /// Letters only because the codes are meant to be read aloud to a
-        /// friend, and mixing digits in brings the whole S/5, Z/2, B/8 family
-        /// of mishearings with it. I, L and O are dropped because they are the
-        /// ones people mistype as 1 and 0 even when reading from a screen.
-        /// What is left is 23 unambiguous characters.
-        /// </summary>
-        private const string Alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ";
-        private const int CodeLength = 4; // 23^4 ≈ 280k — ample for one server
-
+        // Алфавит, длина кода и правила приведения живут в
+        // ScaryTales.Lobby.RoomCode: это решения про то, как один человек
+        // диктует код другому, и проверять их надо без поднятого сервера.
+        // Здесь остаётся только то, что знает про живые комнаты.
         private readonly Random _random = new();
 
-        /// <summary>
-        /// Picks a code no live room is using. Retries on collision, then
-        /// gives up rather than looping forever — a server that cannot find a
-        /// free code in this many tries is holding an implausible number of
-        /// rooms, and failing loudly beats hanging.
-        /// </summary>
-        public string AllocateCode()
-        {
-            const int maxAttempts = 100;
-            var buffer = new StringBuilder(CodeLength);
-            for (int attempt = 0; attempt < maxAttempts; attempt++)
-            {
-                buffer.Clear();
-                for (int i = 0; i < CodeLength; i++)
-                    buffer.Append(Alphabet[_random.Next(Alphabet.Length)]);
+        /// <summary>Подбирает код, которым не занята ни одна живая комната.</summary>
+        public string AllocateCode() => RoomCode.Allocate(_byCode.ContainsKey, _random);
 
-                var candidate = buffer.ToString();
-                if (!_byCode.ContainsKey(candidate)) return candidate;
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// Turns what a player typed into something comparable with a stored
-        /// code: upper case, with the spaces and dashes people add when
-        /// reading a code out loud removed.
-        ///
-        /// Characters outside the alphabet are deliberately *left in* rather
-        /// than stripped — a code containing them simply won't match, and
-        /// "unknown code" is a truer answer than silently deleting what the
-        /// player typed and matching some other room.
-        /// </summary>
-        public static string Normalize(string raw)
-        {
-            if (string.IsNullOrEmpty(raw)) return string.Empty;
-            var buffer = new StringBuilder(raw.Length);
-            foreach (var c in raw)
-            {
-                if (char.IsWhiteSpace(c) || c == '-' || c == '_') continue;
-                buffer.Append(char.ToUpperInvariant(c));
-            }
-            return buffer.ToString();
-        }
+        /// <inheritdoc cref="RoomCode.Normalize"/>
+        public static string Normalize(string raw) => RoomCode.Normalize(raw);
 
         // ---- Rooms ----
 
