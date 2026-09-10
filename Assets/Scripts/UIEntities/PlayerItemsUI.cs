@@ -42,12 +42,12 @@ namespace Assets.Scripts.UIEntities
         [SerializeField] private float _localGap = 6f;
 
         [Header("Сумка соперника (под его подписями)")]
-        [Tooltip("Полоса намеренно низкая: при двух игроках под очками соперника " +
-                 "остаётся 28 px до верха колоды, и это самый тесный случай из трёх.")]
-        [SerializeField] private Vector2 _opponentSlotSize = new Vector2(32f, 24f);
-        [SerializeField] private float _opponentIconSize = 20f;
-        [SerializeField] private float _opponentFontSize = 12f;
-        [SerializeField] private float _opponentGap = 3f;
+        [Tooltip("Самый тесный случай — соперники за общим верхом: под их подписями " +
+                 "до карт остаётся 53 px. Единственный соперник стоит просторнее, сбоку.")]
+        [SerializeField] private Vector2 _opponentSlotSize = new Vector2(38f, 34f);
+        [SerializeField] private float _opponentIconSize = 26f;
+        [SerializeField] private float _opponentFontSize = 14f;
+        [SerializeField] private float _opponentGap = 8f;
 
         [Tooltip("Запасное смещение от центра места — только если подписей у места нет вовсе.")]
         [SerializeField] private Vector2 _fallbackOffset = new Vector2(0f, 11f);
@@ -152,7 +152,7 @@ namespace Assets.Scripts.UIEntities
 
             Vector2 slotSize = isLocal ? _localSlotSize : _opponentSlotSize;
             Vector2 panelSize = new Vector2(slotSize.x * SlotOrder.Length, slotSize.y);
-            Vector2 offset = PlaceUnderLabels(seat, panelSize, isLocal ? _localGap : _opponentGap);
+            Vector2 offset = PlaceUnderLabels(seat, panelSize, isLocal ? _localGap : _opponentGap, isLocal);
 
             var panel = new GameObject($"Items ({player.Name})", typeof(RectTransform));
             var panelRect = (RectTransform)panel.transform;
@@ -197,7 +197,7 @@ namespace Assets.Scripts.UIEntities
         /// приходится на промежуток между ником и очками, и полоса там висела
         /// бы сама по себе, а не под чьим-то именем.</para>
         /// </summary>
-        private Vector2 PlaceUnderLabels(Seat seat, Vector2 panelSize, float gap)
+        private Vector2 PlaceUnderLabels(Seat seat, Vector2 panelSize, float gap, bool isLocal)
         {
             var label = seat.NameText != null ? seat.NameText : seat.ScoreText;
             if (label == null) return _fallbackOffset;
@@ -205,11 +205,48 @@ namespace Assets.Scripts.UIEntities
             var nameRect = seat.NameText != null ? seat.NameText.rectTransform : null;
             var scoreRect = seat.ScoreText != null ? seat.ScoreText.rectTransform : null;
 
+            if (!isLocal && IsStacked(nameRect, scoreRect))
+                return BesideLabel(nameRect, panelSize, gap);
+
             float bottom = float.MaxValue;
             if (nameRect != null) bottom = Mathf.Min(bottom, BottomOf(nameRect));
             if (scoreRect != null) bottom = Mathf.Min(bottom, BottomOf(scoreRect));
 
             return new Vector2(AnchorX(label, panelSize.x), bottom - gap - panelSize.y / 2f);
+        }
+
+        /// <summary>
+        /// Стоят ли подписи места столбиком, а не в строку.
+        ///
+        /// <para>Различает две раскладки, которые задаёт <c>SeatLayout</c>:
+        /// у соперников за общим верхом ник и очки делят строку по половинам
+        /// места, а у единственного соперника (и у себя) они уезжают столбиком
+        /// в боковой жёлоб.</para>
+        /// </summary>
+        private static bool IsStacked(RectTransform nameRect, RectTransform scoreRect)
+        {
+            if (nameRect == null || scoreRect == null) return false;
+
+            float apart = Mathf.Abs(nameRect.anchoredPosition.y - scoreRect.anchoredPosition.y);
+            return apart > nameRect.sizeDelta.y / 2f;
+        }
+
+        /// <summary>
+        /// Полоса справа от ника, на его строке.
+        ///
+        /// <para>Так ложится сумка единственного соперника. Под его подписями
+        /// места нет: жёлоб зажат между верхом экрана и колодой, там остаётся
+        /// 28 px, и полоса вставала в пикселе от колоды — далеко от имени и
+        /// вплотную к чужому предмету. А справа от подписей пусто на 570×95:
+        /// его карты кончаются ниже, веер — правее.</para>
+        ///
+        /// <para>У себя так не делается намеренно: внизу слева места вдоволь,
+        /// и сумка под очками читается как своя строка, а не как довесок.</para>
+        /// </summary>
+        private static Vector2 BesideLabel(RectTransform nameRect, Vector2 panelSize, float gap)
+        {
+            float right = nameRect.anchoredPosition.x + nameRect.sizeDelta.x / 2f;
+            return new Vector2(right + gap + panelSize.x / 2f, nameRect.anchoredPosition.y);
         }
 
         /// <summary>
