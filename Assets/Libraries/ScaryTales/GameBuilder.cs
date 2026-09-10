@@ -92,6 +92,7 @@ namespace ScaryTales
                 // перенумеровывает всё, что ниже.
                 new GypsyCard(),
                 new SecretHelperCard(),
+                new WitchCard(),
             };
         }
         public static List<Item> MakeItemTemplates()

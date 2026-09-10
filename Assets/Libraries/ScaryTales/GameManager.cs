@@ -118,11 +118,69 @@ namespace ScaryTales
         /// <param name="player"></param>
         public void DrawCard(Player player)
         {
+            // Запрет спрашивается здесь, а не в цикле хода: через этот метод
+            // карты из колоды попадают в руку ВЕЗДЕ — и обязательным взятием
+            // хода, и эффектами карт (Купец, Заколдованный лес), и правилами
+            // партии. Проверяй мы в одном цикле хода, Ведьма запрещала бы
+            // только обязательное взятие, а Купец обходил бы её.
+            if (IsDeckDrawBlockedFor(player))
+            {
+                PrintMessage($"Игрок {player.Name} не может брать карты из колоды.");
+                return;
+            }
+
             var cardFromDeck = TryDrawCardFromDeck();
             if (cardFromDeck != null)
             {
                 PutCardInPlayerHand(cardFromDeck, player);
             }
+        }
+
+        /// <summary>
+        /// Запрещает ли игроку брать из колоды хоть одна его карта на столе.
+        /// </summary>
+        private bool IsDeckDrawBlockedFor(Player player)
+        {
+            if (player == null) return false;
+
+            return _context.GameBoard.GetCardsOnBoard(player).Any(c => c.BlocksDeckDraw);
+        }
+
+        /// <summary>
+        /// Правила начала хода, которые накладывают карты перед игроком:
+        /// сначала уходят те, чей срок вышел, потом оставшиеся выдают право на
+        /// дополнительные розыгрыши.
+        ///
+        /// <para>Порядок важен. Сброс идёт первым, потому что уходящая карта
+        /// не должна ни дарить розыгрыш на прощание, ни мешать обязательному
+        /// взятию — Ведьма уходит ровно тогда, когда брать снова можно и
+        /// нужно.</para>
+        ///
+        /// <para>Право на розыгрыши выдаётся заново каждый ход: оно живёт один
+        /// ход и гасится <c>ClearExtraPlays</c> в начале следующего. Здесь —
+        /// для карт, которые уже лежали на столе к началу хода. Ту, что
+        /// выложили прямо сейчас, обслуживает <see cref="PlayCard"/>: своё
+        /// право она даёт сразу, не дожидаясь следующего хода.</para>
+        /// </summary>
+        public void ApplyStartOfTurnBoardRules(Player player)
+        {
+            if (player == null) return;
+
+            var board = _context.GameBoard;
+
+            // ToList: сброс меняет коллекцию, по которой идём.
+            foreach (var card in board.GetCardsOnBoard(player).ToList())
+            {
+                if (!card.ShouldDiscardAtTurnStart(_context)) continue;
+
+                PrintMessage($"Карта {card.Name} уходит в сброс: её условие выполнено.");
+                board.RemoveCardFromBoard(card);
+                PutCardToDiscardPile(card);
+            }
+
+            foreach (var card in board.GetCardsOnBoard(player))
+                for (int i = 0; i < card.ExtraPlaysPerTurn; i++)
+                    GrantExtraPlay();
         }
 
         public async Task PlayCard(Card card)
@@ -147,6 +205,21 @@ namespace ScaryTales
                     board.RemoveCardFromBoard(card);
                     MoveCardToItsPosition(card);
                 }
+
+                // Постоянное правило начинает действовать сразу, в тот же ход,
+                // когда карту выложили: «можете играть 1 дополнительную карту
+                // в свой ход» — а ход, в который её выложили, тоже свой.
+                //
+                // На этом ходу право выдаётся здесь, на следующих — в начале
+                // хода (ApplyStartOfTurnBoardRules). Задвоения нет: в начале
+                // ЭТОГО хода карты на столе ещё не было.
+                //
+                // Проверка «осталась на столе» не формальность: карта, которая
+                // после розыгрыша уходит в сброс, в игре не остаётся, и
+                // постоянных правил у неё быть не может.
+                if (card.ExtraPlaysPerTurn > 0 && board.GetCardsOnBoard(player).Contains(card))
+                    for (int i = 0; i < card.ExtraPlaysPerTurn; i++)
+                        GrantExtraPlay();
             }
         }
         /// <summary>

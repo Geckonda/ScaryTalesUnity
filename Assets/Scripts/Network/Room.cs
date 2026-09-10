@@ -717,14 +717,6 @@ namespace Assets.Scripts.Network
                         IsNight = ctx.GameState.IsNight,
                     });
 
-                    gm.DrawCard(current);
-
-                    if (current.Hand.Count == 0)
-                    {
-                        gm.EndGame();
-                        break;
-                    }
-
                     _playsThisTurn = 0;
                     _ruleUsedThisTurn = false;
                     // Право на дополнительную карту гасим в начале КАЖДОГО
@@ -734,6 +726,25 @@ namespace Assets.Scripts.Network
                     // вышедший посреди Тайной помощницы, дарил бы лишнюю карту
                     // тому, кто ходит следующим.
                     ctx.GameState.ClearExtraPlays();
+
+                    // Карты перед игроком объявляют свои правила ДО взятия и
+                    // ПОСЛЕ гашения прав — иначе выданный ими розыгрыш тут же
+                    // и стёрся бы.
+                    //
+                    // До взятия — потому что Ведьма запрещает брать из колоды и
+                    // здесь же уходит в сброс, когда рука или колода опустела.
+                    // Сделай мы это после, ушедшая ведьма всё равно успела бы
+                    // запретить взятие, рука осталась бы пустой — и следующая
+                    // строка объявила бы конец партии вместо продолжения.
+                    gm.ApplyStartOfTurnBoardRules(current);
+
+                    gm.DrawCard(current);
+
+                    if (current.Hand.Count == 0)
+                    {
+                        gm.EndGame();
+                        break;
+                    }
 
                     try
                     {

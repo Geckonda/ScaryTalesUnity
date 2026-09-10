@@ -33,6 +33,13 @@ namespace ScaryTales.Abstractions
         /// Активирует все постоянные эффекты активных карт игрока
         /// </summary>
         public Task ActivateAllPlayerPermanentCardEffects(Player player);
+
+        /// <summary>
+        /// Правила начала хода от карт, лежащих перед игроком: сброс тех, чьё
+        /// условие выполнено, и выдача права на дополнительные розыгрыши.
+        /// Зовётся до обязательного взятия — см. <c>Card.ShouldDiscardAtTurnStart</c>.
+        /// </summary>
+        public void ApplyStartOfTurnBoardRules(Player player);
         /// <summary>
         /// Активируется мгновенный эффект карты
         /// </summary>
