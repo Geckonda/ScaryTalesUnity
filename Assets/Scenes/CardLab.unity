@@ -480,14 +480,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _cardPrefab: {fileID: 9198207456504143769, guid: 6cd4169ebe23e2648a9e4566acd0b915, type: 3}
-  _onlyCard: 
-  _columns: 7
+  _onlyCard:
+  _arrangement: 0
+  _rows: 3
   _spacing: {x: 180, y: 300}
-  _origin: {x: 120, y: -60}
-  _scales:
-  - 1
-  - 1.3
-  - 2.3
+  _margin: 40
+  _previewCard:
+  _previewScale: 2.3
   _showHandCell: 1
   _handCellSize: {x: 100, y: 150}
   _handCellScale: 1.3
@@ -495,7 +494,6 @@ MonoBehaviour:
   _highlight: 0
   _stressTest: 0
   _interactive: 0
-  _persistInstances: 0
 --- !u!1 &500000
 GameObject:
   m_ObjectHideFlags: 0

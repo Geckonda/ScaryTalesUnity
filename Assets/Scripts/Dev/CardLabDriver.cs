@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.UI;
 #if UNITY_EDITOR
 using UnityEditor;
+using UnityEditor.SceneManagement;
 #endif
 
 /// <summary>
@@ -22,8 +23,9 @@ using UnityEditor;
 /// прилетает во всю галерею, и обратно — подвинул рект на одной карте, «Overrides ▸ Apply
 /// All», и остальные девятнадцать перестроились. Это и есть «прямой эфир».</para>
 ///
-/// <para>Инстансы помечены <see cref="HideFlags.DontSave"/>: галерея не попадает в
-/// CardLab.unity и не даёт километровый диф на каждую перестройку.</para>
+/// <para>Расставляет карты либо драйвер, либо ты — см. <see cref="Arrangement"/>.
+/// В режиме сетки карты временные и в файл сцены не попадают; в ручном они обычные
+/// объекты сцены, и перестройка обновляет им данные, не трогая положение.</para>
 /// </summary>
 [ExecuteAlways]
 public class CardLabDriver : MonoBehaviour
@@ -35,17 +37,31 @@ public class CardLabDriver : MonoBehaviour
     [Tooltip("Показать только карты, в названии которых есть эта строка. Пусто — все.")]
     [SerializeField] private string _onlyCard = "";
 
-    [Header("Сетка")]
-    [SerializeField] private int _columns = 7;
+    [Header("Раскладка")]
+    [Tooltip("Grid — расставляет драйвер, карты временные и живут только в редакторе. " +
+             "Manual — расставляешь ты, карты сохраняются в сцене, и перестройка их не двигает.")]
+    [SerializeField] private Arrangement _arrangement = Arrangement.Grid;
+
+    [Header("Сетка (только для Grid)")]
+    [Tooltip("Сколько рядов. Колонки считаются сами: столько, чтобы влезла вся колода.")]
+    [SerializeField] private int _rows = 3;
+
+    [Tooltip("Шаг сетки. Карта 150x250, так что 180x300 — это по 30 и 50 пикселей зазора.")]
     [SerializeField] private Vector2 _spacing = new Vector2(180f, 300f);
-    [SerializeField] private Vector2 _origin = new Vector2(120f, -60f);
 
-    [Header("Эталонный ряд")]
-    [Tooltip("Масштабы, в которых карта реально встречается в игре: стол, рука, ховер-превью.")]
-    [SerializeField] private float[] _scales = { 1f, 1.3f, 2.3f };
+    [Tooltip("Отступ от краёв холста.")]
+    [SerializeField] private float _margin = 40f;
 
-    [Tooltip("Показать карту так, как её реально видно в руке местного игрока: " +
-             "HandLayoutGroup принудительно ужимает рект до cellSize, а не просто масштабирует.")]
+    [Header("Правая колонка (только для Grid)")]
+    [Tooltip("Название карты для превью. Пусто — первая из колоды.")]
+    [SerializeField] private string _previewCard = "";
+
+    [Tooltip("Масштаб превью при наведении. Столько ставит HoverCardScaler.")]
+    [SerializeField] private float _previewScale = 2.3f;
+
+    [Tooltip("Показать под превью карту такой, какой её видно в руке местного игрока: " +
+             "HandLayoutGroup принудительно ужимает рект до cellSize, а не просто масштабирует, " +
+             "и это единственное место, где лицо верстается в чужом ректе.")]
     [SerializeField] private bool _showHandCell = true;
 
     [Tooltip("HandLayoutGroup.cellSize из сцены. Карта в руке живёт именно в этом ректе.")]
@@ -64,12 +80,31 @@ public class CardLabDriver : MonoBehaviour
              "В лаборатории им не на чем работать, поэтому по умолчанию выключены.")]
     [SerializeField] private bool _interactive;
 
-    [Tooltip("Сохранять галерею в файл сцены. По умолчанию нет: иначе каждая перестройка " +
-             "даёт километровый диф в CardLab.unity.")]
-    [SerializeField] private bool _persistInstances;
+    /// <summary>
+    /// Кто расставляет карты.
+    ///
+    /// <para><see cref="Grid"/> — драйвер. Карты помечены
+    /// <see cref="HideFlags.DontSave"/>, то есть в файл сцены не попадают и
+    /// не дают диф на каждую перестройку. Расплата: подвинутая руками карта
+    /// живёт до ближайшей перестройки, а та случается сама — при сохранении
+    /// префаба, при импорте арта, при любой правке поля в инспекторе.</para>
+    ///
+    /// <para><see cref="Manual"/> — ты. Карты создаются один раз, сохраняются
+    /// в сцене как обычные объекты и переживают перестройку: она обновляет им
+    /// данные и состояние, но <b>не трогает трансформ</b>. Ставь этот режим,
+    /// когда собираешь свою композицию.</para>
+    /// </summary>
+    public enum Arrangement
+    {
+        Grid,
+        Manual,
+    }
 
     private static readonly Vector2 CardSize = new Vector2(150f, 250f);
     private const float LabelHeight = 22f;
+
+    /// <summary>Префикс в имени объекта. По нему ручной режим узнаёт, что за карта.</summary>
+    private const string CardNamePrefix = "Card — ";
 
     private bool _rebuildQueued;
 
@@ -132,7 +167,9 @@ public class CardLabDriver : MonoBehaviour
     [ContextMenu("Rebuild")]
     public void Rebuild()
     {
-        Clear();
+        // В ручном режиме чистить нельзя: композиция — это и есть результат
+        // работы, ради которого сюда пришли.
+        if (_arrangement == Arrangement.Grid) Clear();
 
         GameObject prefab = _cardPrefab != null
             ? _cardPrefab
@@ -165,9 +202,121 @@ public class CardLabDriver : MonoBehaviour
             return;
         }
 
-        float y = BuildScaleRow(prefab, cards[0], longest);
-        BuildGallery(prefab, cards, longest, y);
+        if (_arrangement == Arrangement.Manual)
+        {
+            RefreshInPlace(prefab, cards, longest);
+            ReportMissingArt(cards);
+            return;
+        }
+
+        BuildLayout(prefab, cards, longest);
         ReportMissingArt(cards);
+    }
+
+    /// <summary>
+    /// Раскладка по умолчанию: вся колода рядами слева в натуральную величину,
+    /// справа — одна карта так, как её видно при наведении.
+    ///
+    /// <para>Раньше эталонный ряд стоял сверху во всю ширину, и карта в 2.3×
+    /// съедала больше половины высоты холста — колода уезжала за нижний край,
+    /// и её приходилось либо листать, либо ужимать до нечитаемого. Превью
+    /// сбоку убирает конфликт: обе части помещаются в 1920×1080 целиком и без
+    /// уменьшения.</para>
+    /// </summary>
+    private void BuildLayout(GameObject prefab, List<Card> cards, string longest)
+    {
+        float canvasWidth = 1920f, canvasHeight = 1080f;
+        var canvas = GetComponentInParent<Canvas>();
+        if (canvas != null)
+        {
+            var r = ((RectTransform)canvas.transform).rect;
+            if (r.width > 1f && r.height > 1f) { canvasWidth = r.width; canvasHeight = r.height; }
+        }
+
+        float sideWidth = CardSize.x * Mathf.Max(1f, _previewScale);
+        float sideX = canvasWidth - _margin - sideWidth;
+
+        BuildSideColumn(prefab, cards, longest, sideX, sideWidth);
+        BuildGallery(prefab, cards, longest, sideX - _margin, canvasHeight);
+    }
+
+    /// <summary>
+    /// Ручной режим: карты уже расставлены человеком, и трансформ — это его
+    /// работа. Перестройка обновляет данные и состояние прямо на месте.
+    ///
+    /// <para>Обновлять всё равно нужно: сохранение префаба рассылает свои
+    /// значения по инстансам и затирает то, что скрипт проставил в те же поля,
+    /// — арт карты в первую очередь. Именно поэтому «ничего не делать» тут не
+    /// подходит, а «собрать заново» ломает композицию.</para>
+    ///
+    /// <para>Карт ещё нет — раскладываем сетку один раз, чтобы было что
+    /// двигать. Дальше расстановка твоя.</para>
+    /// </summary>
+    private void RefreshInPlace(GameObject prefab, List<Card> cards, string longest)
+    {
+        var existing = GetComponentsInChildren<CardView>(true);
+
+        if (existing.Length == 0)
+        {
+            BuildLayout(prefab, cards, longest);
+            Debug.Log("[CardLab] Ручной режим: карты разложены первый раз. " +
+                      "Дальше двигай их как хочешь — перестройка больше их не тронет, " +
+                      "но правки префаба будут прилетать в них по-прежнему.");
+            return;
+        }
+
+        int matched = 0;
+        foreach (var view in existing)
+        {
+            // Карты, доставшиеся от режима Grid, помечены DontSave и молча не
+            // попали бы в файл сцены: расстановка выглядела бы сохранённой и
+            // исчезала при следующем открытии. Снимаем метку здесь, а не при
+            // переключении режима, потому что попасть сюда можно и иначе —
+            // например продублировав карту в Hierarchy.
+            if (view.gameObject.hideFlags != HideFlags.None)
+            {
+                view.gameObject.hideFlags = HideFlags.None;
+#if UNITY_EDITOR
+                EditorUtility.SetDirty(view.gameObject);
+                EditorSceneManager.MarkSceneDirty(gameObject.scene);
+#endif
+            }
+
+            var card = MatchCardByObjectName(view.gameObject.name, cards);
+            if (card == null) continue;
+
+            ApplyCardState(view, card, longest);
+            matched++;
+        }
+
+        if (matched < existing.Length)
+            Debug.LogWarning($"[CardLab] {existing.Length - matched} карт(ы) не опознались по имени объекта. " +
+                             $"Ручной режим узнаёт карту по имени вида «{CardNamePrefix}Дракон» — " +
+                             "переименованный объект обновить нечем.");
+    }
+
+    /// <summary>
+    /// Какая карта лежит в объекте с таким именем.
+    ///
+    /// <para>Имя объекта — единственное, что переживает перезагрузку домена:
+    /// <c>CardView._card</c> это обычный C#-класс, Unity его не сериализует, и
+    /// после перекомпиляции он null. Заодно имя видно прямо в Hierarchy.</para>
+    ///
+    /// <para>Берём самое длинное подходящее имя: дубликат, которому Unity
+    /// приписала « (1)», должен опознаться так же, как оригинал.</para>
+    /// </summary>
+    private static Card MatchCardByObjectName(string objectName, List<Card> cards)
+    {
+        if (string.IsNullOrEmpty(objectName)) return null;
+
+        var tail = objectName.StartsWith(CardNamePrefix)
+            ? objectName.Substring(CardNamePrefix.Length)
+            : objectName;
+
+        return cards
+            .Where(c => tail.StartsWith(c.Name, System.StringComparison.Ordinal))
+            .OrderByDescending(c => c.Name.Length)
+            .FirstOrDefault();
     }
 
     [ContextMenu("Clear")]
@@ -182,86 +331,97 @@ public class CardLabDriver : MonoBehaviour
     }
 
     /// <summary>
-    /// Верхний ряд: одна и та же карта во всех масштабах, в которых её видит игрок.
-    /// Возвращает Y, с которого можно начинать галерею.
+    /// Правая колонка: одна карта так, как её видит игрок при наведении, и под
+    /// ней — она же в ректе руки.
+    ///
+    /// <para>Карта в руке это не просто уменьшенная карта:
+    /// <c>HandLayoutGroup</c> каждый пересчёт делает <c>child.sizeDelta = cellSize</c>,
+    /// то есть 150×250 превращается в 100×150, и только потом накладывается
+    /// масштаб. Это единственное место, где лицо карты верстается в чужом
+    /// ректе, и потому первое, что ломается при перестановке полос.</para>
     /// </summary>
-    private float BuildScaleRow(GameObject prefab, Card sample, string longest)
+    private void BuildSideColumn(GameObject prefab, List<Card> cards, string longest,
+                                 float x, float width)
     {
-        bool hasScales = _scales != null && _scales.Length > 0;
-        if (!hasScales && !_showHandCell) return _origin.y;
+        var sample = PickPreviewCard(cards);
+        float scale = Mathf.Max(0.01f, _previewScale);
+        float top = -_margin;
 
-        float maxScale = hasScales ? _scales.Max() : 1f;
-        if (_showHandCell) maxScale = Mathf.Max(maxScale, _handCellScale);
-
-        float rowTop = _origin.y - LabelHeight;
-        float rowBottom = rowTop - CardSize.y * maxScale;
-        float x = _origin.x;
-
-        if (hasScales)
+        CardView preview = Spawn(prefab, sample, longest);
+        if (preview != null)
         {
-            foreach (float rawScale in _scales)
-            {
-                float scale = Mathf.Max(0.01f, rawScale);
-                float width = CardSize.x * scale;
+            AddLabel($"{scale:0.##}× — при наведении", x, top, width);
 
-                CardView view = Spawn(prefab, sample, longest);
-                if (view == null) continue;
-
-                var rect = (RectTransform)view.transform;
-                rect.localScale = Vector3.one * scale;
-                rect.anchoredPosition = new Vector2(x + width / 2f, rowBottom);
-
-                AddLabel($"{scale:0.##}× — {DescribeScale(rawScale)}", x, rowTop, width);
-
-                x += width + 40f;
-            }
+            var rect = (RectTransform)preview.transform;
+            rect.localScale = Vector3.one * scale;
+            rect.anchoredPosition = new Vector2(
+                x + width / 2f,
+                top - LabelHeight - CardSize.y * scale);
         }
 
-        if (_showHandCell) BuildHandCell(prefab, sample, longest, ref x, rowTop, rowBottom);
+        if (!_showHandCell) return;
 
-        return rowBottom - 70f;
+        float handTop = top - LabelHeight - CardSize.y * scale - _margin;
+        float handScale = Mathf.Max(0.01f, _handCellScale);
+
+        CardView hand = Spawn(prefab, sample, longest);
+        if (hand == null) return;
+
+        AddLabel($"{_handCellSize.x:0}×{_handCellSize.y:0} @ {handScale:0.##}× — в руке",
+                 x, handTop, width);
+
+        var handRect = (RectTransform)hand.transform;
+        handRect.sizeDelta = _handCellSize;
+        handRect.localScale = Vector3.one * handScale;
+        handRect.anchoredPosition = new Vector2(
+            x + width / 2f,
+            handTop - LabelHeight - _handCellSize.y * handScale);
+    }
+
+    private Card PickPreviewCard(List<Card> cards)
+    {
+        if (string.IsNullOrWhiteSpace(_previewCard)) return cards[0];
+
+        var hit = cards.FirstOrDefault(c =>
+            c.Name.IndexOf(_previewCard, System.StringComparison.OrdinalIgnoreCase) >= 0);
+
+        if (hit == null)
+            Debug.LogWarning($"[CardLab] Карта «{_previewCard}» для превью не нашлась — беру первую.");
+
+        return hit ?? cards[0];
     }
 
     /// <summary>
-    /// Карта в руке местного игрока — не просто уменьшенная карта.
-    /// <see cref="HandLayoutGroup"/> каждый пересчёт делает <c>child.sizeDelta = cellSize</c>,
-    /// то есть 150×250 превращается в 100×150, и только потом накладывается масштаб.
+    /// Вся колода рядами, в натуральную величину.
     ///
-    /// <para>Это единственное место, где вёрстка лица работает в чужом ректе, и потому
-    /// первое, что ломается при перестановке полос. Показываем его рядом с остальными
-    /// масштабами, чтобы не узнавать об этом из партии.</para>
+    /// <para>Колонки считаются из числа рядов, а не задаются: рядов ровно
+    /// столько, сколько попросили, а ширина подстраивается. Если ряд не влезает
+    /// в отведённую ширину — ужимается шаг, а не карта: смотреть колоду имеет
+    /// смысл в том размере, в котором она лежит на столе.</para>
     /// </summary>
-    private void BuildHandCell(GameObject prefab, Card sample, string longest,
-                               ref float x, float rowTop, float rowBottom)
+    private void BuildGallery(GameObject prefab, List<Card> cards, string longest,
+                              float rightEdge, float canvasHeight)
     {
-        CardView view = Spawn(prefab, sample, longest);
-        if (view == null) return;
+        int rows = Mathf.Max(1, _rows);
+        int columns = Mathf.CeilToInt(cards.Count / (float)rows);
 
-        float scale = Mathf.Max(0.01f, _handCellScale);
-        float width = _handCellSize.x * scale;
+        float available = rightEdge - _margin;
+        float stepX = _spacing.x;
+        if (columns > 1)
+        {
+            float needed = (columns - 1) * stepX + CardSize.x;
+            if (needed > available)
+                stepX = (available - CardSize.x) / (columns - 1);
+        }
 
-        var rect = (RectTransform)view.transform;
-        rect.sizeDelta = _handCellSize;
-        rect.localScale = Vector3.one * scale;
-        rect.anchoredPosition = new Vector2(x + width / 2f, rowBottom);
-
-        AddLabel($"{_handCellSize.x:0}×{_handCellSize.y:0} @ {scale:0.##}× — рука",
-                 x, rowTop, width);
-
-        x += width + 40f;
-    }
-
-    private static string DescribeScale(float scale)
-    {
-        if (Mathf.Approximately(scale, 1f)) return "стол";
-        if (Mathf.Approximately(scale, 1.3f)) return "рука";
-        if (Mathf.Approximately(scale, 2.3f)) return "ховер-превью";
-        return "свой";
-    }
-
-    private void BuildGallery(GameObject prefab, List<Card> cards, string longest, float top)
-    {
-        int columns = Mathf.Max(1, _columns);
+        // Ряды прижимаются к верху; если колода в заданное число рядов по
+        // высоте не влезает, шаг ужимается — карты начнут находить друг на
+        // друга, и это честнее, чем молча уехать за нижний край.
+        float stepY = _spacing.y;
+        float neededY = (rows - 1) * stepY + CardSize.y;
+        float availableY = canvasHeight - _margin * 2f;
+        if (rows > 1 && neededY > availableY)
+            stepY = (availableY - CardSize.y) / (rows - 1);
 
         for (int i = 0; i < cards.Count; i++)
         {
@@ -274,10 +434,11 @@ public class CardLabDriver : MonoBehaviour
             var rect = (RectTransform)view.transform;
             rect.localScale = Vector3.one;
             rect.anchoredPosition = new Vector2(
-                _origin.x + column * _spacing.x + CardSize.x / 2f,
-                top - row * _spacing.y - CardSize.y);
+                _margin + column * stepX + CardSize.x / 2f,
+                -_margin - row * stepY - CardSize.y);
         }
     }
+
 
     /// <summary>
     /// Создаёт одну карту и приводит её ровно в то состояние, что и в игре:
@@ -298,8 +459,13 @@ public class CardLabDriver : MonoBehaviour
         if (instance == null) return null;
 
         instance.transform.SetParent(transform, false);
-        if (!_persistInstances) instance.hideFlags = HideFlags.DontSave;
-        instance.name = $"Card — {card.Name}";
+
+        // В ручном режиме карта обязана попасть в файл сцены — иначе твоя
+        // расстановка не переживёт даже перезагрузку сцены, не то что
+        // перезапуск редактора.
+        if (_arrangement == Arrangement.Grid) instance.hideFlags = HideFlags.DontSave;
+
+        instance.name = CardNamePrefix + card.Name;
 
         CardView view = instance.GetComponent<CardView>();
         if (view == null)
@@ -324,6 +490,17 @@ public class CardLabDriver : MonoBehaviour
             }
         }
 
+        ApplyCardState(view, card, longest);
+        return view;
+    }
+
+    /// <summary>
+    /// Приводит карту ровно в то состояние, что и в игре:
+    /// Initialize → подсветка → лицо или рубашка. Трансформ не трогает —
+    /// им заведует либо сетка, либо человек.
+    /// </summary>
+    private void ApplyCardState(CardView view, Card card, string longest)
+    {
         view.Initialize(card);
 
         if (_stressTest && view._cardDescriptionText != null && longest != null)
@@ -333,14 +510,12 @@ public class CardLabDriver : MonoBehaviour
 
         if (_faceDown) view.FaceDown();
         else view.FaceUp();
-
-        return view;
     }
 
     private void AddLabel(string text, float x, float top, float width)
     {
         var go = new GameObject("Label", typeof(RectTransform));
-        go.hideFlags = HideFlags.DontSave;
+        if (_arrangement == Arrangement.Grid) go.hideFlags = HideFlags.DontSave;
         go.transform.SetParent(transform, false);
 
         var rect = (RectTransform)go.transform;
