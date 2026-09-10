@@ -103,10 +103,62 @@ namespace Assets.Scripts.Menus
         private void Awake()
         {
             Instance = this;
+            StretchOverWholeCanvas(UIBlockerOverlay);
             // Переключатель включается только тогда, когда есть куда
             // переключаться, — см. SetAlternatePage.
             if (ToggleBtn != null) ToggleBtn.gameObject.SetActive(false);
             gameObject.SetActive(false); // По умолчанию скрыто
+        }
+
+        /// <summary>
+        /// Заставляет затемнение накрывать весь канвас, где бы оно ни лежало в
+        /// сцене.
+        ///
+        /// <para><b>Зачем.</b> В сцене <c>UIBlockerOverlay</c> лежит внутри
+        /// <c>TablePanel</c> — коробки ровно 1920×1080. Растянут он по ней, а не
+        /// по экрану. Канвасы стоят на Scale With Screen Size в режиме Expand,
+        /// то есть в опорных единицах канвас равен 1920×1080 <b>только</b> при
+        /// соотношении ровно 16:9, а на любом другом одна сторона вырастает:
+        /// на 21:9 канвас становится 2560 единиц шириной. Коробка остаётся
+        /// 1920 — и по краям экрана остаются неприкрытые полосы, где стол и
+        /// виден, и ловит клики, хотя таблица правил открыта.</para>
+        ///
+        /// <para>Правится это одним перетаскиванием в Hierarchy, но ровно
+        /// поэтому и ломается обратно: затемнение легко уронить в первую
+        /// попавшуюся панель, а заметно это только на нетипичном экране,
+        /// которого у разработчика перед глазами нет. Здесь оно чинится само.</para>
+        ///
+        /// <para>Заодно уходит последним ребёнком корня: внутри
+        /// <c>TablePanel</c> после него шли <c>SeatLayout</c> и <c>Table</c>,
+        /// то есть места и сам стол рисовались поверх затемнения и не гасли.</para>
+        /// </summary>
+        private static void StretchOverWholeCanvas(GameObject overlay)
+        {
+            if (overlay == null) return;
+
+            var rect = overlay.transform as RectTransform;
+            if (rect == null) return;
+
+            // includeInactive: затемнение выключено почти всегда, а выключенный
+            // объект обычным поиском по родителям не находится.
+            var canvas = overlay.GetComponentInParent<Canvas>(true);
+            if (canvas == null)
+            {
+                Debug.LogWarning("[RuleContainer] Затемнение лежит вне канваса — " +
+                                 "растянуть его не по чему.");
+                return;
+            }
+
+            var root = (RectTransform)canvas.rootCanvas.transform;
+            if (rect.parent != root) rect.SetParent(root, false);
+            rect.SetAsLastSibling();
+
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            rect.localScale = Vector3.one;
         }
         /// <summary>
         /// Показать таблицу правил.
