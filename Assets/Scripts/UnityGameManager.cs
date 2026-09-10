@@ -51,6 +51,9 @@ public class UnGameManager : MonoBehaviour
     [Tooltip("Показ «игрок смотрит верх колоды»: рубашки над колодой. Можно не привязывать — компонент добавляется сюда же кодом. Привязка нужна только чтобы покрутить ручки показа.")]
     public PeekUI _peekUI;
 
+    [Tooltip("Сумки игроков на столе: своя колонкой справа внизу, чужие полосой над ником. Можно не привязывать — компонент добавляется сюда же кодом и собирает панели сам. Привязка нужна только чтобы подвинуть их или сменить размеры.")]
+    public PlayerItemsUI _playerItemsUI;
+
     [Tooltip("Название сказки в начале партии — имена двух выпавших правил через «и». Можно не привязывать: компонент добавляется сюда же кодом и собирает оверлей сам. Привязка нужна только чтобы покрутить длительность и шрифт.")]
     public TaleTitleUI _taleTitleUI;
     public Transform GameBoardPanel;
@@ -269,6 +272,11 @@ public class UnGameManager : MonoBehaviour
         // берёт из сцены только саму колоду и строится кодом.
         if (_peekUI == null) _peekUI = gameObject.AddComponent<PeekUI>();
         _peekUI.Initialize(ClientView);
+
+        // Сумки на столе — после раскладки мест: панели вешаются детьми на
+        // Seat, и места к этому моменту уже стоят там, где будут стоять.
+        if (_playerItemsUI == null) _playerItemsUI = gameObject.AddComponent<PlayerItemsUI>();
+        _playerItemsUI.Initialize(ClientView, _seatLayout);
 
         // Название сказки — последним: стол под ним к этому моменту уже
         // разложен, и когда заголовок угаснет, за ним окажется готовая

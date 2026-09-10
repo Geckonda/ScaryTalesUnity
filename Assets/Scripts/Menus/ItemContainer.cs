@@ -9,7 +9,12 @@ public class ItemContainer : MonoBehaviour
     public static ItemContainer Instance { get; private set; }
 
     public Transform contentPanel; // Куда добавляются предметы
-    [SerializeField] private Button ShowBtn;
+
+    // Кнопки «показать сумку» больше нет: предметы видны на столе постоянно
+    // (см. PlayerItemsUI), а это окно осталось только тем, чем и было по
+    // сути — выбором предмета, когда его просит эффект. Поле удалено вместе
+    // с кнопкой: пока оно было, Hide() исправно включал её обратно, и убрать
+    // кнопку из сцены не получалось.
     [SerializeField] private Button CloseBtn;
     [SerializeField] private TMP_Text IsEmptyText;
 
@@ -23,7 +28,6 @@ public class ItemContainer : MonoBehaviour
     public void Show(List<Item> items)
     {
         gameObject.SetActive(true);
-        ShowBtn.gameObject.SetActive(false);
 
         if (items.Count == 0)
         {
@@ -43,7 +47,6 @@ public class ItemContainer : MonoBehaviour
     public void Show(List<ItemView> itemViews, bool isClosedWindow)
     {
         gameObject.SetActive(true);
-        ShowBtn.gameObject.SetActive(false);
 
         if (itemViews.Count == 0)
         {
@@ -79,8 +82,7 @@ public class ItemContainer : MonoBehaviour
     {
         gameObject.SetActive(false);
         ClearContentPanelChildren();
-        ShowBtn.gameObject.SetActive(true);
-        CloseBtn.gameObject.SetActive(true);
+        if (CloseBtn != null) CloseBtn.gameObject.SetActive(true);
     }
 
     private void ConvertItemsToViews(List<Item> items)
