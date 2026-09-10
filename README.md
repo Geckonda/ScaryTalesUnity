@@ -242,7 +242,8 @@ flowchart LR
 Транспорт — **Mirror + KCP, UDP 7777**. HTTP в игре нет вообще, обратный прокси не нужен.
 
 Подробная история проектирования и все принятые решения — в [REFACTOR.md](REFACTOR.md),
-поведение всех карт одной таблицей — в [docs/CARDS.md](docs/CARDS.md).
+поведение всех карт одной таблицей — в [docs/CARDS.md](docs/CARDS.md),
+замеченное, но пока не решённое — в [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md).
 
 ---
 

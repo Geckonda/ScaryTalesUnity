@@ -21,6 +21,8 @@
 | `OldMasterCard` | If it is Day, gain 2 VP at the end of your turn. |
 | `MerchantCard` | Draw 2 cards. Gain 2 VP per played Merchant. |
 | `GypsyCard` | All players reveal their hands. Gain 1 VP per revealed Location. Draw 1 card per revealed Gypsy. |
+| `SecretHelperCard` | Look at the top 2 cards of the deck. Take one into your hand, remove the other from the game. You may play 1 extra card this turn. |
+| `WitchCard` | While in front of you: you cannot draw from the deck, and you may play 1 extra card each of your turns. Discarded at the start of your turn once your hand is empty or the deck has run out. |
 
 
 ## Global Rules
