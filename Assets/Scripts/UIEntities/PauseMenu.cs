@@ -168,15 +168,6 @@ namespace Assets.Scripts.UIEntities
             GameConnectionManager.ReturnToMenu();
         }
 
-        private void QuitGame()
-        {
-#if UNITY_EDITOR
-            // В редакторе Application.Quit() ничего не делает, и кнопка
-            // выглядит сломанной.
-            UnityEditor.EditorApplication.isPlaying = false;
-#else
-            Application.Quit();
-#endif
-        }
+        private void QuitGame() => GameExit.QuitApplication();
     }
 }
