@@ -258,6 +258,23 @@ namespace Assets.Scripts.Network.Messages
     /// <para>Порядок в массиве — по местам за столом, чтобы у всех клиентов
     /// список читался одинаково.</para>
     /// </summary>
+    /// <summary>
+    /// Занавес: карты кончились, партия сыграна, но разбор ещё не начался.
+    /// Клиент показывает текст поверх стола тем же окном, что и название
+    /// сказки в начале партии.
+    ///
+    /// <para><b>Длительности едут в событии, а не зашиты на клиенте.</b>
+    /// Сервер держит паузу ровно на столько же и только потом начинает
+    /// разбор. Разойдись эти два числа — разбор пошёл бы под ещё не угасшей
+    /// надписью либо после неловкой тишины. Одно число, один владелец.</para>
+    /// </summary>
+    public struct TaleEpilogueEvent : NetworkMessage
+    {
+        public string Text;
+        public float HoldSeconds;
+        public float FadeSeconds;
+    }
+
     public struct GameEndedEvent : NetworkMessage
     {
         public int[] WinnerIds;

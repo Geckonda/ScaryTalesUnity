@@ -137,6 +137,7 @@ public class UnGameManager : MonoBehaviour
         ClientView.OnAwaitingCardPlay += HandleAwaitingCardPlay;
         ClientView.OnDecisionRequested += HandleDecisionRequested;
         ClientView.OnDecisionResolved += HandleDecisionResolved;
+        ClientView.OnTaleEpilogue += HandleTaleEpilogue;
         ClientView.OnGameEnded += HandleGameEnded;
         ClientView.OnGameAborted += HandleGameAborted;
         ClientView.OnPlayerLeft += HandlePlayerLeft;
@@ -843,6 +844,20 @@ public class UnGameManager : MonoBehaviour
         if (LocalPlayer == null) return;
         var items = LocalPlayer.ShowItemsFromItemBag();
         ItemContainer.Instance.Show(items);
+    }
+
+    /// <summary>
+    /// Занавес перед разбором конца партии — тем же окном, каким партия
+    /// открывалась названием сказки.
+    ///
+    /// <para>Длительности пришли с сервера: он держит паузу ровно на столько
+    /// же и только потом начинает разбор. Свои числа брать нельзя — разбор
+    /// пошёл бы под ещё не угасшей надписью.</para>
+    /// </summary>
+    private void HandleTaleEpilogue(string text, float holdSeconds, float fadeSeconds)
+    {
+        if (_taleTitleUI == null) _taleTitleUI = gameObject.AddComponent<TaleTitleUI>();
+        _taleTitleUI.ShowText(text, holdSeconds, fadeSeconds);
     }
 
     private void HandleGameEnded(int[] winnerIds)

@@ -1,4 +1,4 @@
-using Assets.Libraries.ScaryTales.Abstractions;
+﻿using Assets.Libraries.ScaryTales.Abstractions;
 using Assets.Libraries.ScaryTales.Rules;
 using Assets.Scripts;
 using Assets.Scripts.Network.Messages;
@@ -760,6 +760,8 @@ namespace Assets.Scripts.Network
 
                 if (_gameOver) return;
 
+                await ShowEpilogue(ctx);
+
                 // Разбор ДО _gameOver: он рассылает события комнате, а
                 // ReportRuleOutcome и прочие отправители под этим флагом
                 // замолкают. И до подсчёта победителя — правило вполне может
@@ -818,6 +820,40 @@ namespace Assets.Scripts.Network
         /// <para>Синхронный: <see cref="IFinalRuleEffect.Score"/> ничего не
         /// спрашивает у игроков — см. пояснение в самом интерфейсе.</para>
         /// </summary>
+        /// <summary>Текст занавеса. Сервер владеет им целиком — как и <c>GameAbortedEvent.Reason</c>.</summary>
+        private const string EpilogueText = "Вот и сказочке конец...";
+
+        /// <summary>Пауза между последней картой и занавесом: партия должна успеть «осесть».</summary>
+        private const int BeforeEpilogueMs = 1000;
+
+        private const float EpilogueHoldSeconds = 3f;
+        private const float EpilogueFadeSeconds = 0.6f;
+
+        /// <summary>
+        /// Занавес между последним ходом и разбором правила.
+        ///
+        /// <para>Пауза держится <b>на сервере</b>, а не только на клиентах:
+        /// разбор рассылает свои события сам, и без ожидания они пришли бы
+        /// под ещё не угасшей надписью. Клиенту едут те же числа, что сервер
+        /// прождёт, — расходиться им нельзя, поэтому владелец у них один.</para>
+        ///
+        /// <para>Ждём через <see cref="IGameClock"/>, а не Task.Delay: прогон
+        /// без зрителей проходит эти четыре секунды мгновенно.</para>
+        /// </summary>
+        private async Task ShowEpilogue(IGameContext ctx)
+        {
+            await ctx.Clock.Beat(BeforeEpilogueMs);
+
+            Channel.SendToRoom(new TaleEpilogueEvent
+            {
+                Text = EpilogueText,
+                HoldSeconds = EpilogueHoldSeconds,
+                FadeSeconds = EpilogueFadeSeconds,
+            });
+
+            await ctx.Clock.Beat((int)((EpilogueHoldSeconds + EpilogueFadeSeconds * 2f) * 1000f));
+        }
+
         private void ScoreFinalRule(IGameContext ctx)
         {
             var rule = _session?.CurrentFinalRule;

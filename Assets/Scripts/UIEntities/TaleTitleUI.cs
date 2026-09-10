@@ -62,16 +62,37 @@ namespace Assets.Scripts.UIEntities
             if (string.IsNullOrWhiteSpace(inGameRuleName) || string.IsNullOrWhiteSpace(finalRuleName))
                 return;
 
+            ShowText($"{inGameRuleName.Trim()} и {finalRuleName.Trim()}");
+        }
+
+        /// <summary>
+        /// Показать произвольный текст и убрать его само. Тем же окном
+        /// закрывается партия («Вот и сказочки конец...»), каким она
+        /// открывается названием сказки.
+        /// </summary>
+        /// <param name="hold">
+        /// Сколько держать в полную силу. Неположительное — взять поле
+        /// инспектора. Конец партии присылает своё число с сервера: тот держит
+        /// паузу ровно на столько же, и расходиться им нельзя.
+        /// </param>
+        /// <param name="fade">Сколько длятся проявление и угасание, каждое.</param>
+        public void ShowText(string text, float hold = 0f, float fade = 0f)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            float holdSeconds = hold > 0f ? hold : _holdSeconds;
+            float fadeSeconds = fade > 0f ? fade : _fadeSeconds;
+
             Hide();
 
             var root = FindCanvasRoot();
             if (root == null)
             {
-                Debug.LogWarning("[TaleTitleUI] Не нашёлся корень канваса — заголовка не будет.");
+                Debug.LogWarning("[TaleTitleUI] Не нашёлся корень канваса — надписи не будет.");
                 return;
             }
 
-            var group = BuildOverlay(root, $"{inGameRuleName.Trim()} и {finalRuleName.Trim()}");
+            var group = BuildOverlay(root, text);
 
             // Гасим до первого кадра: оверлей создаётся непрозрачным, и без
             // этой строки первый кадр успел бы мигнуть готовым заголовком
@@ -83,9 +104,9 @@ namespace Assets.Scripts.UIEntities
             // Time.timeScale в ноль на паузе.
             _sequence = DOTween.Sequence()
                 .SetUpdate(true)
-                .Append(group.DOFade(1f, _fadeSeconds).From(0f))
-                .AppendInterval(_holdSeconds)
-                .Append(group.DOFade(0f, _fadeSeconds))
+                .Append(group.DOFade(1f, fadeSeconds).From(0f))
+                .AppendInterval(holdSeconds)
+                .Append(group.DOFade(0f, fadeSeconds))
                 .OnComplete(Hide);
         }
 

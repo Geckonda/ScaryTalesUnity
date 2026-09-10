@@ -139,6 +139,13 @@ namespace Assets.Scripts.Network
         public event Action<Player, bool> OnAwaitingCardPlay;
 
         /// <summary>
+        /// Занавес перед разбором: текст, сколько его держать и сколько
+        /// длятся проявление и угасание. Всё приходит с сервера — он держит
+        /// паузу ровно на столько же.
+        /// </summary>
+        public event Action<string, float, float> OnTaleEpilogue;
+
+        /// <summary>
         /// Начался разбор правила конца партии. Дальше по одному
         /// <see cref="OnFinalScoring"/> на каждого игрока, в порядке ходов.
         /// </summary>
@@ -191,6 +198,7 @@ namespace Assets.Scripts.Network
             Defer<CardReturnedToDeckEvent>(HandleCardReturnedToDeck);
             Defer<RuleEffectResolvedEvent>(HandleRuleEffectResolved);
             Defer<DeckCountChangedEvent>(HandleDeckCountChanged);
+            Defer<TaleEpilogueEvent>(HandleTaleEpilogue);
             Defer<FinalScoringStartedEvent>(HandleFinalScoringStarted);
             Defer<FinalScoringEvent>(HandleFinalScoring);
             Defer<HandsRevealedEvent>(HandleHandsRevealed);
@@ -542,6 +550,11 @@ namespace Assets.Scripts.Network
             var card = FindCard(evt.CardId);
             if (card == null) return;
             OnCardShowcased?.Invoke(card, evt.StepOut);
+        }
+
+        private void HandleTaleEpilogue(TaleEpilogueEvent evt)
+        {
+            OnTaleEpilogue?.Invoke(evt.Text, evt.HoldSeconds, evt.FadeSeconds);
         }
 
         private void HandleFinalScoringStarted(FinalScoringStartedEvent evt)
