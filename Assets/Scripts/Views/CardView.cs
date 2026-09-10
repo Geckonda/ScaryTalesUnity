@@ -19,6 +19,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
 
     public Card _card;
     private Image _background;
+    private CardWobble _wobble;
 
     [Header("Лицо карты")]
     [Tooltip("Контейнер со всем, что видно только у лицевой стороны.")]
@@ -75,6 +76,7 @@ public class CardView : MonoBehaviour, IPointerClickHandler
 
         DisplayCard();
         SetHighlight(false); // По умолчанию рамка выключена
+        SetPickable(false);
     }
 
     public void DisplayCard()
@@ -210,6 +212,28 @@ public class CardView : MonoBehaviour, IPointerClickHandler
     {
         if (_highlightFrame != null)
             _highlightFrame.gameObject.SetActive(isHighlighted);
+    }
+
+    /// <summary>
+    /// Помечает карту как ту, которую сейчас можно выбрать: она начинает
+    /// подрагивать. Рамка для этого больше не используется — она осталась за
+    /// «эта карта посчитана», где карта не кликается и движение сбивало бы с толку.
+    /// </summary>
+    public void SetPickable(bool isPickable)
+    {
+        // Карте, которую никто не просил выбирать, компонент не нужен вовсе:
+        // представлений на столе много, а дрожат единицы.
+        if (!isPickable && _wobble == null) return;
+
+        if (_wobble == null)
+        {
+            // Сравнение с null — перегрузка Unity, поэтому уничтоженный
+            // компонент сюда тоже попадёт и будет заведён заново.
+            _wobble = GetComponent<CardWobble>();
+            if (_wobble == null) _wobble = gameObject.AddComponent<CardWobble>();
+        }
+
+        _wobble.enabled = isPickable;
     }
 
     /// <summary>

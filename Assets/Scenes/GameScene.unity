@@ -6460,6 +6460,8 @@ MonoBehaviour:
   _useOutline: 0
   _outlineWidth: 0.2
   _outlineColor: {r: 0.4, g: 0.28, b: 0, a: 1}
+  _fitLabelsToRect: 1
+  _minLabelFontSize: 18
   _showOpponentScores: 0
   _scorePulseScale: 1.35
   _scorePulseSeconds: 0.3

@@ -502,7 +502,7 @@ public class UnGameManager : MonoBehaviour
     /// этого можно отказаться. Зовётся из <c>PauseMenu</c> по Esc.
     ///
     /// <para>Esc, а не отдельная кнопка, потому что выбор карты рисуется не
-    /// панелью, а подсветкой самих карт на столе — вешать кнопку негде, и
+    /// панелью, а дрожью самих карт на столе — вешать кнопку негде, и
     /// любая новая привязка в сцене имеет свойство остаться непривязанной.
     /// «Esc — назад» игрок угадывает без подсказки.</para>
     /// </summary>
@@ -534,7 +534,7 @@ public class UnGameManager : MonoBehaviour
             var v = _cardViewService.GetCardView(card);
             if (v != null)
             {
-                v.SetHighlight(true);
+                v.SetPickable(true);
                 views.Add(v);
             }
         }
@@ -557,7 +557,7 @@ public class UnGameManager : MonoBehaviour
         foreach (var v in views)
         {
             v.OnCardClicked -= handler;
-            v.SetHighlight(false);
+            v.SetPickable(false);
         }
 
         // При отказе интент уже ушёл из TryCancelPendingDecision.
