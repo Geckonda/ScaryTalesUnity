@@ -34,6 +34,7 @@ namespace Assets.Libraries.ScaryTales.Rules
         public const int A1Id = 1;
         public const int B2Id = 2;
         public const int A2Id = 3;
+        public const int A3Id = 4;
 
         /// <summary>
         /// Builds a fresh rule instance with its <see cref="Rule.Id"/> set.
@@ -47,6 +48,7 @@ namespace Assets.Libraries.ScaryTales.Rules
                 A1Id => new A1(),
                 B2Id => new B2(),
                 A2Id => new A2(),
+                A3Id => new A3(),
                 _ => null,
             };
             if (rule != null) rule.Id = id;
@@ -65,7 +67,7 @@ namespace Assets.Libraries.ScaryTales.Rules
         public static int DefaultInGameRuleId => A1Id;
         public static int DefaultFinalRuleId => B2Id;
 
-        private static IEnumerable<int> AllIds => new[] { A1Id, B2Id, A2Id };
+        private static IEnumerable<int> AllIds => new[] { A1Id, B2Id, A2Id, A3Id };
 
         /// <summary>
         /// Случайное правило каждого вида на партию.

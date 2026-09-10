@@ -29,6 +29,7 @@
 | :--- | :--- |
 | `Rule A1` | 1) Discard 1 Armor to take the top card of the discard pile. 2) Discard 1 Sword and 1 played Villain to gain 3 VP. 3) Discard 1 Magic Wand to draw 1 card, take 1 Gold Coin from the supply, and gain 1 VP. |
 | `Rule A2` | 1) Discard 1 Magic Wand to play 1 extra card this turn. 2) Discard 1 Sword and 1 played Villain to take 1 Gold Coin from the supply and gain 1 VP. |
+| `Rule A3` | 1) Discard 1 Armor and 1 Sword to draw 2 cards and gain 3 VP. 2) Discard 1 Magic Wand and 1 played Villain to take 1 Gold Coin from the supply and gain 1 VP. |
 | `Rule B2` | Gain 12 VP for each set of 3 Gold Coins and 1 Magic Wand you have. |
 
 One in-game rule (`A*`) and one end-of-game rule (`B*`) are drawn at random per game
