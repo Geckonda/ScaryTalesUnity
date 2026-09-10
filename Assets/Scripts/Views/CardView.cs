@@ -66,6 +66,13 @@ public class CardView : MonoBehaviour, IPointerClickHandler
         _background = GetComponent<Image>();
         CacheFrontLook();
 
+        // Кэш лица привязан к карте, а не к представлению: Initialize означает
+        // «стань вот этой картой», и оставшийся от прежней картинки спрайт был
+        // бы просто чужим лицом. В игре представление на карту одно и повторно
+        // не инициализируется, так что лишних чтений с диска это не добавляет.
+        _frontSprite = null;
+        _frontSpriteLoaded = false;
+
         DisplayCard();
         SetHighlight(false); // По умолчанию рамка выключена
     }

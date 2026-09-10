@@ -485,9 +485,9 @@ MonoBehaviour:
   _rows: 3
   _spacing: {x: 180, y: 300}
   _margin: 40
-  _previewCard:
+  _previewCard: Сумасбродство короля
   _previewScale: 2.3
-  _showHandCell: 1
+  _showHandCell: 0
   _handCellSize: {x: 100, y: 150}
   _handCellScale: 1.3
   _faceDown: 0

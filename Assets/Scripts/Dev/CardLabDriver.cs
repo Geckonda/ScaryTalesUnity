@@ -103,10 +103,23 @@ public class CardLabDriver : MonoBehaviour
     private static readonly Vector2 CardSize = new Vector2(150f, 250f);
     private const float LabelHeight = 22f;
 
-    /// <summary>Префикс в имени объекта. По нему ручной режим узнаёт, что за карта.</summary>
+    /// <summary>
+    /// Префикс в имени объекта. По нему и ручной режим, и наведение узнают,
+    /// что перед ними карта галереи, а не служебное представление.
+    /// </summary>
     private const string CardNamePrefix = "Card — ";
 
+    private const string PreviewName = "Preview";
+    private const string HandCellName = "HandCell";
+
     private bool _rebuildQueued;
+
+    // Чем сейчас занято превью и из чего выбирать. Заполняется перестройкой,
+    // читается наведением.
+    private CardView _previewView;
+    private List<Card> _templates;
+    private string _longestDescription;
+    private Card _previewedCard;
 
     private void OnEnable()
     {
@@ -120,6 +133,8 @@ public class CardLabDriver : MonoBehaviour
         EditorApplication.projectChanged += RequestRebuild;
         PrefabUtility.prefabInstanceUpdated -= OnPrefabInstanceUpdated;
         PrefabUtility.prefabInstanceUpdated += OnPrefabInstanceUpdated;
+        SceneView.duringSceneGui -= OnSceneGui;
+        SceneView.duringSceneGui += OnSceneGui;
 #endif
     }
 
@@ -128,8 +143,59 @@ public class CardLabDriver : MonoBehaviour
 #if UNITY_EDITOR
         EditorApplication.projectChanged -= RequestRebuild;
         PrefabUtility.prefabInstanceUpdated -= OnPrefabInstanceUpdated;
+        SceneView.duringSceneGui -= OnSceneGui;
 #endif
     }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// Наведение на карту в галерее — превью показывает её.
+    ///
+    /// <para>Через события Scene view, а не через <c>IPointerEnterHandler</c>:
+    /// в режиме редактора Unity не крутит EventSystem и UI-события не
+    /// рассылает вовсе, так что обычный обработчик наведения тут молчал бы.
+    /// Расплата — работает только пока курсор над Scene view; в Game view
+    /// без запуска игры наведения не существует.</para>
+    /// </summary>
+    private void OnSceneGui(SceneView sceneView)
+    {
+        if (_previewView == null || _templates == null || _templates.Count == 0) return;
+        if (sceneView == null || sceneView.camera == null) return;
+
+        // Без явной просьбы окно может не присылать события движения мыши —
+        // а без них наведение узнавало бы о курсоре только при перерисовке по
+        // какому-нибудь постороннему поводу.
+        if (!sceneView.wantsMouseMove) sceneView.wantsMouseMove = true;
+
+        var e = Event.current;
+        if (e == null || (e.type != EventType.MouseMove && e.type != EventType.Repaint)) return;
+
+        // mousePosition живёт в координатах GUI (начало сверху слева), а
+        // проверка попадания в прямоугольник ждёт экранные (снизу слева).
+        Vector2 screenPoint = HandleUtility.GUIPointToScreenPixelCoordinate(e.mousePosition);
+
+        Card hovered = null;
+        foreach (var view in GetComponentsInChildren<CardView>(true))
+        {
+            if (!view.gameObject.name.StartsWith(CardNamePrefix)) continue;
+            if (!RectTransformUtility.RectangleContainsScreenPoint(
+                    (RectTransform)view.transform, screenPoint, sceneView.camera))
+                continue;
+
+            // _card не сериализуется и после перекомпиляции пуст — тогда
+            // выручает имя объекта, тем же способом, что и в ручном режиме.
+            hovered = view._card ?? MatchCardByObjectName(view.gameObject.name, _templates);
+            break;
+        }
+
+        var target = hovered ?? PickPreviewCard(_templates);
+        if (target == null || ReferenceEquals(target, _previewedCard)) return;
+
+        _previewedCard = target;
+        ApplyCardState(_previewView, target, _longestDescription);
+        sceneView.Repaint();
+    }
+#endif
 
     private void OnValidate() => RequestRebuild();
 
@@ -202,6 +268,11 @@ public class CardLabDriver : MonoBehaviour
             return;
         }
 
+        // Наведение читает это между перестройками — там своих данных нет.
+        _templates = cards;
+        _longestDescription = longest;
+        _previewedCard = null;
+
         if (_arrangement == Arrangement.Manual)
         {
             RefreshInPlace(prefab, cards, longest);
@@ -254,7 +325,15 @@ public class CardLabDriver : MonoBehaviour
     /// </summary>
     private void RefreshInPlace(GameObject prefab, List<Card> cards, string longest)
     {
-        var existing = GetComponentsInChildren<CardView>(true);
+        var all = GetComponentsInChildren<CardView>(true);
+
+        // Превью держим отдельно: наведение подменяет ему карту, и в общий
+        // счёт «сколько карт не опознано» оно попадать не должно.
+        _previewView = all.FirstOrDefault(v => v.gameObject.name == PreviewName) ?? _previewView;
+
+        var existing = all
+            .Where(v => v.gameObject.name != PreviewName && v.gameObject.name != HandCellName)
+            .ToArray();
 
         if (existing.Length == 0)
         {
@@ -322,6 +401,9 @@ public class CardLabDriver : MonoBehaviour
     [ContextMenu("Clear")]
     public void Clear()
     {
+        _previewView = null;
+        _previewedCard = null;
+
         for (int i = transform.childCount - 1; i >= 0; i--)
         {
             GameObject child = transform.GetChild(i).gameObject;
@@ -357,6 +439,12 @@ public class CardLabDriver : MonoBehaviour
             rect.anchoredPosition = new Vector2(
                 x + width / 2f,
                 top - LabelHeight - CardSize.y * scale);
+
+            // Наведению нужно знать, какое представление подменять, и не
+            // спутать его с картой галереи под курсором.
+            preview.gameObject.name = PreviewName;
+            _previewView = preview;
+            _previewedCard = sample;
         }
 
         if (!_showHandCell) return;
@@ -366,6 +454,8 @@ public class CardLabDriver : MonoBehaviour
 
         CardView hand = Spawn(prefab, sample, longest);
         if (hand == null) return;
+
+        hand.gameObject.name = HandCellName;
 
         AddLabel($"{_handCellSize.x:0}×{_handCellSize.y:0} @ {handScale:0.##}× — в руке",
                  x, handTop, width);
