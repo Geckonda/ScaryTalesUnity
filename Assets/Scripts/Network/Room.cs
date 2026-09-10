@@ -827,10 +827,21 @@ namespace Assets.Scripts.Network
 
                 _gameOver = true;
 
-                int winnerId = ctx.Players.OrderByDescending(p => p.Score).First().Id;
+                // Побеждают все, у кого счёт наибольший. Тайбрейкера в правилах
+                // нет, а прежний OrderByDescending().First() тихо отдавал победу
+                // тому, кто раньше сел за стол: сортировка устойчивая, так что
+                // при равенстве первым оставался игрок с меньшим номером места.
+                // На экране это выглядело как случайный выбор.
+                int best = ctx.Players.Count == 0 ? 0 : ctx.Players.Max(p => p.Score);
+                int[] winnerIds = ctx.Players
+                    .Where(p => p.Score == best)
+                    .OrderBy(p => p.Id)
+                    .Select(p => p.Id)
+                    .ToArray();
+
                 Channel.SendToRoom(new GameEndedEvent
                 {
-                    WinnerId = winnerId,
+                    WinnerIds = winnerIds,
                 });
                 Teardown();
             }

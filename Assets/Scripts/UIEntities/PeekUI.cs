@@ -85,7 +85,7 @@ namespace Assets.Scripts.UIEntities
 
         private void HandleGameAborted(string reason, Player who) => ClearGhosts();
 
-        private void HandleGameEnded(int winnerId) => ClearGhosts();
+        private void HandleGameEnded(int[] winnerIds) => ClearGhosts();
 
         // ---- Рубашки выезжают ----
 

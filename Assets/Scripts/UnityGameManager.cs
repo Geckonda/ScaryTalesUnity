@@ -845,7 +845,7 @@ public class UnGameManager : MonoBehaviour
         ItemContainer.Instance.Show(items);
     }
 
-    private void HandleGameEnded(int winnerId)
+    private void HandleGameEnded(int[] winnerIds)
     {
         // Партия кончилась — больше ничего не тащим и правил не выбираем.
         // Раньше это делал за нас уход в меню через пять секунд; теперь
@@ -857,8 +857,15 @@ public class UnGameManager : MonoBehaviour
         _decidingByRequest.Clear();
         if (_textUIManager != null) _textUIManager.ClearAllDeciding();
 
-        var winner = ClientView.FindPlayer(winnerId);
-        ResultContainer.Instance.ShowWinner(winner?.Name ?? "?");
+        // Имена, а не номера мест: список победителей читает человек. Кого
+        // зеркало не знает (вышел до конца партии) — пропускаем молча, лучше
+        // короткий список, чем список с вопросительным знаком.
+        var names = (winnerIds ?? System.Array.Empty<int>())
+            .Select(id => ClientView.FindPlayer(id)?.Name)
+            .Where(n => !string.IsNullOrEmpty(n))
+            .ToList();
+
+        ResultContainer.Instance.ShowWinner(names);
 
         // Автовыхода отсюда нет намеренно: когда уходить — решает игрок.
         // Уводят в меню кнопка «Выйти» на экране результата и меню по Esc,

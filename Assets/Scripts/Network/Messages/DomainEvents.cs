@@ -247,12 +247,20 @@ namespace Assets.Scripts.Network.Messages
     }
 
     /// <summary>
-    /// Game-over signal. Scores are sent in player-id order matching
-    /// GameStartedEvent.Players.
+    /// Game-over signal.
+    ///
+    /// <para><c>WinnerIds</c> — <b>все</b> игроки с наибольшим счётом, а не
+    /// один. Ничья в этой игре обычное дело: очки набираются десятками, а
+    /// тайбрейкера в правилах нет. Раньше здесь ехал единственный
+    /// <c>WinnerId</c>, и при равенстве побеждал тот, кто раньше сел за стол,
+    /// — правило, которого нет ни в правилах игры, ни на экране.</para>
+    ///
+    /// <para>Порядок в массиве — по местам за столом, чтобы у всех клиентов
+    /// список читался одинаково.</para>
     /// </summary>
     public struct GameEndedEvent : NetworkMessage
     {
-        public int WinnerId;
+        public int[] WinnerIds;
         // Итоговые очки здесь когда-то ехали параллельным массивом к
         // GameStartedEvent.Players и не читались ни одним клиентом: счёт и так
         // живёт на местах и обновляется PointsAwardedEvent. Убрано 2026-08-31.

@@ -99,7 +99,7 @@ namespace Assets.Scripts.Network
         public event Action OnGameStarted;
         public event Action<int> OnTurnAdvanced; // arg = currentPlayerId
         public event Action<bool> OnPhaseChanged; // arg = isNight
-        public event Action<int> OnGameEnded;     // arg = winnerId
+        public event Action<int[]> OnGameEnded;   // arg = все победители, обычно один
         // Game torn down early — args are the reason to display and the
         // player who left (or null if the abort wasn't player-caused).
         public event Action<string, Player> OnGameAborted;
@@ -621,7 +621,7 @@ namespace Assets.Scripts.Network
 
         private void HandleGameEnded(GameEndedEvent evt)
         {
-            OnGameEnded?.Invoke(evt.WinnerId);
+            OnGameEnded?.Invoke(evt.WinnerIds ?? System.Array.Empty<int>());
         }
 
         /// <summary>

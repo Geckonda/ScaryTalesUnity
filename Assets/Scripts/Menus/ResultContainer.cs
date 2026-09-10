@@ -30,9 +30,27 @@ namespace Assets.Scripts.Menus
             if (_exitButton != null) _exitButton.onClick.AddListener(Exit);
             gameObject.SetActive(false); // По умолчанию скрыто
         }
-        public void ShowWinner(string winner)
+        /// <summary>
+        /// Экран результата. Победителей может быть несколько: тайбрейкера в
+        /// правилах нет, и все, кто набрал наибольший счёт, выигрывают вместе.
+        ///
+        /// <para>Ничья названа ничьёй прямым текстом. «Победители: Вася, Петя»
+        /// без этого слова читается как список призёров, где первый главнее, —
+        /// а они равны.</para>
+        /// </summary>
+        public void ShowWinner(IReadOnlyList<string> winners)
         {
-            ShowMessage($"Победитель: {winner}");
+            if (winners == null || winners.Count == 0)
+            {
+                // Победителей не осталось — партия кончилась, а назвать некого.
+                // Такое возможно, если все вышли; молчать тут хуже, чем сказать.
+                ShowMessage("Партия окончена.");
+                return;
+            }
+
+            ShowMessage(winners.Count == 1
+                ? $"Победитель: {winners[0]}"
+                : $"Ничья! Победители: {string.Join(", ", winners)}");
         }
 
         /// <summary>

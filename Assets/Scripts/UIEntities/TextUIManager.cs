@@ -131,7 +131,7 @@ public class TextUIManager : MonoBehaviour
     }
 
     private void HandleFinalScoringStarted(Rule rule) => RevealAllScores();
-    private void HandleGameEnded(int winnerId) => RevealAllScores();
+    private void HandleGameEnded(int[] winnerIds) => RevealAllScores();
 
     /// <summary>
     /// Открывает счёт всех игроков. Идемпотентна: зовётся и из разбора правила,
